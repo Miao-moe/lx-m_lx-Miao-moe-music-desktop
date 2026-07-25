@@ -67,7 +67,7 @@ export default {
     const downloadProgress = computed(() => {
       return versionInfo.status == 'downloading'
         ? versionInfo.downloadProgress
-          ? `${versionInfo.downloadProgress.percent.toFixed(2)}% - ${sizeFormate(versionInfo.downloadProgress.transferred)}/${sizeFormate(versionInfo.downloadProgress.total)} - ${sizeFormate(versionInfo.downloadProgress.bytesPerSecond)}/s`
+          ? `${versionInfo.downloadProgress.progress.toFixed(2)}% - ${sizeFormate(versionInfo.downloadProgress.transferred)}/${sizeFormate(versionInfo.downloadProgress.total)} - ${sizeFormate(versionInfo.downloadProgress.bytesPerSecond)}/s`
           : t('setting__update_init')
         : ''
     })

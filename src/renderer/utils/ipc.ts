@@ -1,6 +1,5 @@
 import { rendererSend, rendererInvoke, rendererOn, rendererOff } from '@common/rendererIpc'
 import { HOTKEY_RENDERER_EVENT_NAME, WIN_MAIN_RENDERER_EVENT_NAME, CMMON_EVENT_NAME } from '@common/ipcNames'
-import { type ProgressInfo, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater'
 import { markRaw } from '@common/utils/vueTools'
 import * as hotKeys from '@common/hotKey'
 import { APP_EVENT_NAMES, DATA_KEYS, DEFAULT_SETTING } from '@common/constants'
@@ -86,19 +85,16 @@ export const checkUpdate = () => {
   rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.update_check)
 }
 
-export const downloadUpdate = () => {
-  rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.update_download_update)
+export const downloadUpdate = (info: LX.UpdateDownloadInfo) => {
+  rendererSend<LX.UpdateDownloadInfo>(WIN_MAIN_RENDERER_EVENT_NAME.update_download_update, info)
 }
 
 export const quitUpdate = () => {
   rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.quit_update)
 }
 
-export const onUpdateAvailable = (listener: LX.IpcRendererEventListenerParams<UpdateInfo>): RemoveListener => {
-  rendererOn(WIN_MAIN_RENDERER_EVENT_NAME.update_available, listener)
-  return () => {
-    rendererOff(WIN_MAIN_RENDERER_EVENT_NAME.update_available, listener)
-  }
+export const cancelDownloadUpdate = () => {
+  rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.update_download_update, null)
 }
 
 export const onUpdateError = (listener: LX.IpcRendererEventListenerParams<string>): RemoveListener => {
@@ -108,24 +104,17 @@ export const onUpdateError = (listener: LX.IpcRendererEventListenerParams<string
   }
 }
 
-export const onUpdateProgress = (listener: LX.IpcRendererEventListenerParams<ProgressInfo>): RemoveListener => {
+export const onUpdateProgress = (listener: LX.IpcRendererEventListenerParams<LX.UpdateProgressInfo>): RemoveListener => {
   rendererOn(WIN_MAIN_RENDERER_EVENT_NAME.update_progress, listener)
   return () => {
     rendererOff(WIN_MAIN_RENDERER_EVENT_NAME.update_progress, listener)
   }
 }
 
-export const onUpdateDownloaded = (listener: LX.IpcRendererEventListenerParams<UpdateDownloadedEvent>): RemoveListener => {
+export const onUpdateDownloaded = (listener: LX.IpcRendererEventListenerParams<{ fileName: string }>): RemoveListener => {
   rendererOn(WIN_MAIN_RENDERER_EVENT_NAME.update_downloaded, listener)
   return () => {
     rendererOff(WIN_MAIN_RENDERER_EVENT_NAME.update_downloaded, listener)
-  }
-}
-
-export const onUpdateNotAvailable = (listener: LX.IpcRendererEventListenerParams<UpdateInfo>): RemoveListener => {
-  rendererOn(WIN_MAIN_RENDERER_EVENT_NAME.update_not_available, listener)
-  return () => {
-    rendererOff(WIN_MAIN_RENDERER_EVENT_NAME.update_not_available, listener)
   }
 }
 

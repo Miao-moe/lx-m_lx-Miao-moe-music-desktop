@@ -1,19 +1,15 @@
 import { httpGet } from './request'
 
-// TODO add Notice
-
-// 更新检测：本项目发布地址为 Miao-moe/lx-Miao-moe-music-desktop 的 GitHub Releases
 const REPO_OWNER = 'Miao-moe'
-const REPO_NAME = 'lx-Miao-moe-music-desktop'
-
-const address = [
-  [`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`, 'github'],
-]
+const REPO_NAME = 'lx-m_lx-Miao-moe-music-desktop'
+const LATEST_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`
 
 const request = async(url, retryNum = 0) => {
   return new Promise((resolve, reject) => {
     httpGet(url, {
       timeout: 10000,
+      follow: true,
+      follow_max: 5,
       headers: {
         'User-Agent': 'lx-music-desktop',
         Accept: 'application/vnd.github+json',
@@ -28,35 +24,57 @@ const request = async(url, retryNum = 0) => {
   })
 }
 
-const getGithubReleaseInfo = async(url) => {
-  return request(url).then(info => {
-    if (!info || info.tag_name == null) throw new Error('failed')
-    // GitHub Release 的 tag 常带 v 前缀，统一去除
-    const version = String(info.tag_name).replace(/^v/i, '')
-    return {
-      version,
-      desc: info.body ?? '',
-      history: [],
+const getArchKeyword = () => {
+  switch (process.arch) {
+    case 'x64': return 'x64'
+    case 'ia32': return 'x86'
+    case 'arm64': return 'arm64'
+    case 'arm': return 'armv7l'
+    default: return process.arch
+  }
+}
+
+const selectAsset = (assets) => {
+  if (!Array.isArray(assets) || !assets.length) return null
+  const arch = getArchKeyword().toLowerCase()
+  const platform = process.platform
+
+  let candidates = assets.filter(asset => {
+    const name = (asset.name || '').toLowerCase()
+    switch (platform) {
+      case 'win32': return name.endsWith('.exe')
+      case 'darwin': return name.endsWith('.dmg')
+      case 'linux': return name.endsWith('.appimage') || name.endsWith('.deb')
+      default: return false
     }
   })
-}
+  if (!candidates.length) return null
 
-export const getVersionInfo = async(index = 0) => {
-  const [url, source] = address[index]
-  let promise
-  switch (source) {
-    case 'github':
-      promise = getGithubReleaseInfo(url)
-      break
+  const archMatched = candidates.filter(asset => (asset.name || '').toLowerCase().includes(arch))
+  if (archMatched.length) candidates = archMatched
+
+  if (platform === 'win32') {
+    const setup = candidates.find(asset => (asset.name || '').toLowerCase().includes('setup'))
+    if (setup) return setup
   }
 
-  return promise.catch(async(err) => {
-    index++
-    if (index >= address.length) throw err
-    return getVersionInfo(index)
-  })
+  return candidates[0]
 }
 
-// getVersionInfo().then(info => {
-//   console.log(info)
-// })
+export const getVersionInfo = async() => {
+  const info = await request(LATEST_API)
+  if (!info || info.tag_name == null) throw new Error('failed')
+
+  const version = String(info.tag_name).replace(/^v/i, '')
+  const asset = selectAsset(info.assets)
+
+  return {
+    version,
+    desc: info.body ?? '',
+    history: [],
+    downloadUrl: asset?.browser_download_url ?? '',
+    fileName: asset?.name ?? '',
+    size: asset?.size ?? 0,
+    digest: asset?.digest ?? '',
+  }
+}
