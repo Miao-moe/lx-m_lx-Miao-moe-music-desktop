@@ -112,4 +112,17 @@ declare namespace LX {
     version: string
     desc: string
   }
+  interface UpdateProgressInfo {
+    progress: number
+    transferred: number
+    total: number
+    bytesPerSecond: number
+  }
+  interface UpdateDownloadInfo {
+    version: string
+    downloadUrl: string
+    fileName: string
+    size: number
+    digest: string
+  }
 }

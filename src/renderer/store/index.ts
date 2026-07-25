@@ -2,7 +2,6 @@ import { ref, reactive, shallowRef, markRaw, computed, watch } from '@common/uti
 import { windowSizeList as configWindowSizeList } from '@common/config'
 import { appSetting } from './setting'
 import pkg from '../../../package.json'
-import { type ProgressInfo } from 'electron-updater'
 import music from '@renderer/utils/musicSdk'
 process.versions.app = pkg.version
 
@@ -114,13 +113,17 @@ export const versionInfo = window.lxData.versionInfo = reactive<{
     version: string
     desc: string
     history?: LX.VersionInfo[]
+    downloadUrl?: string
+    fileName?: string
+    size?: number
+    digest?: string
   } | null
   showModal: boolean
   isUnknown: boolean
   isLatest: boolean
   reCheck: boolean
   status: LX.UpdateStatus
-  downloadProgress: ProgressInfo | null
+  downloadProgress: LX.UpdateProgressInfo | null
 }>({
   version: pkg.version,
   newVersion: null,

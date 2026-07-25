@@ -1,13 +1,12 @@
 import { nextTick, onBeforeUnmount, watch } from '@common/utils/vueTools'
 import {
-  onUpdateAvailable,
   onUpdateDownloaded,
   onUpdateError,
-  onUpdateNotAvailable,
   onUpdateProgress,
   getIgnoreVersion,
   getLastStartInfo,
   saveLastStartInfo,
+  downloadUpdate,
 } from '@renderer/utils/ipc'
 import { compareVer, isWin } from '@common/utils'
 import { isShowChangeLog, versionInfo } from '@renderer/store'
@@ -17,6 +16,7 @@ import { appSetting } from '@renderer/store/setting'
 
 export default () => {
   let isShowedChangeLog = false
+  let hasAutoDownloadTriggered = false
 
   // 更新超时定时器
   let updateTimeout: number | null = null
@@ -52,7 +52,7 @@ export default () => {
       if (version) {
         if (compareVer(process.versions.app, version) < 0) {
           void dialog({
-            message: window.i18n.t('update__downgrade_tip', { ver: `${version} → ${process.versions.app}` }),
+            message: window.i18n.t('update__downgrade_tip', { ver: `${version} -> ${process.versions.app}` }),
             confirmButtonText: window.i18n.t('update__ignore_confirm_tip_confirm'),
           })
           return
@@ -83,6 +83,20 @@ export default () => {
       }
       versionInfo.newVersion = result
       return result
+    })
+  }
+
+  const triggerDownload = () => {
+    const info = versionInfo.newVersion
+    if (!info?.downloadUrl) return
+    versionInfo.status = 'downloading'
+    startUpdateTimeout()
+    downloadUpdate({
+      version: info.version,
+      downloadUrl: info.downloadUrl,
+      fileName: info.fileName ?? '',
+      size: info.size ?? 0,
+      digest: info.digest ?? '',
     })
   }
 
@@ -136,6 +150,12 @@ export default () => {
             }, 500)
           }
         })
+
+        // 自动下载（当设置了 tryAutoUpdate 且为首次发现新版本时）
+        if (!hasAutoDownloadTriggered && !status && appSetting['common.tryAutoUpdate']) {
+          hasAutoDownloadTriggered = true
+          triggerDownload()
+        }
       })
     }).finally(() => {
       // @ts-expect-error
@@ -143,38 +163,9 @@ export default () => {
     })
   }
 
-  const rUpdateAvailable = onUpdateAvailable(({ params: info }) => {
-    // versionInfo.isDownloading = true
-    // console.log(info)
-    versionInfo.newVersion = {
-      version: info.version,
-      desc: info.releaseNotes as string,
-    }
-    versionInfo.isLatest = false
-    if (appSetting['common.tryAutoUpdate']) {
-      versionInfo.status = 'downloading'
-      startUpdateTimeout()
-    }
-    void nextTick(() => {
-      showUpdateModal()
-    })
-  })
-  const rUpdateNotAvailable = onUpdateNotAvailable(({ params: info }) => {
-    clearUpdateTimeout()
-    // versionInfo.newVersion = {
-    //   version: info.version,
-    //   desc: info.releaseNotes as string,
-    // }
-    void handleGetVersionInfo().finally(() => {
-      versionInfo.isLatest = true
-      versionInfo.isUnknown = false
-      versionInfo.status = 'idle'
-      handleShowChangeLog()
-    })
-  })
   const rUpdateError = onUpdateError((params) => {
     clearUpdateTimeout()
-    // versionInfo.status = 'error'
+    versionInfo.downloadProgress = null
     void nextTick(() => {
       showUpdateModal('error')
     })
@@ -184,10 +175,15 @@ export default () => {
   })
   const rUpdateDownloaded = onUpdateDownloaded(({ params: info }) => {
     clearUpdateTimeout()
-    // versionInfo.status = 'downloaded'
+    versionInfo.downloadProgress = null
     void nextTick(() => {
       showUpdateModal('downloaded')
     })
+  })
+
+  // 监听 reCheck 变化以触发重新检查
+  watch(() => versionInfo.reCheck, (val) => {
+    if (val) showUpdateModal()
   })
 
   watch(() => versionInfo.showModal, (visible) => {
@@ -197,10 +193,13 @@ export default () => {
     }, 1000)
   })
 
+  // 启动后延迟触发首次版本检查
+  setTimeout(() => {
+    showUpdateModal()
+  }, 3000)
+
   onBeforeUnmount(() => {
     clearUpdateTimeout()
-    rUpdateAvailable()
-    rUpdateNotAvailable()
     rUpdateError()
     rUpdateProgress()
     rUpdateDownloaded()
