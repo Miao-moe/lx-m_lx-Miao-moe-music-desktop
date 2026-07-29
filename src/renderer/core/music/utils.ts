@@ -218,7 +218,7 @@ export const getOnlineOtherSourcePicByLocal = async(musicInfo: LX.Music.MusicInf
   })
 }
 
-export const TRY_QUALITYS_LIST = ['flac24bit', 'flac', '320k'] as const
+export const TRY_QUALITYS_LIST = ['master', 'atmos', 'hires', 'flac24bit', 'flac', '320k'] as const
 type TryQualityType = typeof TRY_QUALITYS_LIST[number]
 export const getPlayQuality = (highQuality: LX.Quality, musicInfo: LX.Music.MusicInfoOnline): LX.Quality => {
   let type: LX.Quality = '128k'
@@ -227,11 +227,35 @@ export const getPlayQuality = (highQuality: LX.Quality, musicInfo: LX.Music.Musi
 
     let t = TRY_QUALITYS_LIST
       .slice(TRY_QUALITYS_LIST.indexOf(highQuality as TryQualityType))
-      .find(q => musicInfo.meta._qualitys[q] && list?.includes(q))
+      .find(q => {
+        if (list) {
+          if (!list.includes(q)) return false
+          if ((q === 'master' || q === 'atmos' || q === 'hires') && !musicInfo.meta._qualitys.flac24bit) return false
+          return true
+        }
+        return !!musicInfo.meta._qualitys[q]
+      })
 
     if (t) type = t
   }
   return type
+}
+
+const EXTRA_QUALITY_TIERS = ['master', 'atmos', 'hires'] as const
+
+export const getMaxQuality = (musicInfo: LX.Music.MusicInfoOnline, sourceQualityList: readonly string[]): LX.Quality => {
+  if (musicInfo.meta._qualitys.flac24bit) {
+    for (const q of EXTRA_QUALITY_TIERS) {
+      if (sourceQualityList.includes(q)) return q as LX.Quality
+    }
+    return 'flac24bit'
+  }
+  if (musicInfo.meta._qualitys.flac) return 'flac'
+  if (musicInfo.meta._qualitys.ape) return 'ape'
+  if (musicInfo.meta._qualitys.wav) return 'wav'
+  if (musicInfo.meta._qualitys['320k']) return '320k'
+  if (musicInfo.meta._qualitys['192k']) return '192k'
+  return '128k'
 }
 
 export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggleSource, isRefresh, retryedSource = [] }: {
@@ -256,7 +280,10 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
     retryedSource.push(musicInfo.source)
     if (!assertApiSupport(musicInfo.source)) continue
     itemQuality = quality ?? getPlayQuality(appSetting['player.playQuality'], musicInfo)
-    if (!musicInfo.meta._qualitys[itemQuality]) continue
+    if (!musicInfo.meta._qualitys[itemQuality]) {
+      const list = qualityList.value[musicInfo.source]
+      if (!list?.includes(itemQuality)) continue
+    }
 
     console.log('try toggle to: ', musicInfo.source, musicInfo.name, musicInfo.singer, musicInfo.interval)
     onToggleSource(musicInfo)

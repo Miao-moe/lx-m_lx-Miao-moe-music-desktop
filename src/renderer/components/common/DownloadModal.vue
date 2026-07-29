@@ -12,6 +12,7 @@
 <script>
 import { qualityList } from '@renderer/store'
 import { createDownloadTasks } from '@renderer/store/download/action'
+import { getMaxQuality } from '@renderer/core/music/utils'
 
 export default {
   props: {
@@ -50,7 +51,19 @@ export default {
       return this.qualityList[this.musicInfo.source] || []
     },
     qualitys() {
-      return this.info.meta?.qualitys?.filter(quality => this.checkSource(quality.type)) || []
+      const builtIn = (this.info.meta?.qualitys || [])
+        .filter(quality => this.checkSource(quality.type))
+      const qualityOrder = ['128k', '192k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'atmos_plus', 'master']
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const maxQuality = getMaxQuality(this.info, this.sourceQualityList)
+      const maxIdx = qualityOrder.indexOf(maxQuality)
+      const builtInTypes = new Set(builtIn.map(q => q.type))
+      const extras = this.sourceQualityList
+        .filter(q => !builtInTypes.has(q) && qualityOrder.indexOf(q) <= maxIdx)
+        .map(type => ({ type, size: null }))
+      return [...builtIn, ...extras]
+        .filter(q => qualityOrder.indexOf(q.type) <= maxIdx)
+        .sort((a, b) => qualityOrder.indexOf(a.type) - qualityOrder.indexOf(b.type))
     },
   },
   methods: {
@@ -65,6 +78,10 @@ export default {
       switch (quality) {
         case 'flac24bit':
           return this.$t('download__lossless') + ' FLAC Hires'
+        case 'hires':
+        case 'atmos':
+        case 'atmos_plus':
+        case 'master':
         case 'flac':
         case 'ape':
         case 'wav':
@@ -91,6 +108,8 @@ export default {
   padding: 15px;
   max-width: 400px;
   min-width: 200px;
+  max-height: 70vh;
+  overflow-y: auto;
   display: flex;
   flex-flow: column nowrap;
   justify-content: center;

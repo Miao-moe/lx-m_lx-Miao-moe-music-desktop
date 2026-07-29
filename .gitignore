@@ -70,4 +70,6 @@ publish/assets
 
 publish/utils/githubToken.js
 
+kaifamoshi.cmd
+
 src/**/*-internal.js
