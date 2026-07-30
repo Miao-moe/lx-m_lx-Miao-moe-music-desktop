@@ -71,5 +71,6 @@ publish/assets
 publish/utils/githubToken.js
 
 kaifamoshi.cmd
+build_pack.cmd
 
 src/**/*-internal.js
