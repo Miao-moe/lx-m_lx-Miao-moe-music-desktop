@@ -37,6 +37,9 @@ export const getExt = (type: string): LX.Download.FileExt => {
       return 'ape'
     case 'flac':
     case 'flac24bit':
+    case 'hires':
+    case 'atmos':
+    case 'master':
       return 'flac'
     case 'wav':
       return 'wav'
@@ -60,7 +63,11 @@ export const getMusicType = (musicInfo: LX.Music.MusicInfoOnline, type: LX.Quali
   if (!list.includes(type)) type = list[list.length - 1]
   const rangeType = QUALITYS.slice(QUALITYS.indexOf(type))
   for (const type of rangeType) {
-    if (musicInfo.meta._qualitys[type]) return type
+    if (type === 'master' || type === 'atmos' || type === 'hires') {
+      if (musicInfo.meta._qualitys.flac24bit && list.includes(type)) return type
+    } else if (musicInfo.meta._qualitys[type] || list.includes(type)) {
+      return type
+    }
   }
   return '128k'
 }

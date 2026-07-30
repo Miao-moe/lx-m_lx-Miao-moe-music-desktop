@@ -108,15 +108,26 @@ export default {
         appSetting[item.settingKey] = cookie
         updateSetting({ [item.settingKey]: cookie })
         loginStates[item.id] = { busy: false, tip: t('setting__cookie_login_done'), error: false }
-        const result = await syncCookiePlaylists(item.id, playlists)
-        if (result.synced) {
-          loginStates[item.id] = {
-            busy: false,
-            tip: t('setting__cookie_sync_now_done', { list: String(result.listCount), count: String(result.count) }),
-            error: false,
+
+        syncing.value = true
+        syncTip.value = ''
+        syncError.value = false
+        try {
+          const result = await syncCookiePlaylists(item.id, playlists)
+          if (result.synced) {
+            syncTip.value = t('setting__cookie_sync_now_done', { list: String(result.listCount), count: String(result.count) })
+            syncError.value = !!result.error
+          } else if (result.error) {
+            syncError.value = true
+            syncTip.value = t('setting__cookie_sync_now_failed')
+          } else {
+            syncTip.value = t('setting__cookie_sync_now_skipped')
           }
-        } else if (result.error) {
-          loginStates[item.id] = { busy: false, tip: t('setting__cookie_sync_now_failed'), error: true }
+        } catch {
+          syncError.value = true
+          syncTip.value = t('setting__cookie_sync_now_failed')
+        } finally {
+          syncing.value = false
         }
       } catch {
         loginStates[item.id] = { busy: false, tip: t('setting__cookie_login_failed'), error: true }

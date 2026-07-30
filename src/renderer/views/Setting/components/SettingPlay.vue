@@ -38,7 +38,7 @@ dd
   div
     base-checkbox.gap-left(
       v-for="item in playQualityList" :id="`setting_play_quality_${item}`" :key="item"
-      name="setting_play_quality" need :model-value="appSetting['player.playQuality']" :value="item" :label="item"
+      name="setting_play_quality" need :model-value="appSetting['player.playQuality']" :value="item" :label="getQualityLabel(item)"
       @update:model-value="updateSetting({'player.playQuality': $event})")
 
 dd(:aria-label="$t('setting__play_mediaDevice_title')")
@@ -64,6 +64,15 @@ export default {
   setup() {
     const t = useI18n()
     const playQualityList = [...TRY_QUALITYS_LIST, '128k'].reverse()
+    const getQualityLabel = (quality) => {
+      switch (quality) {
+        case 'flac24bit': return t('setting__play_quality_master')
+        case 'flac': return t('setting__play_quality_lossless')
+        case '320k': return t('setting__play_quality_high')
+        case '128k': return t('setting__play_quality_normal')
+        default: return quality
+      }
+    }
 
     const mediaDevices = ref([])
     const getMediaDevice = async() => {
@@ -148,6 +157,7 @@ export default {
       isMaxOutputChannelCount,
       handleUpdateMaxOutputChannelCount,
       playQualityList,
+      getQualityLabel,
       isMac,
     }
   },
