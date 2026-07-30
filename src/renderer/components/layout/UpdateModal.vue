@@ -82,9 +82,10 @@ material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose
         p(v-if="progress") 当前下载进度：{{ progress }}
         p(v-else) &nbsp;
       div(:class="$style.btns")
-        base-btn(:class="$style.btn2" @click="handleIgnoreClick") {{ isIgnored ? '取消忽略' : '忽略更新该版本' }}
-        base-btn(v-if="versionInfo.status == 'downloading'" :class="$style.btn2" disabled) 下载更新中...
-        base-btn(v-else :class="$style.btn2" @click="handleDownloadClick") 下载更新
+        base-btn(:class="$style.btn3" @click="handleClose") 暂不更新
+        base-btn(:class="$style.btn3" @click="handleManualUpdate") 手动更新
+        base-btn(v-if="versionInfo.status == 'downloading'" :class="$style.btn3" disabled) 下载更新中...
+        base-btn(v-else :class="$style.btn3" @click="handleDownloadClick") 自动更新
 </template>
 
 <script>
@@ -186,6 +187,10 @@ export default {
         size: info.size ?? 0,
         digest: info.digest ?? '',
       })
+    },
+    handleManualUpdate() {
+      this.handleOpenUrl('https://github.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/releases')
+      this.handleClose()
     },
     handleCheckUpdate() {
       if (this.isIgnored) saveIgnoreVersion(this.ignoreVersion = null)
@@ -321,6 +326,11 @@ export default {
   margin-top: 10px;
   display: block;
   width: 50%;
+}
+.btn3 {
+  margin-top: 10px;
+  display: block;
+  flex: 1;
 }
 
 </style>

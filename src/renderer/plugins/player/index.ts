@@ -455,7 +455,15 @@ export const setMediaDeviceId = async(mediaDeviceId: string): Promise<void> => {
 }
 
 export const setVolume = (volume: number) => {
-  if (audio) audio.volume = volume
+  if (audio && volume > 1 && !gainNode) {
+    initAdvancedAudioFeatures()
+  }
+  if (gainNode) {
+    if (audio) audio.volume = 1
+    gainNode.gain.value = volume
+  } else if (audio) {
+    audio.volume = volume
+  }
 }
 
 export const getDuration = () => {

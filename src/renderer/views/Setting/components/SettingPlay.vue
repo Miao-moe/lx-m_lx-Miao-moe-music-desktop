@@ -38,8 +38,22 @@ dd
   div
     base-checkbox.gap-left(
       v-for="item in playQualityList" :id="`setting_play_quality_${item}`" :key="item"
-      name="setting_play_quality" need :model-value="appSetting['player.playQuality']" :value="item" :label="getQualityLabel(item)"
+      name="setting_play_quality" need :model-value="appSetting['player.playQuality']" :value="item" :label="item"
       @update:model-value="updateSetting({'player.playQuality': $event})")
+
+dd
+  h3#basic_play_max_volume {{ $t('setting__play_max_volume') }}
+  p(style="color: var(--color-font-label); font-size: 12px; margin-bottom: 6px;") {{ $t('setting__play_max_volume_label') }}
+  div
+    input.gap-left(
+      type="number"
+      style="width: 80px; padding: 4px 8px; border: 1px solid var(--color-primary-light-200-alpha-700); border-radius: 4px; background: var(--color-main-background); color: var(--color-font); font-size: 13px;"
+      :value="maxVolumePercent"
+      min="100" max="200" step="1"
+      @change="handleUpdateMaxVolumeInput"
+    )
+    span(style="margin-left: 4px; font-size: 13px;") %
+    span(v-if="maxVolumeHint" style="margin-left: 8px; color: var(--color-font-label); font-size: 12px;") {{ maxVolumeHint }}
 
 dd(:aria-label="$t('setting__play_mediaDevice_title')")
   h3#play_mediaDevice {{ $t('setting__play_mediaDevice') }}
@@ -48,7 +62,7 @@ dd(:aria-label="$t('setting__play_mediaDevice_title')")
 </template>
 
 <script>
-import { ref, onBeforeUnmount, watch } from '@common/utils/vueTools'
+import { ref, onBeforeUnmount, watch, computed } from '@common/utils/vueTools'
 import { hasInitedAdvancedAudioFeatures, setMediaDeviceId } from '@renderer/plugins/player'
 import { dialog } from '@renderer/plugins/Dialog'
 import { useI18n } from '@renderer/plugins/i18n'
@@ -64,15 +78,6 @@ export default {
   setup() {
     const t = useI18n()
     const playQualityList = [...TRY_QUALITYS_LIST, '128k'].reverse()
-    const getQualityLabel = (quality) => {
-      switch (quality) {
-        case 'flac24bit': return t('setting__play_quality_master')
-        case 'flac': return t('setting__play_quality_lossless')
-        case '320k': return t('setting__play_quality_high')
-        case '128k': return t('setting__play_quality_normal')
-        default: return quality
-      }
-    }
 
     const mediaDevices = ref([])
     const getMediaDevice = async() => {
@@ -146,6 +151,33 @@ export default {
       updateSetting({ 'player.isMaxOutputChannelCount': enabled })
     }
 
+    const maxVolume = ref(appSetting['player.maxVolume'] ?? 1)
+    const maxVolumePercent = computed(() => Math.trunc(maxVolume.value * 100))
+    const maxVolumeHint = ref('')
+
+    const handleUpdateMaxVolumeInput = (event) => {
+      let pct = parseInt(event.target.value)
+      if (isNaN(pct)) {
+        pct = Math.trunc(maxVolume.value * 100)
+      }
+      if (pct < 100) {
+        pct = 100
+        maxVolumeHint.value = '最低支持 100%（不可低于 100%）'
+        setTimeout(() => { maxVolumeHint.value = '' }, 3000)
+      } else if (pct > 200) {
+        pct = 200
+        maxVolumeHint.value = '最高支持 200%（不可超过 200%）'
+        setTimeout(() => { maxVolumeHint.value = '' }, 3000)
+      } else {
+        maxVolumeHint.value = ''
+      }
+      maxVolume.value = pct / 100
+      updateSetting({ 'player.maxVolume': maxVolume.value })
+    }
+    watch(() => appSetting['player.maxVolume'], (val) => {
+      if (val != null) maxVolume.value = val
+    })
+
 
     return {
       appSetting,
@@ -157,7 +189,10 @@ export default {
       isMaxOutputChannelCount,
       handleUpdateMaxOutputChannelCount,
       playQualityList,
-      getQualityLabel,
+      maxVolume,
+      maxVolumePercent,
+      maxVolumeHint,
+      handleUpdateMaxVolumeInput,
       isMac,
     }
   },

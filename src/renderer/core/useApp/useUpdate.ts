@@ -6,9 +6,8 @@ import {
   getIgnoreVersion,
   getLastStartInfo,
   saveLastStartInfo,
-  downloadUpdate,
 } from '@renderer/utils/ipc'
-import { compareVer, isWin } from '@common/utils'
+import { compareVer } from '@common/utils'
 import { isShowChangeLog, versionInfo } from '@renderer/store'
 import { getVersionInfo } from '@renderer/utils/update'
 import { dialog } from '@renderer/plugins/Dialog'
@@ -16,32 +15,8 @@ import { appSetting } from '@renderer/store/setting'
 
 export default () => {
   let isShowedChangeLog = false
-  let hasAutoDownloadTriggered = false
 
-  // 更新超时定时器
-  let updateTimeout: number | null = null
-  const startUpdateTimeout = () => {
-    if (window.lx.isProd && !(isWin && process.arch.includes('arm'))) {
-      updateTimeout = window.setTimeout(() => {
-        updateTimeout = null
-        void nextTick(() => {
-          showUpdateModal()
-          setTimeout(() => {
-            void dialog({
-              message: window.i18n.t('update__timeout_top'),
-              confirmButtonText: window.i18n.t('alert_button_text'),
-            })
-          }, 500)
-        })
-      }, 60 * 60 * 1000)
-    }
-  }
-
-  const clearUpdateTimeout = () => {
-    if (!updateTimeout) return
-    clearTimeout(updateTimeout)
-    updateTimeout = null
-  }
+  const clearUpdateTimeout = () => {}
 
   const handleShowChangeLog = () => {
     isShowedChangeLog = true
@@ -83,20 +58,6 @@ export default () => {
       }
       versionInfo.newVersion = result
       return result
-    })
-  }
-
-  const triggerDownload = () => {
-    const info = versionInfo.newVersion
-    if (!info?.downloadUrl) return
-    versionInfo.status = 'downloading'
-    startUpdateTimeout()
-    downloadUpdate({
-      version: info.version,
-      downloadUrl: info.downloadUrl,
-      fileName: info.fileName ?? '',
-      size: info.size ?? 0,
-      digest: info.digest ?? '',
     })
   }
 
@@ -150,12 +111,6 @@ export default () => {
             }, 500)
           }
         })
-
-        // 自动下载（当设置了 tryAutoUpdate 且为首次发现新版本时）
-        if (!hasAutoDownloadTriggered && !status && appSetting['common.tryAutoUpdate']) {
-          hasAutoDownloadTriggered = true
-          triggerDownload()
-        }
       })
     }).finally(() => {
       // @ts-expect-error

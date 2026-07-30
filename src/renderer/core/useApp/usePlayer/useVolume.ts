@@ -10,9 +10,12 @@ import { appSetting, saveVolume, saveVolumeIsMute } from '@renderer/store/settin
 export default () => {
   const handleSaveVolume = debounce(saveVolume, 300)
 
+  const initialMax = appSetting['player.maxVolume'] ?? 1
+  let lastMaxVolume = initialMax
+
   setVolume(appSetting['player.volume'])
   setMute(appSetting['player.isMute'])
-  setPlayerVolume(appSetting['player.volume'])
+  setPlayerVolume(appSetting['player.volume'] * initialMax)
   setPlayerMute(appSetting['player.isMute'])
 
   const handleToggleVolumeMute = (_isMute?: boolean) => {
@@ -22,8 +25,10 @@ export default () => {
   }
 
   const handleSetVolume = (num: number) => {
+    const max = appSetting['player.maxVolume'] ?? 1
     const _volume = num < 0 ? 0 : num > 1 ? 1 : num
     setVolume(_volume)
+    setPlayerVolume(_volume * max)
   }
 
   const handleSetVolumeUp = (step = 0.04) => {
@@ -45,7 +50,7 @@ export default () => {
 
   watch(volume, _volume => {
     handleSaveVolume(_volume)
-    setPlayerVolume(_volume)
+    setPlayerVolume(_volume * (appSetting['player.maxVolume'] ?? 1))
   })
   watch(isMute, mute => {
     saveVolumeIsMute(mute)
@@ -53,9 +58,19 @@ export default () => {
   })
   watch(() => appSetting['player.volume'], _volume => {
     setVolume(_volume)
+    setPlayerVolume(_volume * (appSetting['player.maxVolume'] ?? 1))
   })
   watch(() => appSetting['player.isMute'], muteStatus => {
     setMute(muteStatus)
+  })
+  watch(() => appSetting['player.maxVolume'], (newMax) => {
+    const max = newMax ?? 1
+    const actual = volume.value * lastMaxVolume
+    const newVolume = Math.min(1, Math.max(0, actual / max))
+    lastMaxVolume = max
+    setVolume(newVolume)
+    handleSaveVolume(newVolume)
+    setPlayerVolume(newVolume * max)
   })
 
 
