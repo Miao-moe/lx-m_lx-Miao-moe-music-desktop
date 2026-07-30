@@ -29,6 +29,7 @@ const defaultSetting: LX.AppSetting = {
   'player.isShowTaskProgess': true,
   'player.isShowStatusBarLyric': false,
   'player.volume': 1,
+  'player.maxVolume': 1,
   'player.powerSaveBlocker': true,
   'player.isMute': false,
   'player.playbackRate': 1,

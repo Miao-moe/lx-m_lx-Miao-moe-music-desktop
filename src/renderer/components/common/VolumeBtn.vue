@@ -1,14 +1,14 @@
 <template>
   <material-popup-btn :class="$style.btnContent">
-    <button :class="$style.btn" :aria-label="isMute ? $t('player__volume_muted') : `${$t('player__volume')}${parseInt(volume * 100)}%`" @wheel="handleWheel">
+    <button :class="$style.btn" :aria-label="isMute ? $t('player__volume_muted') : `${$t('player__volume')}${Math.trunc(volume * maxVolume * 100)}%`" @wheel.prevent="handleWheel">
       <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="100%" viewBox="0 0 24 24" space="preserve">
         <use :xlink:href="icon" />
       </svg>
     </button>
     <template #content>
-      <div :class="$style.setting">
+      <div :class="$style.setting" @wheel.prevent="handleWheel">
         <div :class="$style.info">
-          <span>{{ Math.trunc(volume * 100) }}%</span>
+          <span>{{ Math.trunc(volume * maxVolume * 100) }}%</span>
           <base-checkbox
             id="player__volume_mute"
             :model-value="isMute"
@@ -16,7 +16,7 @@
             @update:model-value="saveVolumeIsMute($event)"
           />
         </div>
-        <base-slider-bar :class="$style.slider" :value="volume" :min="0" :max="1" :step="0.01" @change="handleUpdateVolume" />
+        <base-slider-bar :class="$style.slider" :value="volume * maxVolume" :min="0" :max="maxVolume" :step="0.01" @change="handleUpdateVolume" />
       </div>
     </template>
   </material-popup-btn>
@@ -24,18 +24,19 @@
 
 <script setup>
 import { computed } from '@common/utils/vueTools'
-// import useNextTogglePlay from '@renderer/utils/compositions/useNextTogglePlay'
-// import useToggleDesktopLyric from '@renderer/utils/compositions/useToggleDesktopLyric'
-// import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
-import { saveVolumeIsMute } from '@renderer/store/setting'
+import { saveVolumeIsMute, appSetting } from '@renderer/store/setting'
 import { volume, isMute } from '@renderer/store/player/volume'
 
+const maxVolume = computed(() => appSetting['player.maxVolume'] ?? 1)
+
 const handleWheel = (event) => {
-  window.app_event.setVolume(Math.round(volume.value * 100 + (-event.deltaY / 100 * 2)) / 100)
+  const step = 0.01
+  const delta = event.deltaY > 0 ? -step : step
+  window.app_event.setVolume(Math.max(0, Math.min(1, volume.value + delta)))
 }
 
 const handleUpdateVolume = (val) => {
-  window.app_event.setVolume(val)
+  window.app_event.setVolume(val / maxVolume.value)
 }
 
 const icon = computed(() => {

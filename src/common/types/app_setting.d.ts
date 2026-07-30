@@ -115,6 +115,11 @@ declare global {
       'player.volume': number
 
       /**
+       * 最大音量（1=100%, 2=200%）
+       */
+      'player.maxVolume': number
+
+      /**
        * 播放歌曲时是否阻止电脑休眠
        */
       'player.powerSaveBlocker': boolean

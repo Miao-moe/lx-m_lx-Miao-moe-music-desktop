@@ -14,6 +14,15 @@ dd
         @update:model-value="updateSetting({ 'cookie.enableFavListSync': $event })"
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__cookie_sync_fav_list_tip')")
+    .gap-top
+      base-checkbox(
+        id="setting_cookie_enable_play_history_sync"
+        :model-value="appSetting['cookie.enablePlayHistorySync']"
+        :label="$t('setting__cookie_sync_play_history')"
+        @update:model-value="updateSetting({ 'cookie.enablePlayHistorySync': $event })"
+      )
+      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__cookie_sync_play_history_tip')")
+      p(style="color: var(--color-font-label); font-size: 11px; margin-top: 4px; padding-left: 24px;") {{ $t('setting__cookie_sync_play_history_unsupported') }}
     .p.gap-top(style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;")
       base-btn.btn(min :disabled="syncing" @click="handleSyncNow") {{ syncing ? $t('setting__cookie_sync_now_running') : $t('setting__cookie_sync_now') }}
       span(v-if="syncTip" :style="{ color: syncError ? 'var(--color-font-label)' : 'var(--color-primary)', fontSize: '12px' }") {{ syncTip }}
