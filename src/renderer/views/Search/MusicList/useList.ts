@@ -1,7 +1,7 @@
 import { LIST_IDS } from '@common/constants'
 import { ref } from '@common/utils/vueTools'
 import { playList } from '@renderer/core/player/action'
-import { getListMusics, addListMusics } from '@renderer/store/list/action'
+import { getListMusics, addListMusics, setTempList } from '@renderer/store/list/action'
 import { addHistoryWord } from '@renderer/store/search/action'
 // import { useI18n } from '@renderer/plugins/i18n'
 // import { } from '@renderer/store/search/state'
@@ -44,8 +44,17 @@ export default () => {
 
     await addListMusics(LIST_IDS.DEFAULT, [targetSong])
 
-    let targetIndex = defaultListMusics.findIndex(s => s.id === targetSong.id)
-    if (targetIndex > -1) playList(LIST_IDS.DEFAULT, targetIndex)
+    // 播放列表加入当前搜索结果的整批歌曲
+    const searchList = listInfo.value.list
+    const targetIndex = searchList.findIndex(s => s.id === targetSong.id)
+    if (targetIndex > -1) {
+      await setTempList(`search__${listInfo.value.key ?? ''}`, [...searchList])
+      playList(LIST_IDS.TEMP, targetIndex)
+      return
+    }
+
+    let defaultIndex = defaultListMusics.findIndex(s => s.id === targetSong.id)
+    if (defaultIndex > -1) playList(LIST_IDS.DEFAULT, defaultIndex)
   }
 
   return {

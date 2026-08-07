@@ -1,5 +1,5 @@
 import { isEmpty, setPause, setPlay, setResource, setStop } from '@renderer/plugins/player'
-import { isPlay, playedList, playInfo, playMusicInfo, tempPlayList, musicInfo as _musicInfo } from '@renderer/store/player/state'
+import { isPlay, playedList, playInfo, playMusicInfo, musicInfo as _musicInfo, playQueueList, PLAY_QUEUE_LIST_ID } from '@renderer/store/player/state'
 import {
   getList,
   clearPlayedList,
@@ -8,9 +8,10 @@ import {
   addPlayedList,
   setMusicInfo,
   setAllStatus,
-  removeTempPlayList,
   setPlayListId,
   removePlayedList,
+  setPlayQueue,
+  updatePlayIndex,
 } from '@renderer/store/player/action'
 import { appSetting } from '@renderer/store/setting'
 import { getMusicUrl, getPicPath, getLyricInfo } from '../music/index'
@@ -180,7 +181,7 @@ const handleRestorePlay = async(restorePlayInfo: LX.Player.SavedPlayInfo) => {
     setAllStatus(window.i18n.t('lyric__load_error'))
   })
 
-  if (appSetting['player.togglePlayMethod'] == 'random' && !playMusicInfo.isTempPlay) addPlayedList({ ...playMusicInfo as LX.Player.PlayMusicInfo })
+  if (appSetting['player.togglePlayMethod'] == 'random' && !playMusicInfo.isTempPlay) addPlayedList({ ...playMusicInfo as LX.Player.PlayMusicInfo, listId: playInfo.playerListId ?? playMusicInfo.listId })
 }
 
 
@@ -205,7 +206,7 @@ const handlePlay = () => {
   clearLoadTimeout()
 
 
-  if (appSetting['player.togglePlayMethod'] == 'random' && !playMusicInfo.isTempPlay) addPlayedList({ ...(playMusicInfo as LX.Player.PlayMusicInfo) })
+  if (appSetting['player.togglePlayMethod'] == 'random' && !playMusicInfo.isTempPlay) addPlayedList({ ...(playMusicInfo as LX.Player.PlayMusicInfo), listId: playInfo.playerListId ?? playMusicInfo.listId })
 
   setMusicUrl(musicInfo)
 
@@ -233,18 +234,26 @@ const handlePlay = () => {
 }
 
 /**
+ * 当前播放队列的来源列表 id（用于判断是否切换了来源列表）
+ */
+let playQueueSourceListId: string | null = null
+
+/**
  * 播放列表内歌曲
  * @param listId 列表id
  * @param id 歌曲id
  */
 export const playListById = (listId: string, id: string) => {
-  const prevListId = playInfo.playerListId
-  setPlayListId(listId)
-  // pause()
-  const musicInfo = getList(listId).find(m => m.id == id)
+  const prevSourceListId = playQueueSourceListId
+  const list = getList(listId)
+  const musicInfo = list.find(m => m.id == id)
   if (!musicInfo) return
+  setPlayQueue(list.map(m => ({ musicInfo: m, listId, isTempPlay: false })))
+  playQueueSourceListId = listId
+  setPlayListId(PLAY_QUEUE_LIST_ID)
+  // pause()
   setPlayMusicInfo(listId, musicInfo)
-  if (appSetting['player.isAutoCleanPlayedList'] || prevListId != listId) clearPlayedList()
+  if (appSetting['player.isAutoCleanPlayedList'] || prevSourceListId != listId) clearPlayedList()
   clearTempPlayeList()
   handlePlay()
 }
@@ -255,13 +264,46 @@ export const playListById = (listId: string, id: string) => {
  * @param index 播放的歌曲位置
  */
 export const playList = (listId: string, index: number) => {
-  const prevListId = playInfo.playerListId
-  setPlayListId(listId)
+  const prevSourceListId = playQueueSourceListId
+  const list = getList(listId)
+  setPlayQueue(list.map(m => ({ musicInfo: m, listId, isTempPlay: false })))
+  playQueueSourceListId = listId
+  setPlayListId(PLAY_QUEUE_LIST_ID)
   // pause()
-  setPlayMusicInfo(listId, getList(listId)[index])
-  if (appSetting['player.isAutoCleanPlayedList'] || prevListId != listId) clearPlayedList()
+  setPlayMusicInfo(listId, list[index])
+  if (appSetting['player.isAutoCleanPlayedList'] || prevSourceListId != listId) clearPlayedList()
   clearTempPlayeList()
   handlePlay()
+}
+
+/**
+ * 播放播放列表（播放队列）内的歌曲
+ * @param index 歌曲在播放队列中的位置
+ */
+export const playQueueById = (index: number) => {
+  const queueItem = playQueueList[index]
+  if (!queueItem) return
+  const prevSourceListId = playQueueSourceListId
+  playQueueSourceListId = queueItem.listId
+  setPlayListId(PLAY_QUEUE_LIST_ID)
+  setPlayMusicInfo(queueItem.listId, queueItem.musicInfo)
+  if (appSetting['player.isAutoCleanPlayedList'] || prevSourceListId != queueItem.listId) clearPlayedList()
+  clearTempPlayeList()
+  handlePlay()
+}
+
+/**
+ * 用列表内容重新填充播放队列（不改变当前播放的歌曲）
+ * 用于排行榜/热门歌单等场景：先播放第一页，全量列表加载完成后更新队列
+ * @param listId 列表 id（列表内容需已加载到缓存中）
+ */
+export const refreshPlayQueueFromList = (listId: string) => {
+  if (playInfo.playerListId != PLAY_QUEUE_LIST_ID) return
+  if (playQueueSourceListId !== listId) return
+  const list = getList(listId)
+  if (!list.length) return
+  setPlayQueue(list.map(m => ({ musicInfo: m, listId, isTempPlay: false })))
+  updatePlayIndex()
 }
 
 const handleToggleStop = () => {
@@ -283,11 +325,6 @@ export const resetRandomNextMusicInfo = () => {
 }
 
 export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | null> => {
-  if (tempPlayList.length) { // 如果稍后播放列表存在歌曲则直接播放改列表的歌曲
-    const playMusicInfo = tempPlayList[0]
-    return playMusicInfo
-  }
-
   if (playMusicInfo.musicInfo == null) return null
 
   if (randomNextMusicInfo.info) return randomNextMusicInfo.info
@@ -365,8 +402,12 @@ export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | n
 }
 
 const handlePlayNext = (playMusicInfo: LX.Player.PlayMusicInfo) => {
-  // pause()
-  setPlayMusicInfo(playMusicInfo.listId, playMusicInfo.musicInfo, playMusicInfo.isTempPlay)
+  // 播放队列内的歌曲，需要解析出其来源列表 id，用于列表内的播放定位/高亮
+  let listId = playMusicInfo.listId
+  if (listId == PLAY_QUEUE_LIST_ID) {
+    listId = playQueueList.find(item => item.musicInfo.id == playMusicInfo.musicInfo.id)?.listId ?? listId
+  }
+  setPlayMusicInfo(listId, playMusicInfo.musicInfo, playMusicInfo.isTempPlay)
   handlePlay()
 }
 /**
@@ -376,14 +417,6 @@ const handlePlayNext = (playMusicInfo: LX.Player.PlayMusicInfo) => {
  */
 export const playNext = async(isAutoToggle = false): Promise<void> => {
   console.log('skip next', isAutoToggle)
-  if (tempPlayList.length) { // 如果稍后播放列表存在歌曲则直接播放改列表的歌曲
-    const playMusicInfo = tempPlayList[0]
-    removeTempPlayList(0)
-    handlePlayNext(playMusicInfo)
-    console.log('play temp list')
-    return
-  }
-
   if (playMusicInfo.musicInfo == null) {
     handleToggleStop()
     console.log('musicInfo empty')
