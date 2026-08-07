@@ -2,7 +2,7 @@
   <div :class="$style.container">
     <div :class="$style.header">
       <div :class="$style.left">
-        <tag-list :source="source" :tag-id="tagId" :sort-id="sortId" />
+        <tag-list v-if="sortId !== 'recommend'" :source="source" :tag-id="tagId" :sort-id="sortId" />
         <sort-tab :source="source" :tag-id="tagId" :sort-id="sortId" />
       </div>
       <base-btn :class="$style.btn" outline min @click="visibleOpenSongListModal = true">{{ $t('songlist__import_input_show_btn') }}</base-btn>
@@ -22,6 +22,7 @@ import OpenListModal from './components/OpenListModal.vue'
 import ListView from './ListView.vue'
 import { sources, listInfo, isVisibleListDetail } from '@renderer/store/songList/state'
 import { sourceNames } from '@renderer/store'
+import { hasCookie } from '@renderer/utils/cookieManager'
 import { useRoute, useRouter } from '@common/utils/vueRouter'
 
 const source = ref<LX.OnlineSource>('kw')
@@ -60,6 +61,12 @@ const verifyQueryParams = async function(this: any, to: { query: Query, path: st
       _page = '1'
     }
 
+    // 已设置该平台 Cookie 时默认展示主页推荐歌单
+    if (!_sortId && hasCookie(_source)) {
+      _sortId = 'recommend'
+      _tagId = ''
+    }
+
     next({
       path: to.path,
       query: { ...to.query, source: _source, tagId: _tagId, sortId: _sortId, page: _page },
@@ -67,6 +74,8 @@ const verifyQueryParams = async function(this: any, to: { query: Query, path: st
     return
   }
   next()
+  // 未指定排序时：已设置该平台 Cookie 则默认展示主页推荐歌单
+  if (_sortId == null && hasCookie(_source)) _sortId = 'recommend'
   source.value = _source as LX.OnlineSource
   tagId.value = _tagId ?? ''
   sortId.value = _sortId ?? ''

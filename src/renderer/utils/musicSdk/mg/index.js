@@ -6,6 +6,7 @@ import pic from './pic'
 import lyric from './lyric'
 import hotSearch from './hotSearch'
 import comment from './comment'
+import recommend from './recommend'
 // import tipSearch from './tipSearch'
 
 const mg = {
@@ -15,6 +16,7 @@ const mg = {
   leaderboard,
   hotSearch,
   comment,
+  recommend,
   getMusicUrl(songInfo, type) {
     return apis('mg').getMusicUrl(songInfo, type)
   },

@@ -22,10 +22,7 @@ const buildApiUrl = (path, params = {}) => {
   return `${WY_API_BASE}${path}?${query}`
 }
 
-const apiGet = async(path, params = {}) => {
-  const cookie = getCookie('wy')
-  if (!cookie) throw new Error('wy cookie: not configured')
-
+export const apiGet = async(path, params = {}, cookie = getCookie('wy')) => {
   const req = httpFetch(buildApiUrl(path, params), {
     method: 'get',
     headers: {
