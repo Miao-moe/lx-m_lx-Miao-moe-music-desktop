@@ -35,6 +35,12 @@
                 </svg>
                 <span v-else>{{ index + 1 }}</span>
               </div>
+              <div :class="$style.itemImg">
+                <svg v-if="!getCover(item) || imgErrorSet.has(item.key)" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
+                  <use xlink:href="#icon-music" />
+                </svg>
+                <img v-else :src="getCover(item)" :alt="getMusicName(item)" loading="lazy" decoding="async" @error="handleImgError(item.key)" />
+              </div>
               <div :class="$style.itemInfo">
                 <div :class="$style.itemName">{{ getMusicName(item) }}</div>
                 <div :class="$style.itemSinger">{{ getMusicSinger(item) }}</div>
@@ -57,6 +63,7 @@
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from '@common/utils/vueTools'
 import { playQueueList, playMusicInfo } from '@renderer/store/player/state'
 import { removePlayQueue, clearPlayQueue, updatePlayIndex, setPlayMusicInfo } from '@renderer/store/player/action'
+import { getMusicCoverUrl } from '@renderer/utils/musicCover'
 import { playQueueById, stop } from '@renderer/core/player'
 
 const rowHeight = 36
@@ -86,6 +93,24 @@ const getMusicInfo = (item) => {
 const getMusicName = (item) => getMusicInfo(item).name
 const getMusicSinger = (item) => getMusicInfo(item).singer
 const isCurrentItem = (item) => playMusicInfo.musicInfo?.id == item.musicInfo.id
+
+const imgErrorSet = reactive(new Set())
+const coverMap = reactive(new Map())
+
+const handleImgError = (key) => {
+  imgErrorSet.add(key)
+}
+
+const getCover = (item) => {
+  const info = getMusicInfo(item)
+  if (info.img || info.meta?.picUrl) return info.img || info.meta?.picUrl
+  const key = `${item.musicInfo.source}__${item.musicInfo.id}`
+  if (coverMap.has(key)) return coverMap.get(key)
+  getMusicCoverUrl(item.musicInfo).then(url => {
+    if (url) coverMap.set(key, url)
+  })
+  return ''
+}
 
 const currentQueueIndex = () => {
   const id = playMusicInfo.musicInfo?.id
@@ -304,6 +329,30 @@ onBeforeUnmount(() => {
   }
 }
 
+.itemImg {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-left: 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary-background-active);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  svg {
+    fill: var(--color-font-label);
+    opacity: .5;
+  }
+}
+
 .itemInfo {
   flex: auto;
   min-width: 0;
@@ -311,6 +360,7 @@ onBeforeUnmount(() => {
   flex-flow: column nowrap;
   justify-content: center;
   line-height: 1.4;
+  padding-left: 8px;
 }
 
 .itemName {

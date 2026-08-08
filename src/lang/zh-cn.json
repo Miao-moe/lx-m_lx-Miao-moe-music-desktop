@@ -188,6 +188,7 @@
   "media_device__empty_device_tip": "音频输出设备为空，若出现无法播放的情况，请检查声卡驱动是否已安装。或卸载并重新安装软件，安装时选「仅为我安装」，并保持默认安装路径。",
   "min": "最小化",
   "music_album": "专辑名",
+  "music_cover": "封",
   "music_duplicate": "重复歌曲",
   "music_name": "歌曲名",
   "music_singer": "艺术家",

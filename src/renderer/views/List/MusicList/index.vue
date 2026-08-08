@@ -5,6 +5,7 @@
         <thead>
           <tr v-if="actionButtonsVisible">
             <th class="num" style="width: 5%;">#</th>
+            <th class="no-select" style="width: 36px; box-sizing: border-box; padding-right: 8px; text-align: center;">{{ $t('music_cover') }}</th>
             <th class="nobreak">{{ $t('music_name') }}</th>
             <th class="nobreak" style="width: 22%;">{{ $t('music_singer') }}</th>
             <th class="nobreak" style="width: 22%;">{{ $t('music_album') }}</th>
@@ -13,6 +14,7 @@
           </tr>
           <tr v-else>
             <th class="num" style="width: 5%;">#</th>
+            <th class="no-select" style="width: 36px; box-sizing: border-box; padding-right: 8px; text-align: center;">{{ $t('music_cover') }}</th>
             <th class="nobreak">{{ $t('music_name') }}</th>
             <th class="nobreak" style="width: 25%;">{{ $t('music_singer') }}</th>
             <th class="nobreak" style="width: 28%;">{{ $t('music_album') }}</th>
@@ -40,6 +42,12 @@
               </div>
               <div v-else class="num">{{ index + 1 }}</div>
             </transition>
+          </div>
+          <div class="list-item-cell no-select" :class="$style.cover">
+            <img v-if="getCover(item)" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError">
+            <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
+              <use xlink:href="#icon-music" />
+            </svg>
           </div>
           <div class="list-item-cell auto name" :aria-label="item.name">
             <span class="select name">{{ item.name }}</span>
@@ -73,6 +81,12 @@
               <div v-else class="num">{{ index + 1 }}</div>
             </transition>
           </div>
+          <div class="list-item-cell no-select" :class="$style.cover">
+            <img v-if="getCover(item)" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError">
+            <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
+              <use xlink:href="#icon-music" />
+            </svg>
+          </div>
           <div class="list-item-cell auto name">
             <span class="select name" :aria-label="item.name">{{ item.name }}</span>
             <span v-if="isShowSource" class="no-select label-source">{{ item.source }}</span>
@@ -104,8 +118,10 @@
 </template>
 
 <script>
+import { reactive } from '@common/utils/vueTools'
 import { clipboardWriteText } from '@common/utils/electron'
 import { assertApiSupport } from '@renderer/store/utils'
+import { getMusicCoverUrl } from '@renderer/utils/musicCover'
 import SearchList from './components/SearchList.vue'
 import MusicSortModal from './components/MusicSortModal.vue'
 import MusicToggleModal from './components/MusicToggleModal.vue'
@@ -149,6 +165,21 @@ export default {
     const onLoadedList = () => {
       // console.log('restoreScroll', scrollIndex, isAnimation)
       void restoreScroll(scrollIndex, isAnimation)
+    }
+
+    const handleCoverError = (event) => {
+      event.target.style.display = 'none'
+    }
+
+    const coverMap = reactive(new Map())
+    const getCover = (item) => {
+      if (item.img || item.meta?.picUrl) return item.img || item.meta?.picUrl
+      const key = `${item.source}__${item.id}`
+      if (coverMap.has(key)) return coverMap.get(key)
+      getMusicCoverUrl(item).then(url => {
+        if (url) coverMap.set(key, url)
+      })
+      return ''
     }
 
     const {
@@ -354,6 +385,9 @@ export default {
       isShowMusicToggleModal,
       selectedToggleMusicInfo,
       toggleSource,
+
+      handleCoverError,
+      getCover,
     }
   },
 }
@@ -392,6 +426,29 @@ export default {
   align-items: center;
   justify-content: center;
   position: relative;
+}
+.cover {
+  flex: 0 0 36px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-right: 8px;
+  box-sizing: border-box;
+
+  img {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--color-font-label);
+    opacity: .5;
+  }
 }
 .playIcon {
   position: absolute;

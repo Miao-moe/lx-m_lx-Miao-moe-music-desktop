@@ -22,7 +22,7 @@ import OpenListModal from './components/OpenListModal.vue'
 import ListView from './ListView.vue'
 import { sources, listInfo, isVisibleListDetail } from '@renderer/store/songList/state'
 import { sourceNames } from '@renderer/store'
-import { hasCookie } from '@renderer/utils/cookieManager'
+import { hasCookie, type MusicSource } from '@renderer/utils/cookieManager'
 import { useRoute, useRouter } from '@common/utils/vueRouter'
 
 const source = ref<LX.OnlineSource>('kw')
@@ -62,7 +62,7 @@ const verifyQueryParams = async function(this: any, to: { query: Query, path: st
     }
 
     // 已设置该平台 Cookie 时默认展示主页推荐歌单
-    if (!_sortId && hasCookie(_source)) {
+    if (_source && !_sortId && hasCookie(_source as MusicSource)) {
       _sortId = 'recommend'
       _tagId = ''
     }
@@ -75,7 +75,7 @@ const verifyQueryParams = async function(this: any, to: { query: Query, path: st
   }
   next()
   // 未指定排序时：已设置该平台 Cookie 则默认展示主页推荐歌单
-  if (_sortId == null && hasCookie(_source)) _sortId = 'recommend'
+  if (_source && _sortId == null && hasCookie(_source as MusicSource)) _sortId = 'recommend'
   source.value = _source as LX.OnlineSource
   tagId.value = _tagId ?? ''
   sortId.value = _sortId ?? ''
