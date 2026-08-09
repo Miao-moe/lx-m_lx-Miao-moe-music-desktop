@@ -7,7 +7,7 @@
   <a href="https://electronjs.org/releases/stable"><img src="https://img.shields.io/github/package-json/dependency-version/miao-moe/lx-music-desktop/dev/electron/master" alt="Electron version"></a>
 </p>
 
-<p align="center">在 Lx-m Music 桌面版基础上扩展，新增可解耦的扩展音源插件机制与 Cookie 同步功能</p>
+<p align="center">在 LX-X Music 移动版基础上扩展，新增可解耦的扩展音源插件机制与 Cookie 同步功能</p>
 
 ---
 
