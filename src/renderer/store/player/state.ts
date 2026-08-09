@@ -14,6 +14,20 @@ export interface PlayerMusicInfo {
   album: string
 }
 
+/**
+ * 播放列表（播放队列）的列表 id
+ * 播放器切换到播放队列后，`playInfo.playerListId` 会指向这个 id，
+ * 所有播放逻辑（下一首/上一首/随机等）都会遵循 `playQueueList` 这个队列
+ */
+export const PLAY_QUEUE_LIST_ID = '@play_queue'
+
+/**
+ * 播放列表（播放队列）
+ * 每次开始播放（playList/playListById）时，会用目标列表的快照填充该队列，
+ * 之后播放器的一切播放切换逻辑都遵循该队列，不再依赖原列表的变动
+ */
+export const playQueueList = window.lxData.playQueueList = shallowReactive<LX.Player.PlayMusicInfo[]>([])
+
 export const musicInfo = window.lxData.musicInfo = reactive<PlayerMusicInfo>({
   id: null,
   pic: null,

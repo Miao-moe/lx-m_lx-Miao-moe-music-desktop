@@ -1,6 +1,6 @@
 import { onBeforeUnmount } from '@common/utils/vueTools'
 
-import { playInfo, playMusicInfo } from '@renderer/store/player/state'
+import { playInfo, playMusicInfo, playQueueList, PLAY_QUEUE_LIST_ID } from '@renderer/store/player/state'
 import { setPlayMusicInfo, updatePlayIndex } from '@renderer/store/player/action'
 import { throttle } from '@common/utils'
 import { playNext, stop } from '@renderer/core/player'
@@ -13,6 +13,7 @@ export default () => {
     changedListIds.clear()
     if (isSkip) return
 
+    const prevPlayIndex = playInfo.playIndex
     const { playIndex } = updatePlayIndex()
     if (playIndex < 0) { // 歌曲被移除
       if (window.lx.isPlayedStop) {
@@ -21,6 +22,13 @@ export default () => {
           setPlayMusicInfo(null, null)
         })
       } else if (!playMusicInfo.isTempPlay) {
+        // 播放逻辑遵循播放队列，来源列表移除歌曲不影响播放队列
+        if (playInfo.playerListId == PLAY_QUEUE_LIST_ID && playMusicInfo.musicInfo &&
+          playQueueList.some(item => item.musicInfo.id == playMusicInfo.musicInfo?.id)) {
+          // 恢复原播放位置，保证歌曲播放进度仍可被保存/恢复
+          if (prevPlayIndex > -1) playInfo.playIndex = prevPlayIndex
+          return
+        }
         console.log('current music removed')
         void playNext(true)
       }

@@ -7,6 +7,7 @@
           <thead>
             <tr v-if="actionButtonsVisible">
               <th class="num" style="width: 5%;">#</th>
+              <th class="no-select" style="width: 36px; box-sizing: border-box; padding-right: 8px; text-align: center;">{{ $t('music_cover') }}</th>
               <th class="nobreak">{{ $t('music_name') }}</th>
               <th class="nobreak" style="width: 22%;">{{ $t('music_singer') }}</th>
               <th class="nobreak" style="width: 22%;">{{ $t('music_album') }}</th>
@@ -15,6 +16,7 @@
             </tr>
             <tr v-else>
               <th class="num" style="width: 5%;">#</th>
+              <th class="no-select" style="width: 36px; box-sizing: border-box; padding-right: 8px; text-align: center;">{{ $t('music_cover') }}</th>
               <th class="nobreak">{{ $t('music_name') }}</th>
               <th class="nobreak" style="width: 24%;">{{ $t('music_singer') }}</th>
               <th class="nobreak" style="width: 27%;">{{ $t('music_album') }}</th>
@@ -32,6 +34,12 @@
                 @click="handleListItemClick($event, index)" @contextmenu="handleListItemRightClick($event, index)"
               >
                 <div class="list-item-cell no-select num" style="flex: 0 0 5%;" @click.stop>{{ index + 1 }}</div>
+                <div class="list-item-cell no-select" :class="$style.cover">
+                  <img v-if="getCover(item)" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError">
+                  <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
+                    <use xlink:href="#icon-music" />
+                  </svg>
+                </div>
                 <div class="list-item-cell auto name">
                   <span class="select name" :aria-label="item.name">{{ item.name }}</span>
                   <span v-if="qualityBadgeLabel(item)" class="no-select badge badge-theme-primary">{{ $t(qualityBadgeLabel(item)) }}</span>
@@ -58,6 +66,12 @@
                 @click="handleListItemClick($event, index)" @contextmenu="handleListItemRightClick($event, index)"
               >
                 <div class="list-item-cell no-select num" style="flex: 0 0 5%;" @click.stop>{{ index + 1 }}</div>
+                <div class="list-item-cell no-select" :class="$style.cover">
+                  <img v-if="getCover(item)" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError">
+                  <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
+                    <use xlink:href="#icon-music" />
+                  </svg>
+                </div>
                 <div class="list-item-cell auto name">
                   <span class="select name" :aria-label="item.name">{{ item.name }}</span>
                   <span v-if="qualityBadgeLabel(item)" class="no-select badge badge-theme-primary">{{ $t(qualityBadgeLabel(item)) }}</span>
@@ -97,9 +111,10 @@
 <script>
 import { clipboardWriteText } from '@common/utils/electron'
 import { assertApiSupport } from '@renderer/store/utils'
-import { ref } from '@common/utils/vueTools'
+import { reactive, ref } from '@common/utils/vueTools'
 import { qualityList } from '@renderer/store'
 import { getMaxQuality } from '@renderer/core/music/utils'
+import { getMusicCoverUrl } from '@renderer/utils/musicCover'
 import useList from './useList'
 import useMenu from './useMenu'
 import usePlay from './usePlay'
@@ -255,6 +270,20 @@ export default {
       }
       return (qualityList.value[item.source] || []).includes(quality)
     }
+
+    const coverMap = reactive(new Map())
+    const getCover = (item) => {
+      if (item.img || item.meta?.picUrl) return item.img || item.meta?.picUrl
+      const key = `${item.source}__${item.id}`
+      if (coverMap.has(key)) return coverMap.get(key)
+      getMusicCoverUrl(item).then(url => {
+        if (url) coverMap.set(key, url)
+      })
+      return ''
+    }
+    const handleCoverError = (event) => {
+      event.target.style.display = 'none'
+    }
     const qualityBadgeLabel = (item) => {
       const maxQ = getMaxQuality(item, qualityList.value[item.source] || [])
       switch (maxQ) {
@@ -301,6 +330,8 @@ export default {
       actionButtonsVisible,
       hasQuality,
       qualityBadgeLabel,
+      getCover,
+      handleCoverError,
     }
   },
 }
@@ -333,6 +364,30 @@ export default {
   min-height: 0;
   position: relative;
   height: 100%;
+}
+
+.cover {
+  flex: 0 0 36px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-right: 8px;
+  box-sizing: border-box;
+
+  img {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--color-font-label);
+    opacity: .5;
+  }
 }
 
 .pagination {

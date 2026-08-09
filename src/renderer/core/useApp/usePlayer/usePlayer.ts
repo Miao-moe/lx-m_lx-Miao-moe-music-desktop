@@ -16,6 +16,7 @@ import {
   musicInfo,
   playMusicInfo,
   playedList,
+  playInfo,
 } from '@renderer/store/player/state'
 import {
   setPlay,
@@ -127,7 +128,7 @@ export default () => {
   watch(() => appSetting['player.togglePlayMethod'], newValue => {
     // setLoopPlay(newValue == 'singleLoop')
     if (playedList.length) clearPlayedList()
-    if (newValue == 'random' && playMusicInfo.musicInfo && !playMusicInfo.isTempPlay) addPlayedList({ ...(playMusicInfo as LX.Player.PlayMusicInfo) })
+    if (newValue == 'random' && playMusicInfo.musicInfo && !playMusicInfo.isTempPlay) addPlayedList({ ...(playMusicInfo as LX.Player.PlayMusicInfo), listId: playInfo.playerListId ?? playMusicInfo.listId })
   })
 
   // setLoopPlay(appSetting['player.togglePlayMethod'] == 'singleLoop')

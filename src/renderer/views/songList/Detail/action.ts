@@ -3,7 +3,7 @@ import { dialog } from '@renderer/plugins/Dialog'
 import syncSourceList from '@renderer/store/list/syncSourceList'
 import { getListDetail, getListDetailAll } from '@renderer/store/songList/action'
 import { createUserList, setTempList } from '@renderer/store/list/action'
-import { playList } from '@renderer/core/player/action'
+import { playList, refreshPlayQueueFromList } from '@renderer/core/player/action'
 import { LIST_IDS } from '@common/constants'
 import { toMD5 } from '@renderer/utils'
 
@@ -50,6 +50,7 @@ export const playSongListDetail = async(id: string, source: LX.OnlineSource, lis
   if (isPlayingList) {
     if (tempListMeta.id == listId) {
       await setTempList(listId, [...fullList])
+      refreshPlayQueueFromList(LIST_IDS.TEMP)
     }
   } else {
     await setTempList(listId, [...fullList])

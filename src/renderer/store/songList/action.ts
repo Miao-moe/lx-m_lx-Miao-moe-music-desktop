@@ -1,6 +1,7 @@
 // import { getSongListSetting } from '@renderer/utils/data'
 import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
 import musicSdk from '@renderer/utils/musicSdk'
+import { hasCookie } from '@renderer/utils/cookieManager'
 import { markRaw, markRawList } from '@common/utils/vueTools'
 import {
   tags,
@@ -86,7 +87,7 @@ export const getTags = async<T extends LX.OnlineSource>(source: T) => {
  * 获取歌单列表
  * @param source 歌单源
  * @param tabId 类型id
- * @param sortId 排序
+ * @param sortId 排序（'recommend' 时加载该平台主页个人定向推荐歌单）
  * @param page 页数
  * @param isRefresh 是否跳过缓存
  * @returns
@@ -109,7 +110,20 @@ export const getAndSetList = async(source: LX.OnlineSource, tabId: string, sortI
   listInfo.noItemLabel = window.i18n.t('list__loading')
   listInfo.key = key
   // clearList()
-  return musicSdk[source]?.songList.getList(sortId, tabId, page).then((result: ListInfo) => {
+  let request: Promise<ListInfo> | undefined
+  if (sortId == 'recommend') {
+    // 主页推荐歌单：未配置该平台 Cookie 时提示配置
+    if (!hasCookie(source)) {
+      listInfo.list = []
+      listInfo.total = 0
+      listInfo.noItemLabel = window.i18n.t('list__need_cookie')
+      return
+    }
+    request = musicSdk[source]?.recommend?.getRecommendList(page, listInfo.limit)
+  } else {
+    request = musicSdk[source]?.songList.getList(sortId, tabId, page)
+  }
+  return request?.then((result: ListInfo) => {
     cache.set(key, result)
     if (key != listInfo.key) return
     setList(result, tabId, sortId, page)

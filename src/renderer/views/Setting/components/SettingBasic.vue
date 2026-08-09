@@ -48,6 +48,8 @@ dd
           span(v-if="item.statusLabel" :class="$style.status") {{ item.statusLabel }}
     .p.gap-top
       base-btn.btn(min @click="isShowUserApiModal = true") {{ $t('setting__basic_source_user_api_btn') }}
+    .p.gap-top
+      base-btn.btn(min @click="isShowQualityCheckModal = true") {{ $t('setting__basic_source_check_quality') }}
 
 dd
   h3#basic_window_size {{ $t('setting__basic_window_size') }}
@@ -109,6 +111,7 @@ ThemeSelectorModal(v-model="isShowThemeSelectorModal")
 ThemeEditModal(v-model="isShowThemeEditModal" :theme-id="editThemeId" @submit="handleRefreshTheme")
 play-timeout-modal(v-model="isShowPlayTimeoutModal")
 user-api-modal(v-model="isShowUserApiModal")
+quality-check-modal(v-model="isShowQualityCheckModal")
 </template>
 
 <script>
@@ -124,6 +127,7 @@ import ThemeSelectorModal from './ThemeSelectorModal.vue'
 import ThemeEditModal from './ThemeEditModal/index.vue'
 import PlayTimeoutModal from './PlayTimeoutModal.vue'
 import UserApiModal from './UserApiModal.vue'
+import QualityCheckModal from './QualityCheckModal.vue'
 import { appSetting, updateSetting } from '@renderer/store/setting'
 import { getThemes, applyTheme, findTheme, buildBgUrl } from '@renderer/store/utils'
 
@@ -134,6 +138,7 @@ export default {
     ThemeEditModal,
     PlayTimeoutModal,
     UserApiModal,
+    QualityCheckModal,
   },
   setup() {
     const t = useI18n()
@@ -250,6 +255,7 @@ export default {
     const { timeLabel } = useTimeout()
 
     const isShowUserApiModal = ref(false)
+    const isShowQualityCheckModal = ref(false)
     const getApiStatus = () => {
       let status
       if (userApi.status) status = t('setting__basic_source_status_success')
@@ -344,6 +350,7 @@ export default {
       timeLabel,
       apiSources,
       isShowUserApiModal,
+      isShowQualityCheckModal,
       windowSizeList,
       langList,
       sourceNameTypes,

@@ -41,7 +41,11 @@ const handleToggle = (id) => {
 watch(() => props.source, async(source) => {
   // const source = (await getLeaderboardSetting()).source as LX.OnlineSource
   if (!source) return
-  let _list = sortList[source] ?? []
+  const _list = [...(sortList[source] ?? [])]
+  // 追加「推荐」（主页个人定向推荐歌单）排序选项（未配置 Cookie 时点击会提示配置）
+  if (!_list.some(item => item.id === 'recommend')) {
+    _list.push({ name: window.i18n.t('recommend'), id: 'recommend' })
+  }
   list.splice(0, list.length, ..._list)
   if (!props.sortId && list.length) handleToggle(list[0].id)
   // console.log(list)

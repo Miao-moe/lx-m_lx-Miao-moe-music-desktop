@@ -25,10 +25,6 @@ export default {
   },
   sortList: [
     {
-      name: '推荐',
-      id: '5',
-    },
-    {
       name: '最热',
       id: '6',
     },
@@ -905,7 +901,7 @@ export default {
           return info
         }),
     )
-    if (!tagId && page === 1 && sortId === this.sortList[0].id) tasks.push(this.getSongListRecommend()) // 如果是所有类别，则顺便获取推荐列表
+    if (!tagId && page === 1 && sortId === 'recommend') tasks.push(this.getSongListRecommend()) // 推荐排序（已由推荐模块处理，此处仅为兼容保留）
     return Promise.all(tasks).then(([list, info, recommendList]) => {
       if (recommendList) list.unshift(...recommendList)
       return {

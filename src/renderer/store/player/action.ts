@@ -12,14 +12,16 @@ import {
   playMusicInfo,
   playedList,
   tempPlayList,
+  playQueueList,
+  PLAY_QUEUE_LIST_ID,
 } from './state'
 import { getListMusicsFromCache } from '@renderer/store/list/action'
 import { downloadList } from '@renderer/store/download/state'
 import { setProgress } from './playProgress'
-import { playNext } from '@renderer/core/player'
+import { playQueueById, resetRandomNextMusicInfo } from '@renderer/core/player'
 import { LIST_IDS } from '@common/constants'
 import { toRaw } from '@common/utils/vueTools'
-import { arrPush, arrUnshift } from '@common/utils/common'
+import showToast from '@renderer/plugins/Toast'
 
 
 type PlayerMusicInfoKeys = keyof typeof musicInfo
@@ -74,7 +76,36 @@ export const setPlayListId = (listId: string | null) => {
 }
 
 export const getList = (listId: string | null): Array<LX.Music.MusicInfo | LX.Download.ListItem> => {
-  return listId == LIST_IDS.DOWNLOAD ? downloadList : getListMusicsFromCache(listId)
+  if (listId == LIST_IDS.DOWNLOAD) return downloadList
+  if (listId == PLAY_QUEUE_LIST_ID) return playQueueList.map(item => item.musicInfo)
+  return getListMusicsFromCache(listId)
+}
+
+/**
+ * 设置播放列表（播放队列）
+ * @param list 播放队列
+ */
+export const setPlayQueue = (list: LX.Player.PlayMusicInfo[]) => {
+  playQueueList.splice(0, playQueueList.length)
+  for (const item of list) playQueueList.push(item)
+}
+/**
+ * 从播放列表（播放队列）移除歌曲
+ * @param index 歌曲位置
+ */
+export const removePlayQueue = (index: number) => {
+  playQueueList.splice(index, 1)
+  resetRandomNextMusicInfo()
+}
+/**
+ * 清空播放列表（播放队列）
+ * @returns 是否包含当前正在播放的歌曲（调用方可根据返回值决定是否停止播放）
+ */
+export const clearPlayQueue = (): boolean => {
+  const hasCurrent = playQueueList.some(item => item.musicInfo.id == playMusicInfo.musicInfo?.id)
+  playQueueList.splice(0, playQueueList.length)
+  resetRandomNextMusicInfo()
+  return hasCurrent
 }
 
 /**
@@ -101,21 +132,26 @@ export const getPlayIndex = (listId: string | null, musicInfo: LX.Download.ListI
 
   let playIndex = -1
   let playerPlayIndex = -1
-  if (playerList.length) {
+  // playerPlayIndex 是当前歌曲在播放器播放列表（播放队列）中的位置
+  if (playerList.length && playInfo.playerPlayIndex > -1) {
     playerPlayIndex = Math.min(playInfo.playerPlayIndex, playerList.length - 1)
   }
+  if (!isTempPlay && musicInfo && playerList.length) {
+    const currentId = musicInfo.id
+    const queueIndex = playerList.findIndex(m => m.id == currentId)
+    if (queueIndex > -1) {
+      playerPlayIndex = queueIndex
+    } else if (playInfo.playerPlayIndex > -1) {
+      // 当前歌曲已被移出播放队列，播放位置后退一位
+      playerPlayIndex = Math.min(playInfo.playerPlayIndex - 1, playerList.length - 1)
+      if (playerPlayIndex < 0) playerPlayIndex = playerList.length - 1
+    }
+  }
 
+  // playIndex 是当前歌曲在其所属列表中的位置
   const list = getList(listId)
   if (list.length && musicInfo) {
-    const currentId = musicInfo.id
-    playIndex = list.findIndex(m => m.id == currentId)
-    if (!isTempPlay) {
-      if (playIndex < 0) {
-        playerPlayIndex = playerPlayIndex < 1 ? (list.length - 1) : (playerPlayIndex - 1)
-      } else {
-        playerPlayIndex = playIndex
-      }
-    }
+    playIndex = list.findIndex(m => m.id == musicInfo.id)
   }
 
   return {
@@ -221,22 +257,18 @@ export const clearPlayedList = () => {
 }
 
 /**
- * 添加歌曲到稍后播放列表
+ * 添加歌曲到播放队列中当前歌曲的下一首位置（稍后播放）
  * @param list 歌曲列表
  */
 export const addTempPlayList = (list: LX.Player.TempPlayListItem[]) => {
-  const topList: Array<Omit<LX.Player.TempPlayListItem, 'top'>> = []
-  const bottomList = list.filter(({ isTop, ...musicInfo }) => {
-    if (isTop) {
-      topList.push(musicInfo)
-      return false
-    }
-    return true
-  })
-  if (topList.length) arrUnshift(tempPlayList, topList.map(({ musicInfo, listId }) => ({ musicInfo, listId, isTempPlay: true })))
-  if (bottomList.length) arrPush(tempPlayList, bottomList.map(({ musicInfo, listId }) => ({ musicInfo, listId, isTempPlay: true })))
-
-  if (!playMusicInfo.musicInfo) void playNext()
+  const currentIndex = playQueueList.findIndex(item => item.musicInfo.id == playMusicInfo.musicInfo?.id)
+  const insertIndex = currentIndex > -1 ? currentIndex + 1 : playQueueList.length
+  const items: LX.Player.PlayMusicInfo[] = list.map(({ musicInfo, listId }) => ({ musicInfo, listId, isTempPlay: false }))
+  playQueueList.splice(insertIndex, 0, ...items)
+  // 屏幕中间提示已添加到播放列表
+  showToast(window.i18n.t('player__play_list_added'))
+  // 未在播放任何歌曲时，直接开始播放插入的歌曲（保持原有行为）
+  if (!playMusicInfo.musicInfo) void playQueueById(insertIndex)
 }
 /**
  * 从稍后播放列表移除歌曲

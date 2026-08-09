@@ -16,7 +16,7 @@ export default {
   cachedUrl: {},
   sortList: [
     {
-      name: '推荐',
+      name: '最热',
       id: '15127315',
       // id: '1',
     },
