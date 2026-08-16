@@ -109,6 +109,7 @@ const defaultSetting: LX.AppSetting = {
   'list.isSaveScrollLocation': true,
   'list.addMusicLocationType': 'top',
   'list.actionButtonsVisible': false,
+  'list.coverSize': 28,
 
   'download.enable': false,
   'download.isSavePathGroupByListName': false,
@@ -165,7 +166,6 @@ const defaultSetting: LX.AppSetting = {
   'cookie.kg': '',
   'cookie.kw': '',
   'cookie.mg': '',
-  'cookie.bili': '',
   'cookie.enablePlayHistorySync': false,
   'cookie.enableFavListSync': false,
 

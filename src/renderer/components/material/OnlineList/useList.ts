@@ -58,7 +58,8 @@ export default ({ props, listRef }: {
   const selectedList = ref<LX.Music.MusicInfoOnline[]>([])
   let lastSelectIndex = -1
   const listItemHeight = computed(() => {
-    return Math.ceil((isFullscreen.value ? getFontSizeWithScreen() : appSetting['common.fontSize']) * 2.3)
+    const fontHeight = Math.ceil((isFullscreen.value ? getFontSizeWithScreen() : appSetting['common.fontSize']) * 2.3)
+    return Math.max(fontHeight, appSetting['list.coverSize'] + 8)
   })
 
   const removeAllSelect = () => {

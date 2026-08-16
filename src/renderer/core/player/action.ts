@@ -21,6 +21,7 @@ import { getRandom } from '@renderer/utils/index'
 import { addListMusics, removeListMusics } from '@renderer/store/list/action'
 import { loveList } from '@renderer/store/list/state'
 import { addDislikeInfo } from '@renderer/core/dislikeList'
+import { cancelGaplessTransition } from '@renderer/utils/gaplessPlayer'
 // import { checkMusicFileAvailable } from '@renderer/utils/music'
 
 let gettingUrlId = ''
@@ -186,7 +187,7 @@ const handleRestorePlay = async(restorePlayInfo: LX.Player.SavedPlayInfo) => {
 
 
 // 处理音乐播放
-const handlePlay = () => {
+const handlePlay = (preloadedUrl?: string) => {
   window.lx.isPlayedStop &&= false
 
   resetRandomNextMusicInfo()
@@ -208,7 +209,13 @@ const handlePlay = () => {
 
   if (appSetting['player.togglePlayMethod'] == 'random' && !playMusicInfo.isTempPlay) addPlayedList({ ...(playMusicInfo as LX.Player.PlayMusicInfo), listId: playInfo.playerListId ?? playMusicInfo.listId })
 
-  setMusicUrl(musicInfo)
+  if (preloadedUrl) {
+    if (cancelDelayRetry) cancelDelayRetry()
+    gettingUrlId = ''
+    setResource(preloadedUrl)
+  } else {
+    setMusicUrl(musicInfo)
+  }
 
   void getPicPath({ musicInfo, listId: playMusicInfo.listId }).then((url: string) => {
     if (musicInfo.id != playMusicInfo.musicInfo?.id || url == _musicInfo.pic) return
@@ -401,14 +408,20 @@ export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | n
   return nextPlayMusicInfo
 }
 
-const handlePlayNext = (playMusicInfo: LX.Player.PlayMusicInfo) => {
+const handlePlayNext = (playMusicInfo: LX.Player.PlayMusicInfo, preloadedUrl?: string) => {
   // 播放队列内的歌曲，需要解析出其来源列表 id，用于列表内的播放定位/高亮
   let listId = playMusicInfo.listId
   if (listId == PLAY_QUEUE_LIST_ID) {
     listId = playQueueList.find(item => item.musicInfo.id == playMusicInfo.musicInfo.id)?.listId ?? listId
   }
   setPlayMusicInfo(listId, playMusicInfo.musicInfo, playMusicInfo.isTempPlay)
-  handlePlay()
+  handlePlay(preloadedUrl)
+}
+
+export const playPreloadedNext = (nextPlayMusicInfo: LX.Player.PlayMusicInfo, url: string): boolean => {
+  if (!playMusicInfo.musicInfo || !url) return false
+  handlePlayNext(nextPlayMusicInfo, url)
+  return true
 }
 /**
  * 下一曲
@@ -627,6 +640,7 @@ export const play = () => {
  * 暂停播放
  */
 export const pause = () => {
+  cancelGaplessTransition()
   setPause()
 }
 
@@ -634,6 +648,7 @@ export const pause = () => {
  * 停止播放
  */
 export const stop = () => {
+  cancelGaplessTransition()
   setStop()
   setTimeout(() => {
     window.app_event.stop()

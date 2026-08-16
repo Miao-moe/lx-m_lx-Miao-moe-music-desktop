@@ -14,13 +14,12 @@
  *   - kg   酷狗音乐     https://www.kugou.com
  *   - kw   酷我音乐     https://www.kuwo.cn
  *   - mg   咪咕音乐     https://music.migu.cn
- *   - bili Bilibili     https://www.bilibili.com
  */
 
 import { appSetting } from '@renderer/store/setting'
 
 /** 音乐平台标识 */
-export type MusicSource = 'wy' | 'tx' | 'kg' | 'kw' | 'mg' | 'bili'
+export type MusicSource = 'wy' | 'tx' | 'kg' | 'kw' | 'mg'
 
 /** 支持歌单同步的音乐平台标识 */
 export type CookieSource = 'wy' | 'tx' | 'kg' | 'kw' | 'mg'
@@ -29,13 +28,12 @@ export type CookieSource = 'wy' | 'tx' | 'kg' | 'kw' | 'mg'
 export const COOKIE_SOURCES: CookieSource[] = ['wy', 'tx', 'kg', 'kw', 'mg']
 
 /** 平台对应的设置项 key */
-const SOURCE_SETTING_KEY: Record<MusicSource, 'cookie.wy' | 'cookie.tx' | 'cookie.kg' | 'cookie.kw' | 'cookie.mg' | 'cookie.bili'> = {
+const SOURCE_SETTING_KEY: Record<MusicSource, 'cookie.wy' | 'cookie.tx' | 'cookie.kg' | 'cookie.kw' | 'cookie.mg'> = {
   wy: 'cookie.wy',
   tx: 'cookie.tx',
   kg: 'cookie.kg',
   kw: 'cookie.kw',
   mg: 'cookie.mg',
-  bili: 'cookie.bili',
 }
 
 /** 平台对应的根域名（用于在 UI 中提供「打开官网」按钮，便于用户登录后取 Cookie） */
@@ -45,7 +43,6 @@ export const SOURCE_DOMAIN: Record<MusicSource, string> = {
   kg: 'www.kugou.com',
   kw: 'www.kuwo.cn',
   mg: 'music.migu.cn',
-  bili: 'www.bilibili.com',
 }
 
 /** 平台中文名 */
@@ -55,7 +52,6 @@ export const SOURCE_NAME: Record<MusicSource, string> = {
   kg: '酷狗音乐',
   kw: '酷我音乐',
   mg: '咪咕音乐',
-  bili: 'Bilibili',
 }
 
 /**
@@ -96,7 +92,6 @@ export const getCookieValue = (cookie: string, name: string): string | null => {
  *   - 酷狗：检查 `KuGoo` / `kg_mid` / `kg_user_v` 字段是否存在
  *   - 酷我：检查 `kw_token` / `userid` 字段是否存在
  *   - 咪咕：检查 `mg_auth_sid` / `migu_music_sid` / `USER_ID` 字段是否存在
- *   - Bilibili：检查 `SESSDATA` / `bili_jct` 字段是否存在
  */
 export const isCookieValid = (source: MusicSource, cookie?: string): boolean => {
   const c = cookie ?? getCookie(source)
@@ -107,7 +102,6 @@ export const isCookieValid = (source: MusicSource, cookie?: string): boolean => 
     case 'kg': return !!getCookieValue(c, 'KuGoo') || !!getCookieValue(c, 'kg_mid') || !!getCookieValue(c, 'kg_user_v')
     case 'kw': return !!getCookieValue(c, 'kw_token') || !!getCookieValue(c, 'userid') || c.includes('Hm_lvt_')
     case 'mg': return !!getCookieValue(c, 'mg_auth_sid') || !!getCookieValue(c, 'migu_music_sid') || !!getCookieValue(c, 'USER_ID')
-    case 'bili': return !!getCookieValue(c, 'SESSDATA') && !!getCookieValue(c, 'bili_jct')
   }
 }
 

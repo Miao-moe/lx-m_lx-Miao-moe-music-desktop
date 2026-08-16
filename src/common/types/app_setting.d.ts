@@ -501,6 +501,11 @@ declare global {
       'list.actionButtonsVisible': boolean
 
       /**
+       * 列表封面大小（像素）
+       */
+      'list.coverSize': number
+
+      /**
        * 是否启用下载功能
        */
       'download.enable': boolean
@@ -720,11 +725,6 @@ declare global {
        * 咪咕音乐 Cookie（用于歌单/播放记录同步，不解锁音质）
        */
       'cookie.mg': string
-
-      /**
-       * Bilibili Cookie（用于歌单/播放记录同步，不解锁音质）
-       */
-      'cookie.bili': string
 
       /**
        * 是否将播放记录同步回各音乐平台（基于 Cookie）

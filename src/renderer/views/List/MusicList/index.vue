@@ -1,11 +1,11 @@
 <template>
-  <div :class="$style.list">
+  <div :class="$style.list" :style="{ '--list-cover-size': `${appSetting['list.coverSize']}px` }">
     <div class="thead">
-      <table>
+      <table :class="$style.headerTable">
         <thead>
           <tr v-if="actionButtonsVisible">
             <th class="num" style="width: 5%;">#</th>
-            <th class="no-select" style="width: 36px; box-sizing: border-box; padding-right: 8px; text-align: center;">{{ $t('music_cover') }}</th>
+            <th class="no-select" :class="$style.coverHeader">{{ $t('music_cover') }}</th>
             <th class="nobreak">{{ $t('music_name') }}</th>
             <th class="nobreak" style="width: 22%;">{{ $t('music_singer') }}</th>
             <th class="nobreak" style="width: 22%;">{{ $t('music_album') }}</th>
@@ -14,7 +14,7 @@
           </tr>
           <tr v-else>
             <th class="num" style="width: 5%;">#</th>
-            <th class="no-select" style="width: 36px; box-sizing: border-box; padding-right: 8px; text-align: center;">{{ $t('music_cover') }}</th>
+            <th class="no-select" :class="$style.coverHeader">{{ $t('music_cover') }}</th>
             <th class="nobreak">{{ $t('music_name') }}</th>
             <th class="nobreak" style="width: 25%;">{{ $t('music_singer') }}</th>
             <th class="nobreak" style="width: 28%;">{{ $t('music_album') }}</th>
@@ -43,7 +43,7 @@
               <div v-else class="num">{{ index + 1 }}</div>
             </transition>
           </div>
-          <div class="list-item-cell no-select" :class="$style.cover">
+          <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
             <img v-if="getCover(item)" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
@@ -81,7 +81,7 @@
               <div v-else class="num">{{ index + 1 }}</div>
             </transition>
           </div>
-          <div class="list-item-cell no-select" :class="$style.cover">
+          <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
             <img v-if="getCover(item)" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
@@ -381,6 +381,7 @@ export default {
       handleRestoreScroll,
 
       actionButtonsVisible,
+      appSetting,
 
       isShowMusicToggleModal,
       selectedToggleMusicInfo,
@@ -427,25 +428,35 @@ export default {
   justify-content: center;
   position: relative;
 }
+.headerTable {
+  table-layout: fixed;
+
+  th {
+    box-sizing: border-box;
+  }
+
+  .coverHeader {
+    width: calc(var(--list-cover-size) + 12px);
+    text-align: center;
+  }
+}
 .cover {
-  flex: 0 0 36px;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-right: 8px;
   box-sizing: border-box;
 
   img {
-    width: 28px;
-    height: 28px;
+    width: var(--list-cover-size);
+    height: var(--list-cover-size);
     border-radius: 4px;
     object-fit: cover;
   }
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 60%;
+    height: auto;
     fill: var(--color-font-label);
     opacity: .5;
   }

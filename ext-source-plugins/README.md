@@ -1,10 +1,10 @@
 # 扩展音源插件（Ext Source Plugins）
 
-本目录存放**可独立分发**的扩展音源插件（如汽水音乐、Bilibili）。
+本目录用于存放**可独立分发**的第三方扩展音源插件。
 
 ## 为什么把这些音源做成插件？
 
-汽水音乐（抖音）、Bilibili 等平台版权控制严格、接口变动频繁。如果把它们的解析逻辑
+部分第三方平台版权控制严格、接口变动频繁。如果把它们的解析逻辑
 **内置**进主程序仓库，会带来三个问题：
 
 1. **代码即证据**：解析逻辑、签名算法明文躺在开源仓库里，容易被平台方定位并针对性封禁。
@@ -46,8 +46,7 @@ module.exports = function createPlugin(env) {
 window.__lxExtSourcePlugins__ = {
   // 远程脚本（推荐）：接口失效时只需更新远程文件
   remotes: [
-    'https://your-host/qs.plugin.js',
-    'https://your-host/bili.plugin.js',
+    'https://your-host/example.plugin.js',
   ],
   // 本地工厂（可选）：直接传入 require 得到的工厂函数
   locals: [],
@@ -61,7 +60,7 @@ window.__lxExtSourcePlugins__ = {
 
 ## 分发建议
 
-- 把 `qs.plugin.js` / `bili.plugin.js` 托管到你可控的地址，通过 `remotes` 引用。
+- 把扩展插件脚本托管到你可控的地址，通过 `remotes` 引用。
 - 不要在主仓库 README / 仓库描述中高调罗列平台接口域名、分区、音质编码等信息，
   以降低仓库被自动化扫描命中的概率。
-- 插件内的平台专有参数已做运行时拼装，可进一步做轻度混淆后再分发。
+- 插件内的平台专有参数建议在运行时拼装，可进一步做轻度混淆后再分发。

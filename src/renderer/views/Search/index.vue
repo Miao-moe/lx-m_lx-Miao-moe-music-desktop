@@ -27,6 +27,7 @@ import { sourceNames } from '@renderer/store'
 const source = ref('kw')
 const searchType = ref(null)
 const page = ref(1)
+const normalizeSource = source => _sources.includes(source) ? source : 'all'
 
 const verifyQueryParams = async(to, from, next) => {
   let _source = to.query.source
@@ -35,12 +36,19 @@ const verifyQueryParams = async(to, from, next) => {
 
   if (_source == null || _type == null) {
     const setting = await getSearchSetting()
-    _source ??= setting.source
+    _source = normalizeSource(_source ?? setting.source)
     _type ??= setting.type
 
     next({
       path: to.path,
       query: { ...to.query, source: _source, type: _type, page: _page },
+    })
+    return
+  }
+  if (!_sources.includes(_source)) {
+    next({
+      path: to.path,
+      query: { ...to.query, source: normalizeSource(_source) },
     })
     return
   }

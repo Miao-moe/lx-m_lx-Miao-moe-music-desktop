@@ -45,11 +45,12 @@ dd
       base-checkbox(
         id="setting_advanced_play_fade"
         :model-value="appSetting['player.fadeInFadeOut']"
+        :disabled="!appSetting['player.gaplessPlayback']"
         :label="$t('setting__advanced_play_fade')"
         @update:model-value="updateSetting({ 'player.fadeInFadeOut': $event })"
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_fade_tip')")
-    .p.gap-top(v-if="appSetting['player.fadeInFadeOut']")
+    .p.gap-top(v-if="appSetting['player.gaplessPlayback'] && appSetting['player.fadeInFadeOut']")
       span(style="display: inline-block; width: 130px;") {{ $t('setting__advanced_play_fade_duration') }}
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_fade_duration_tip')")
       span(style="margin-left: 8px; color: var(--color-500); font-size: 12px;") {{ appSetting['player.fadeDuration'] }} ms

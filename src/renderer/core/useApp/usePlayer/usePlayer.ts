@@ -38,6 +38,7 @@ import useSoundEffect from './useSoundEffect'
 import useMaxOutputChannelCount from './useMaxOutputChannelCount'
 import { setPowerSaveBlocker } from '@renderer/core/player/utils'
 import usePreloadNextMusic from './usePreloadNextMusic'
+import { isGaplessTransitionActive } from '@renderer/utils/gaplessPlayer'
 
 
 export default () => {
@@ -87,6 +88,7 @@ export default () => {
     }
   }
   const handleEnded = () => {
+    if (isGaplessTransitionActive()) return
     // setTimeout(() => {
     setAllStatus(t('player__end'))
     if (window.lx.isPlayedStop) {

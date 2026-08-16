@@ -64,34 +64,53 @@ export default {
     }
   },
   methods: {
-    async importUserApi(script) {
+    async importUserApi(script, showError = true) {
       return importUserApi(script).then(({ apiList }) => {
         userApi.list = apiList
       }).catch((err) => {
-        void dialog(this.$t('user_api_import__failed', { message: err.message }))
+        if (showError) void dialog(this.$t('user_api_import__failed', { message: err.message }))
+        return err
       })
     },
-    handleImport() {
-      if (this.userApi.list.length > 20) {
-        this.$dialog({
-          message: this.$t('user_api__max_tip'),
-          confirmButtonText: this.$t('ok'),
-        })
+    showMaxTip() {
+      this.$dialog({
+        message: this.$t('user_api__max_tip'),
+        confirmButtonText: this.$t('ok'),
+      })
+    },
+    async handleImport() {
+      if (this.userApi.list.length >= 20) {
+        this.showMaxTip()
         return
       }
-      void showSelectDialog({
+      const result = await showSelectDialog({
         title: this.$t('user_api__import_file'),
-        properties: ['openFile'],
+        properties: ['openFile', 'multiSelections'],
         filters: [
           { name: 'LX API File', extensions: ['js'] },
           { name: 'All Files', extensions: ['*'] },
         ],
-      }).then(async result => {
-        if (result.canceled) return
-        return readFile(result.filePaths[0]).then(async data => {
-          return this.importUserApi(data.toString())
-        })
       })
+      if (result.canceled) return
+      if (this.userApi.list.length + result.filePaths.length > 20) {
+        this.showMaxTip()
+        return
+      }
+
+      const errors = []
+      for (const filePath of result.filePaths) {
+        try {
+          const data = await readFile(filePath)
+          const error = await this.importUserApi(data.toString(), false)
+          if (error) throw error
+        } catch (err) {
+          const fileName = filePath.split(/[\\/]/).pop() ?? filePath
+          errors.push(`${fileName}: ${err.message}`)
+        }
+      }
+      if (errors.length) {
+        void dialog(this.$t('user_api_import__failed', { message: errors.join('\n') }))
+      }
     },
     handleExport() {
 

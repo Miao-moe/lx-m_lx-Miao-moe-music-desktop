@@ -86,7 +86,7 @@ const fetchRemotePlugin = async(url) => {
  * 读取插件来源配置。
  * 通过全局对象注入，避免在主仓库里硬编码任何扩展音源信息。
  *   window.__lxExtSourcePlugins__ = {
- *     remotes: ['https://your-host/qs.plugin.js', ...],
+ *     remotes: ['https://your-host/example.plugin.js', ...],
  *     locals: [factory1, factory2, ...],   // 可选
  *   }
  */

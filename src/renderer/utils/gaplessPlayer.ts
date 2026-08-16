@@ -1,216 +1,332 @@
-/**
- * 无缝衔接（Gapless Playback）+ 渐入渐出（Fade-in / Fade-out）播放引擎
- *
- * 实现思路：
- *   - 维护两个 audio 元素：primaryAudio 与 secondaryAudio
- *   - 当 current song 播放进度接近末尾（剩余 < 5s）时，开始预加载下一首到 secondaryAudio
- *   - 接近末尾（剩余 < fadeDuration）时启动交叉淡化：
- *       primaryAudio 音量从 1 → 0
- *       secondaryAudio 音量从 0 → 1
- *   - 淡化完成后切换主备
- *
- * 单 audio 元素方案（gapless 关闭或仅 fade 启用时）：
- *   - 切歌时旧 audio 渐出 0.5s，新 audio 加载完成后渐入 0.5s
- *   - 避免直接 setSrc 导致音频瞬断
- *
- * 性能考量：
- *   - 两个 audio 元素共享同一个 AudioContext / MediaElementSource 链路是有限制的
- *     （createMediaElementSource 一对一），所以 secondaryAudio 走独立链路，
- *     不接入 EQ / 环境音效 / Panner（仅接入 gainNode 用于淡化）
- *   - 用户切换歌曲时立即触发 fade-out → setSrc → fade-in
- */
-
 import { appSetting } from '@renderer/store/setting'
+
+type TransitionState = 'idle' | 'crossfading' | 'handoff'
+type TransitionHandler = (url: string) => boolean
+
+const NO_FADE_LEAD_TIME = 80
+const HANDOFF_FADE_TIME = 80
+const HANDOFF_TIMEOUT = 15000
 
 let primaryAudio: HTMLAudioElement | null = null
 let secondaryAudio: HTMLAudioElement | null = null
-let primaryGain: GainNode | null = null
-let secondaryGain: GainNode | null = null
-let primaryCtx: AudioContext | null = null
-let secondaryCtx: AudioContext | null = null
-
+let transitionHandler: TransitionHandler | null = null
 let nextSongUrl: string | null = null
-let isCrossfading = false
-let crossfadeTimer: number | null = null
+let transitionState: TransitionState = 'idle'
+let transitionTimer: number | null = null
+let volumeTimer: number | null = null
+let handoffTimer: number | null = null
+let primaryPlayRequested = false
+let primaryStartVolume = 1
+let primaryAutoplay = true
 
-/**
- * 初始化双 audio 引擎
- * 由 player 插件在 createAudio 时调用
- */
-export const initGaplessEngine = (mainAudio: HTMLAudioElement) => {
-  primaryAudio = mainAudio
-
-  // 主 audio 链路使用现有 player 插件的链路（不动）
-  // secondary audio 独立 AudioContext + GainNode
-  if (!secondaryCtx) {
-    try {
-      secondaryCtx = new AudioContext({ latencyHint: 'playback' })
-      const secAudio = new Audio()
-      secAudio.crossOrigin = 'anonymous'
-      secAudio.preload = 'auto'
-      secAudio.autoplay = false
-      secondaryAudio = secAudio
-      const gain = secondaryCtx.createGain()
-      gain.gain.value = 0
-      secondaryGain = gain
-      const src = secondaryCtx.createMediaElementSource(secAudio)
-      src.connect(gain)
-      gain.connect(secondaryCtx.destination)
-    } catch (err) {
-      console.warn('[gapless] secondary audio init failed:', err)
-    }
-  }
-
-  // 监听主 audio 时间更新，触发预加载与交叉淡化
-  primaryAudio.addEventListener('timeupdate', handleTimeUpdate)
+const clearTimer = (timer: number | null) => {
+  if (timer != null) window.clearTimeout(timer)
 }
 
-const handleTimeUpdate = () => {
-  if (!primaryAudio || !secondaryAudio) return
+const clearTransitionTimer = () => {
+  clearTimer(transitionTimer)
+  transitionTimer = null
+}
+
+const clearVolumeTimer = () => {
+  clearTimer(volumeTimer)
+  volumeTimer = null
+}
+
+const clearHandoffTimer = () => {
+  clearTimer(handoffTimer)
+  handoffTimer = null
+}
+
+const resetSecondaryAudio = () => {
+  if (!secondaryAudio) return
+  secondaryAudio.pause()
+  secondaryAudio.volume = 0
+  secondaryAudio.removeAttribute('src')
+  secondaryAudio.load()
+}
+
+const restorePrimaryAudio = () => {
+  if (!primaryAudio) return
+  primaryAudio.autoplay = primaryAutoplay
+  primaryAudio.volume = primaryStartVolume
+}
+
+const finishTransition = () => {
+  const shouldRestorePrimary = transitionState !== 'idle'
+  clearTransitionTimer()
+  clearVolumeTimer()
+  clearHandoffTimer()
+  resetSecondaryAudio()
+  if (shouldRestorePrimary) restorePrimaryAudio()
+  nextSongUrl = null
+  primaryPlayRequested = false
+  transitionState = 'idle'
+}
+
+export const cancelGaplessTransition = () => {
+  finishTransition()
+}
+
+const runVolumeTransition = (duration: number, update: (progress: number) => void, complete: () => void) => {
+  clearVolumeTimer()
+  const startTime = Date.now()
+  const tick = () => {
+    const progress = Math.min(1, (Date.now() - startTime) / duration)
+    update(progress)
+    if (progress >= 1) {
+      volumeTimer = null
+      complete()
+      return
+    }
+    volumeTimer = window.setTimeout(tick, 20)
+  }
+  tick()
+}
+
+const getFadeDuration = () => {
+  if (!appSetting['player.fadeInFadeOut']) return NO_FADE_LEAD_TIME
+  return Math.max(100, Math.min(3000, appSetting['player.fadeDuration'] ?? 800))
+}
+
+const getSecondaryTargetVolume = () => {
+  const volume = appSetting['player.volume'] * (appSetting['player.maxVolume'] ?? 1)
+  return Math.max(0, Math.min(1, volume))
+}
+
+const handlePrimaryPlaying = () => {
+  if (transitionState !== 'handoff' || !primaryAudio || !secondaryAudio) return
+
+  const targetPrimaryVolume = primaryStartVolume
+  const startSecondaryVolume = secondaryAudio.volume
+  runVolumeTransition(HANDOFF_FADE_TIME, (progress) => {
+    if (primaryAudio) primaryAudio.volume = targetPrimaryVolume * progress
+    if (secondaryAudio) secondaryAudio.volume = startSecondaryVolume * (1 - progress)
+  }, finishTransition)
+}
+
+const handlePrimaryCanPlay = () => {
+  if (transitionState !== 'handoff' || primaryPlayRequested || !primaryAudio || !secondaryAudio) return
+  primaryPlayRequested = true
+  primaryAudio.volume = 0
+  try {
+    primaryAudio.currentTime = secondaryAudio.currentTime
+  } catch {}
+  void primaryAudio.play().catch((err) => {
+    console.warn('[gapless] primary audio handoff failed:', err)
+    finishTransition()
+  })
+}
+
+const commitTransition = () => {
+  if (transitionState !== 'crossfading' || !primaryAudio || !nextSongUrl || !transitionHandler) {
+    finishTransition()
+    return
+  }
+
+  clearVolumeTimer()
+  primaryAudio.volume = 0
+  if (secondaryAudio) secondaryAudio.volume = getSecondaryTargetVolume()
+  const url = nextSongUrl
+  transitionState = 'handoff'
+  primaryPlayRequested = false
+  primaryAutoplay = primaryAudio.autoplay
+  primaryAudio.autoplay = false
+
+  let accepted = false
+  try {
+    accepted = transitionHandler(url)
+  } catch (err) {
+    console.warn('[gapless] transition handler failed:', err)
+  }
+  if (!accepted) {
+    finishTransition()
+    return
+  }
+
+  handoffTimer = window.setTimeout(() => {
+    console.warn('[gapless] primary audio handoff timed out')
+    finishTransition()
+  }, HANDOFF_TIMEOUT)
+}
+
+const startCrossfade = async() => {
+  clearTransitionTimer()
+  if (transitionState !== 'idle' || !primaryAudio || !secondaryAudio || !nextSongUrl) return
   if (!appSetting['player.gaplessPlayback']) return
-  if (isCrossfading) return
+
+  const url = nextSongUrl
+  transitionState = 'crossfading'
+  primaryStartVolume = primaryAudio.volume
+  primaryAutoplay = primaryAudio.autoplay
+  secondaryAudio.currentTime = 0
+  secondaryAudio.volume = 0
+  secondaryAudio.muted = appSetting['player.isMute']
+  secondaryAudio.defaultPlaybackRate = primaryAudio.defaultPlaybackRate
+  secondaryAudio.playbackRate = primaryAudio.playbackRate
+  secondaryAudio.preservesPitch = primaryAudio.preservesPitch
+
+  try {
+    await secondaryAudio.play()
+  } catch (err) {
+    console.warn('[gapless] secondary audio playback failed:', err)
+    finishTransition()
+    return
+  }
+  if (transitionState !== 'crossfading' || nextSongUrl !== url) {
+    secondaryAudio.pause()
+    return
+  }
+
+  const targetSecondaryVolume = getSecondaryTargetVolume()
+  if (!appSetting['player.fadeInFadeOut']) {
+    primaryAudio.volume = 0
+    secondaryAudio.volume = targetSecondaryVolume
+    volumeTimer = window.setTimeout(commitTransition, NO_FADE_LEAD_TIME)
+    return
+  }
+
+  const duration = getFadeDuration()
+  runVolumeTransition(duration, (progress) => {
+    if (primaryAudio) primaryAudio.volume = primaryStartVolume * (1 - progress)
+    if (secondaryAudio) secondaryAudio.volume = targetSecondaryVolume * progress
+  }, commitTransition)
+}
+
+const scheduleTransition = () => {
+  clearTransitionTimer()
+  if (transitionState !== 'idle' || !primaryAudio || !secondaryAudio || !nextSongUrl) return
+  if (!appSetting['player.gaplessPlayback'] || primaryAudio.paused) return
 
   const duration = primaryAudio.duration
-  const current = primaryAudio.currentTime
-  if (!duration || !isFinite(duration)) return
+  if (!Number.isFinite(duration) || duration <= 0) return
+  const remaining = duration - primaryAudio.currentTime
+  if (remaining <= 0) return
 
-  const remaining = duration - current
-  const fadeDuration = (appSetting['player.fadeDuration'] ?? 800) / 1000
+  const leadTime = getFadeDuration() / 1000
+  const playbackRate = Math.max(0.1, primaryAudio.playbackRate)
+  const delay = Math.max(0, ((remaining - leadTime) / playbackRate) * 1000)
+  transitionTimer = window.setTimeout(() => {
+    transitionTimer = null
+    void startCrossfade()
+  }, delay)
+}
 
-  // 剩余 5 秒时预加载下一首
-  if (remaining < 5 && remaining > fadeDuration + 0.3 && !nextSongUrl) {
-    // 触发外部预加载逻辑（通过事件）
-    ;(window as any).app_event?.emit?.('gapless:preload-next')
-  }
+const handlePrimaryTimeUpdate = () => {
+  if (transitionTimer == null) scheduleTransition()
+}
 
-  // 剩余等于 fadeDuration 时开始交叉淡化
-  if (remaining < fadeDuration && remaining > 0 && nextSongUrl && !isCrossfading) {
-    startCrossfade()
+const handlePrimaryPause = () => {
+  if (transitionState === 'crossfading') {
+    window.setTimeout(() => {
+      if (transitionState !== 'crossfading') return
+      if (primaryAudio?.ended) commitTransition()
+      else finishTransition()
+    })
+  } else if (transitionState === 'idle') {
+    clearTransitionTimer()
   }
 }
 
-/**
- * 设置预加载的下一首歌曲 URL（由播放器调用）
- */
+const handlePrimaryEnded = () => {
+  if (transitionState === 'crossfading') commitTransition()
+}
+
+const handlePrimarySeeking = () => {
+  const url = transitionState === 'crossfading' ? nextSongUrl : null
+  if (url) {
+    finishTransition()
+    setNextSongUrl(url)
+  } else {
+    scheduleTransition()
+  }
+}
+
+const handleSecondaryError = () => {
+  if (transitionState !== 'idle') finishTransition()
+  else {
+    clearTransitionTimer()
+    nextSongUrl = null
+    resetSecondaryAudio()
+  }
+}
+
+const createSecondaryAudio = () => {
+  const audio = new Audio()
+  audio.controls = false
+  audio.preload = 'auto'
+  audio.crossOrigin = 'anonymous'
+  audio.autoplay = false
+  audio.volume = 0
+  audio.addEventListener('error', handleSecondaryError)
+  secondaryAudio = audio
+}
+
+export const initGaplessEngine = (mainAudio: HTMLAudioElement, onTransition: TransitionHandler) => {
+  destroyGaplessEngine()
+  primaryAudio = mainAudio
+  transitionHandler = onTransition
+  createSecondaryAudio()
+
+  primaryAudio.addEventListener('timeupdate', handlePrimaryTimeUpdate)
+  primaryAudio.addEventListener('playing', handlePrimaryPlaying)
+  primaryAudio.addEventListener('playing', scheduleTransition)
+  primaryAudio.addEventListener('pause', handlePrimaryPause)
+  primaryAudio.addEventListener('ended', handlePrimaryEnded)
+  primaryAudio.addEventListener('seeking', handlePrimarySeeking)
+  primaryAudio.addEventListener('ratechange', scheduleTransition)
+  primaryAudio.addEventListener('canplay', handlePrimaryCanPlay)
+}
+
 export const setNextSongUrl = (url: string | null) => {
+  if (!url) {
+    if (transitionState !== 'handoff') finishTransition()
+    return
+  }
+  if (!secondaryAudio || !primaryAudio) return
+  if (nextSongUrl === url) {
+    scheduleTransition()
+    return
+  }
+  if (transitionState !== 'idle') finishTransition()
+
   nextSongUrl = url
-  if (url && secondaryAudio) {
-    secondaryAudio.src = url
-    secondaryAudio.load()
+  secondaryAudio.src = url
+  secondaryAudio.load()
+  if (typeof secondaryAudio.setSinkId === 'function') {
+    void secondaryAudio.setSinkId(appSetting['player.mediaDeviceId']).catch((err) => {
+      console.warn('[gapless] setting secondary output device failed:', err)
+    })
   }
+  scheduleTransition()
 }
 
-/**
- * 启动交叉淡化
- */
-const startCrossfade = () => {
-  if (!primaryAudio || !secondaryAudio || !secondaryGain || !secondaryCtx) return
-  if (!nextSongUrl) return
-
-  isCrossfading = true
-  const fadeDuration = (appSetting['player.fadeDuration'] ?? 800) / 1000
-
-  // 主 audio 渐出
-  primaryAudio.volume = 1
-  primaryAudio.volume = 0.5 // 起始（避免 0 突兀）
-  // secondary 渐入
-  secondaryGain!.gain.cancelScheduledValues(0)
-  secondaryGain!.gain.setValueAtTime(0, secondaryCtx!.currentTime)
-  secondaryGain!.gain.linearRampToValueAtTime(1, secondaryCtx!.currentTime + fadeDuration)
-
-  // 启动 secondary 播放
-  void secondaryAudio!.play().catch((err: Error) => {
-    console.warn('[gapless] secondary play failed:', err)
-  })
-
-  // 主 audio 同步渐出（直接用 volume 渐变，因为 primary 链路复杂）
-  const steps = 20
-  const stepInterval = (fadeDuration * 1000) / steps
-  let step = 0
-  if (crossfadeTimer) clearInterval(crossfadeTimer)
-  crossfadeTimer = window.setInterval(() => {
-    step++
-    if (primaryAudio) {
-      primaryAudio.volume = Math.max(0, 1 - (step / steps))
-    }
-    if (step >= steps) {
-      if (crossfadeTimer) {
-        clearInterval(crossfadeTimer)
-        crossfadeTimer = null
-      }
-      // 淡化完成，触发主播放器切换到下一首
-      ;(window as any).app_event?.emit?.('gapless:crossfade-done')
-      // 重置状态
-      if (primaryAudio) primaryAudio.volume = 1
-      if (secondaryGain) secondaryGain.gain.value = 0
-      if (secondaryAudio) {
-        secondaryAudio.pause()
-        secondaryAudio.currentTime = 0
-      }
-      isCrossfading = false
-      nextSongUrl = null
-    }
-  }, stepInterval)
+export const refreshGaplessTransition = () => {
+  if (transitionState === 'idle') scheduleTransition()
 }
 
-/**
- * 渐入渐出工具：用于「非 gapless」的普通切歌场景
- *
- * @param audio 目标 audio 元素
- * @param direction 'in' | 'out'
- * @returns Promise<void>，淡化完成后 resolve
- */
-export const fadeVolume = (
-  audio: HTMLAudioElement,
-  direction: 'in' | 'out',
-): Promise<void> => {
-  if (!appSetting['player.fadeInFadeOut']) {
-    return Promise.resolve()
-  }
-  const duration = appSetting['player.fadeDuration'] ?? 800
-  const steps = 20
-  const stepInterval = duration / steps
-  const targetVolume = direction === 'in' ? 1 : 0
-  const startVolume = direction === 'in' ? 0 : (audio.volume || 1)
-  audio.volume = startVolume
-
-  return new Promise((resolve) => {
-    let step = 0
-    const timer = window.setInterval(() => {
-      step++
-      audio.volume = startVolume + (targetVolume - startVolume) * (step / steps)
-      if (step >= steps) {
-        clearInterval(timer)
-        audio.volume = targetVolume
-        resolve()
-      }
-    }, stepInterval)
-  })
+export const setGaplessMuted = (muted: boolean) => {
+  if (secondaryAudio) secondaryAudio.muted = muted
 }
 
-/**
- * 清理资源
- */
+export const isGaplessTransitionActive = () => transitionState !== 'idle'
+
+export const isGaplessHandoffActive = () => transitionState === 'handoff'
+
 export const destroyGaplessEngine = () => {
-  if (crossfadeTimer) {
-    clearInterval(crossfadeTimer)
-    crossfadeTimer = null
-  }
+  finishTransition()
   if (primaryAudio) {
-    primaryAudio.removeEventListener('timeupdate', handleTimeUpdate)
+    primaryAudio.removeEventListener('timeupdate', handlePrimaryTimeUpdate)
+    primaryAudio.removeEventListener('playing', handlePrimaryPlaying)
+    primaryAudio.removeEventListener('playing', scheduleTransition)
+    primaryAudio.removeEventListener('pause', handlePrimaryPause)
+    primaryAudio.removeEventListener('ended', handlePrimaryEnded)
+    primaryAudio.removeEventListener('seeking', handlePrimarySeeking)
+    primaryAudio.removeEventListener('ratechange', scheduleTransition)
+    primaryAudio.removeEventListener('canplay', handlePrimaryCanPlay)
   }
-  if (secondaryAudio) {
-    secondaryAudio.pause()
-    secondaryAudio.src = ''
-  }
-  if (secondaryCtx) {
-    void secondaryCtx.close()
-    secondaryCtx = null
-  }
+  if (secondaryAudio) secondaryAudio.removeEventListener('error', handleSecondaryError)
   primaryAudio = null
   secondaryAudio = null
-  primaryGain = null
-  secondaryGain = null
-  nextSongUrl = null
-  isCrossfading = false
+  transitionHandler = null
 }

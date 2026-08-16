@@ -77,6 +77,11 @@ export const createAudio = () => {
   })
 }
 
+export const getAudioElement = (): HTMLAudioElement => {
+  if (!audio) throw new Error('audio not defined')
+  return audio
+}
+
 const initAnalyser = () => {
   analyser = audioContext.createAnalyser()
   analyser.fftSize = 256
