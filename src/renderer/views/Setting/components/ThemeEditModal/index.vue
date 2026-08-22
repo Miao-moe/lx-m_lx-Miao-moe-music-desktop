@@ -114,6 +114,7 @@
         <div :class="$style.subContent" style="flex: none;">
           <base-btn v-if="themeId" :class="$style.btn" @click="handleRemove">{{ $t('theme_edit_modal__remove') }}</base-btn>
           <base-btn v-if="themeId" :class="$style.btn" @click="handleSaveNew">{{ $t('theme_edit_modal__save_new') }}</base-btn>
+          <base-btn v-if="themeId" :class="$style.btn" @click="handleExport">{{ $t('theme_edit_modal__export') }}</base-btn>
           <!-- <base-btn :class="$style.btn" @click="handleCancel">{{ $t('btn_cancel') }}</base-btn> -->
           <base-btn :class="$style.btn" @click="handleSubmit">{{ $t('btn_save') }}</base-btn>
         </div>
@@ -123,7 +124,7 @@
 </template>
 
 <script>
-import { joinPath, extname, copyFile, checkPath, createDir, removeFile, moveFile, basename } from '@common/utils/nodejs'
+import { joinPath, extname, copyFile, checkPath, createDir, removeFile, moveFile, basename, readFile, saveLxConfigFile } from '@common/utils/nodejs'
 import { nextTick, ref, watch } from '@common/utils/vueTools'
 import { applyTheme, buildThemeColors, getThemes, copyTheme } from '@renderer/store/utils'
 import { isUrl, encodePath } from '@common/utils/common'
@@ -142,7 +143,7 @@ import useCloseBtnColor from './useCloseBtnColor'
 import useMinBtnColor from './useMinBtnColor'
 import useHideBtnColor from './useHideBtnColor'
 import { appSetting, updateSetting } from '@renderer/store/setting'
-import { removeTheme, saveTheme, showSelectDialog } from '@renderer/utils/ipc'
+import { removeTheme, saveTheme, showSelectDialog, openSaveDir } from '@renderer/utils/ipc'
 import { dialog } from '@renderer/plugins/Dialog'
 import { themeInfo } from '@renderer/store'
 
@@ -485,6 +486,37 @@ export default {
       emit('submit')
       emit('update:modelValue', false)
     }
+    // 导出
+    const handleExport = async() => {
+      if (!themeName.value) return
+      const result = await openSaveDir({
+        title: window.i18n.t('theme_export_desc'),
+        defaultPath: `${themeName.value.replace(/[\\/:*?"<>|]/g, '_')}.lxmc`,
+      })
+      if (result.canceled || !result.filePath) return
+      const exportTheme = copyTheme(theme)
+      exportTheme.name = themeName.value.substring(0, 20)
+      // 将本地背景图片内嵌为 base64，便于跨设备导入
+      if (exportTheme.config.extInfo['--background-image'] != 'none' && !isUrl(exportTheme.config.extInfo['--background-image'])) {
+        try {
+          const buf = await readFile(bgImgRaw)
+          const ext = (extname(bgImgRaw).slice(1).toLowerCase() || 'png').replace('jpeg', 'jpg')
+          exportTheme.config.extInfo['--background-image'] = `data:image/${ext};base64,${buf.toString('base64')}`
+        } catch (err) { /* 读取失败时保留原始文件名 */ }
+      }
+      try {
+        await saveLxConfigFile(result.filePath, { type: 'theme', theme: exportTheme })
+        void dialog({
+          message: window.i18n.t('theme_export_success'),
+          confirmButtonText: window.i18n.t('alert_button_text'),
+        })
+      } catch (err) {
+        void dialog({
+          message: window.i18n.t('theme_export_failed', { message: err.message }),
+          confirmButtonText: window.i18n.t('alert_button_text'),
+        })
+      }
+    }
     // 另存为
     const handleSaveNew = async() => {
       if (!themeName.value) return
@@ -522,6 +554,7 @@ export default {
       handleSubmit,
       handleRemove,
       handleSaveNew,
+      handleExport,
       selectBgImg,
       removeBgImg,
 

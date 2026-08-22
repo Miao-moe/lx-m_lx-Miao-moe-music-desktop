@@ -31,6 +31,11 @@ dd
           div(:class="$style.bgContent")
             svg-icon(:class="$style.icon" name="plus")
         span(:class="$style.label") {{ $t('theme_add') }}
+      li(v-if="showAllTheme" :aria-label="$t('theme_import')" :class="[$style.themeItem, $style.add]" @click="handleImportTheme")
+        div(:class="$style.bg")
+          div(:class="$style.bgContent")
+            svg-icon(:class="$style.icon" name="download")
+        span(:class="$style.label") {{ $t('theme_import') }}
       li(v-if="!showAllTheme" :aria-label="$t('theme_more_btn_show')" :class="[$style.themeItem, $style.moreThme]" @click="showAllTheme = true")
         span(:class="$style.label") {{ $t('theme_more_btn_show') }}
         svg-icon(name="angle-right-solid" :class="$style.activeIcon")
@@ -116,12 +121,14 @@ quality-check-modal(v-model="isShowQualityCheckModal")
 
 <script>
 import { computed, ref, watch, reactive, shallowReactive } from '@common/utils/vueTools'
-import { windowSizeList, userApi, isFullscreen, themeId } from '@renderer/store'
+import { windowSizeList, userApi, isFullscreen, themeId, themeInfo } from '@renderer/store'
 import { langList, useI18n } from '@root/lang'
-import { getSystemFonts } from '@renderer/utils/ipc'
+import { getSystemFonts, saveTheme, showSelectDialog } from '@renderer/utils/ipc'
 import apiSourceInfo from '@renderer/utils/musicSdk/api-source-info'
 import { useTimeout } from '@renderer/core/player/timeoutStop'
 import { dialog } from '@renderer/plugins/Dialog'
+import { checkPath, createDir, joinPath, readLxConfigFile, saveStrToFile } from '@common/utils/nodejs'
+import { isUrl } from '@common/utils/common'
 
 import ThemeSelectorModal from './ThemeSelectorModal.vue'
 import ThemeEditModal from './ThemeEditModal/index.vue'
@@ -225,6 +232,76 @@ export default {
     }
     const handleRefreshTheme = () => {
       init()
+    }
+    const handleImportTheme = async() => {
+      if (userThemes.length >= 10) {
+        void dialog({
+          message: t('theme_max_tip'),
+          confirmButtonText: t('alert_button_text'),
+        })
+        return
+      }
+      const result = await showSelectDialog({
+        title: t('theme_import_desc'),
+        properties: ['openFile'],
+        filters: [
+          { name: 'Theme', extensions: ['lxmc', 'json'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      })
+      if (result.canceled || !result.filePaths.length) return
+      let theme
+      try {
+        const data = await readLxConfigFile(result.filePaths[0])
+        theme = data?.type == 'theme' ? data.theme : data
+      } catch (err) {
+        theme = null
+      }
+      if (!theme?.config?.themeColors || !theme?.config?.extInfo) {
+        void dialog({
+          message: t('theme_import_failed'),
+          confirmButtonText: t('alert_button_text'),
+        })
+        return
+      }
+      const baseTheme = themeInfo.themes[0]
+      const newTheme = {
+        id: 'user_theme_' + Date.now(),
+        name: String(theme.name ?? '').substring(0, 20) || t('theme_import_default_name'),
+        isDark: !!theme.isDark,
+        isDarkFont: !!theme.isDarkFont,
+        isCustom: true,
+        config: {
+          themeColors: { ...baseTheme?.config.themeColors, ...theme.config.themeColors },
+          extInfo: { ...baseTheme?.config.extInfo, ...theme.config.extInfo },
+        },
+      }
+      const bg = newTheme.config.extInfo['--background-image']
+      if (typeof bg == 'string' && bg.startsWith('data:image/')) {
+        const match = /^data:image\/([\w.+-]+);base64,([\s\S]+)$/.exec(bg)
+        if (match) {
+          try {
+            const ext = match[1].toLowerCase().replace('svg+xml', 'svg').replace('jpeg', 'jpg')
+            const fileName = `${newTheme.id}.${ext}`
+            if (!await checkPath(dataPath)) await createDir(dataPath)
+            await saveStrToFile(joinPath(dataPath, fileName), Buffer.from(match[2], 'base64'))
+            newTheme.config.extInfo['--background-image'] = fileName
+          } catch (err) {
+            newTheme.config.extInfo['--background-image'] = 'none'
+          }
+        } else {
+          newTheme.config.extInfo['--background-image'] = 'none'
+        }
+      } else if (bg != 'none' && !isUrl(bg)) {
+        newTheme.config.extInfo['--background-image'] = 'none'
+      }
+      themeInfo.userThemes.push(newTheme)
+      await saveTheme(newTheme)
+      init()
+      void dialog({
+        message: t('theme_import_success'),
+        confirmButtonText: t('alert_button_text'),
+      })
     }
     init()
     const toggleTheme = (theme) => {
@@ -360,6 +437,7 @@ export default {
       toggleTheme,
       themeId,
       handleRefreshTheme,
+      handleImportTheme,
       editThemeId,
       handleEditTheme,
       fontSizeList,
