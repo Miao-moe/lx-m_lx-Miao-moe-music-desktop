@@ -3,7 +3,11 @@
     <div :class="[$style.progressBar, $style.progressBar2, {[$style.barTransition]: isActiveTransition}]" :style="{ transform: `scaleX(${progress || 0})` }" @transitionend="handleTransitionEnd" />
     <div v-show="dragging" :class="[$style.progressBar, $style.progressBar3]" :style="{ transform: `scaleX(${dragProgress || 0})` }" />
   </div>
-  <div ref="dom_progress" :class="$style.progressMask" @mousedown="handleMsDown" />
+  <div
+    ref="dom_progress" :class="$style.progressMask" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100"
+    :aria-valuenow="Math.round((progress || 0) * 100)" @mousedown="handleMsDown"
+    @keydown.left.down.prevent="handleKeyStep(-5)" @keydown.right.up.prevent="handleKeyStep(5)"
+  />
 </template>
 
 <script>
@@ -74,6 +78,10 @@ export default {
     const setProgress = num => {
       window.app_event.setProgress(num)
     }
+    const handleKeyStep = seconds => {
+      const currentTime = (props.progress || 0) * playProgress.maxPlayTime
+      setProgress(Math.max(0, Math.min(playProgress.maxPlayTime, currentTime + seconds)))
+    }
 
     // const handleSetProgress = event => {
     //   // setProgress(event.offsetX / dom_progress.value.clientWidth * playProgress.maxPlayTime)
@@ -85,6 +93,7 @@ export default {
       dragging,
       dragProgress,
       handleMsDown,
+      handleKeyStep,
     }
   },
 }
@@ -97,12 +106,18 @@ export default {
   width: 100%;
   height: 5px;
   overflow: hidden;
-  transition: @transition-normal;
-  transition-property: background-color;
+  transform-origin: 50% 50%;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: background-color, transform;
   background-color: var(--color-primary-light-100-alpha-800);
   // background-color: #f5f5f5;
   position: relative;
   border-radius: 40px;
+
+  &:has(+ .progressMask:hover),
+  &:has(+ .progressMask:focus-visible) {
+    transform: scaleY(1.35);
+  }
 }
 .progressMask {
   position: absolute;
@@ -111,6 +126,11 @@ export default {
   width: 100%;
   height: 100%;
   cursor: pointer;
+  border-radius: var(--radius-sm);
+
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+  }
 }
 .progressBar {
   position: absolute;
@@ -125,20 +145,19 @@ export default {
 }
 
 .progressBar2 {
-  background-color: var(--color-primary-light-100-alpha-400);
+  background-color: var(--color-accent);
   will-change: transform;
 }
 
 .progressBar3 {
-  background-color: var(--color-primary-light-100-alpha-200);
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
-  opacity: 0.5;
+  background-color: var(--color-primary-alpha-200);
+  opacity: .7;
 }
 
 .barTransition {
   transition-property: transform;
-  transition-timing-function: ease-out;
-  transition-duration: 0.2s;
+  transition-timing-function: var(--ease-standard);
+  transition-duration: var(--duration-fast);
 }
 
 </style>

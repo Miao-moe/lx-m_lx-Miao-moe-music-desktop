@@ -33,28 +33,33 @@ export default {
 .btn {
   display: inline-block;
   border: none;
-  border-radius: @form-radius;
+  border-radius: var(--radius-md);
   cursor: pointer;
   padding: 8px 15px;
   color: var(--color-button-font);
   outline: none;
-  transition: background-color 0.2s ease;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, background-color, box-shadow, transform;
   background-color: var(--color-button-background);
   font-size: 14px;
   &[disabled] {
     opacity: .4;
-    cursor: default;
+    cursor: not-allowed;
   }
 
   &.outline {
     background-color: transparent;
   }
 
-  &:hover {
+  &:not([disabled]):hover {
     background-color: var(--color-button-background-hover);
   }
-  &:active {
+  &:not([disabled]):active {
     background-color: var(--color-button-background-active);
+    transform: scale(.98);
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
   }
 }
 

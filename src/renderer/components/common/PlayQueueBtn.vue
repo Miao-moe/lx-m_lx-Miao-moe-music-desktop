@@ -6,7 +6,8 @@
       </svg>
     </button>
     <teleport to="#root">
-      <div v-if="isShow" :class="$style.popup" :style="popupStyle" @click.stop>
+      <transition name="queue-panel">
+        <div v-if="isShow" :class="$style.popup" :style="popupStyle" @click.stop>
         <div :class="$style.header">
           <div :class="$style.titleContent">
             <span :class="$style.title">{{ $t('player__play_list') }}</span>
@@ -33,9 +34,7 @@
               @click="handlePlay(index)"
             >
               <div :class="$style.itemNum">
-                <svg v-if="isCurrentItem(item)" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="60%" viewBox="0 0 24 24" space="preserve">
-                  <use xlink:href="#icon-play-outline" />
-                </svg>
+                <span v-if="isCurrentItem(item)" class="playing-equalizer" :class="{ paused: !isPlay }" aria-hidden="true"><span /><span /><span /></span>
                 <span v-else>{{ index + 1 }}</span>
               </div>
               <div :class="$style.itemImg">
@@ -55,14 +54,15 @@
               </button>
             </div>
           </base-virtualized-list>
-          <div v-else :class="$style.empty">
+          <div v-else :class="[$style.empty, 'ui-state']" role="status">
             <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-playlist" />
             </svg>
             <span>{{ $t('player__play_list_empty') }}</span>
           </div>
         </div>
-      </div>
+        </div>
+      </transition>
     </teleport>
   </div>
 </template>
@@ -71,7 +71,7 @@
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from '@common/utils/vueTools'
 import { isFullscreen } from '@renderer/store'
 import { appSetting } from '@renderer/store/setting'
-import { playQueueList, playMusicInfo } from '@renderer/store/player/state'
+import { isPlay, playQueueList, playMusicInfo } from '@renderer/store/player/state'
 import { removePlayQueue, clearPlayQueue, updatePlayIndex, setPlayMusicInfo } from '@renderer/store/player/action'
 import { getMusicCoverUrl } from '@renderer/utils/musicCover'
 import { getFontSizeWithScreen } from '@renderer/utils'
@@ -179,6 +179,10 @@ const handleDocumentClick = () => {
   isShow.value = false
   window.removeEventListener('resize', updatePosition)
   document.removeEventListener('click', handleDocumentClick)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+}
+const handleDocumentKeydown = (event) => {
+  if (event.key == 'Escape') handleDocumentClick()
 }
 
 const toggleShow = () => {
@@ -189,6 +193,7 @@ const toggleShow = () => {
     updatePosition()
     window.addEventListener('resize', updatePosition)
     document.addEventListener('click', handleDocumentClick)
+    document.addEventListener('keydown', handleDocumentKeydown)
     void nextTick(() => {
       scrollToCurrent()
     })
@@ -218,6 +223,7 @@ const handleClear = () => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updatePosition)
   document.removeEventListener('click', handleDocumentClick)
+  document.removeEventListener('keydown', handleDocumentKeydown)
 })
 
 </script>
@@ -235,7 +241,9 @@ onBeforeUnmount(() => {
   position: relative;
   justify-content: center;
   align-items: center;
-  transition: color @transition-normal;
+  border-radius: var(--radius-sm);
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, background-color, box-shadow, transform;
   cursor: pointer;
   background-color: transparent;
   border: none;
@@ -251,14 +259,19 @@ onBeforeUnmount(() => {
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
+    background-color: var(--color-hover);
     svg {
       opacity: .9;
     }
   }
   &:active {
+    transform: scale(.94);
     svg {
       opacity: 1;
     }
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
   }
 
   &.btnActive {
@@ -273,9 +286,10 @@ onBeforeUnmount(() => {
 .popup {
   position: fixed;
   z-index: 10;
-  border-radius: 8px;
-  background-color: var(--color-content-background);
-  box-shadow: inset 0 0 0 1px var(--color-primary-alpha-900), 0 12px 36px rgba(0, 0, 0, .16), 0 2px 8px rgba(0, 0, 0, .08);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popup);
   display: flex;
   flex-flow: column nowrap;
   overflow: hidden;
@@ -327,8 +341,8 @@ onBeforeUnmount(() => {
   color: var(--color-font-label);
   font-size: 12px;
   padding: 5px 8px;
-  border-radius: @radius-border;
-  transition: @transition-fast;
+  border-radius: var(--radius-sm);
+  transition: var(--duration-fast) var(--ease-standard);
   transition-property: color, background-color;
 
   &:hover {
@@ -341,6 +355,9 @@ onBeforeUnmount(() => {
   &:disabled {
     opacity: .4;
     cursor: not-allowed;
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
   }
 }
 
@@ -364,7 +381,7 @@ onBeforeUnmount(() => {
   padding: 0 8px 0 6px;
   box-sizing: border-box;
   cursor: pointer;
-  transition: @transition-fast;
+  transition: var(--duration-fast) var(--ease-standard);
   transition-property: background-color, color, box-shadow;
   font-size: 12px;
 
@@ -458,12 +475,12 @@ onBeforeUnmount(() => {
   justify-content: center;
   background-color: transparent;
   border: none;
-  border-radius: @form-radius;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--color-font-label);
   opacity: .35;
   padding: 6px;
-  transition: @transition-fast;
+  transition: var(--duration-fast) var(--ease-standard);
   transition-property: color, opacity, background-color;
 
   &:hover {
@@ -493,6 +510,22 @@ onBeforeUnmount(() => {
     fill: currentColor;
     opacity: .35;
   }
+}
+
+:global(.queue-panel-enter-active) {
+  transition: var(--duration-normal) var(--ease-emphasized);
+  transition-property: opacity, transform;
+}
+
+:global(.queue-panel-leave-active) {
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: opacity, transform;
+}
+
+:global(.queue-panel-enter-from),
+:global(.queue-panel-leave-to) {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 </style>

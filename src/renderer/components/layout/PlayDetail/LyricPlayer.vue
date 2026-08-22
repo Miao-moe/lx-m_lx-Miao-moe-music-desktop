@@ -215,14 +215,17 @@ export default {
   :global {
     .font-lrc {
       color: var(--color-450);
+      transition: var(--duration-normal) var(--ease-standard);
+      transition-property: color, opacity;
     }
     .line-content {
       line-height: 1.2;
       padding: calc(var(--playDetail-lrc-font-size, 16px) / 2) 1px;
       overflow-wrap: break-word;
       color: var(--color-450);
-      transition: @transition-normal;
-      transition-property: padding;
+      opacity: .64;
+      transition: var(--duration-normal) var(--ease-standard);
+      transition-property: color, opacity;
 
       .extended {
         font-size: 0.8em;
@@ -230,22 +233,22 @@ export default {
       }
       &.line-mode {
         .font-lrc {
-          transition: @transition-fast;
-          transition-property: font-size, color;
+          transition: color var(--duration-normal) var(--ease-standard);
         }
       }
       &.line-mode.active .font-lrc, &.font-mode.played .font-lrc {
         color: var(--color-primary-dark-200);
       }
+      &.active {
+        opacity: 1;
+      }
       &.font-mode .extended .font-lrc {
-        transition: @transition-slow;
-        transition-property: font-size, color;
+        transition: color var(--duration-slow) var(--ease-standard);
       }
 
       &.font-mode > .line > .font-lrc {
-        > span {
-          transition: @transition-normal;
-          transition-property: font-size;
+          > span {
+          transition: opacity var(--duration-normal) var(--ease-standard);
           font-size: 1em;
           background-repeat: no-repeat;
           background-color: var(--color-450);
@@ -342,8 +345,7 @@ export default {
   .lyricSelectline {
     padding: calc(var(--playDetail-lrc-font-size, 16px) / 2) 1px;
     overflow-wrap: break-word;
-    transition: @transition-normal !important;
-    transition-property: color, font-size;
+    transition: color var(--duration-normal) var(--ease-standard) !important;
     line-height: 1.3;
   }
   .lyricSelectlineExtended {
@@ -351,6 +353,7 @@ export default {
   }
   .lrcActive {
     color: var(--color-primary);
+    font-weight: 500;
   }
 }
 

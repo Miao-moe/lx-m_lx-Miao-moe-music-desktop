@@ -11,7 +11,7 @@ export default ({ visible, location, onHide }) => {
     top: 0,
     opacity: 0,
     transitionProperty: 'transform, opacity',
-    transform: 'scale(.8, .7) translate(0,0)',
+    transform: 'scale(.96) translate(0, -4px)',
     pointerEvents: 'none',
   })
 
@@ -23,7 +23,7 @@ export default ({ visible, location, onHide }) => {
   }
   const handleHide = () => {
     menuStyles.opacity = 0
-    menuStyles.transform = 'scale(.8, .7) translate(0, 0)'
+    menuStyles.transform = 'scale(.96) translate(0, -4px)'
     menuStyles.pointerEvents = 'none'
     show = false
   }
@@ -54,6 +54,10 @@ export default ({ visible, location, onHide }) => {
 
     onHide()
   }
+  const handleKeyDown = (event) => {
+    if (!show || event.key != 'Escape') return
+    onHide()
+  }
 
   watch(visible, visible => {
     visible ? handleShow() : handleHide()
@@ -72,10 +76,12 @@ export default ({ visible, location, onHide }) => {
 
   onMounted(() => {
     document.addEventListener('click', handleDocumentClick)
+    document.addEventListener('keydown', handleKeyDown)
   })
 
   onBeforeUnmount(() => {
     document.removeEventListener('click', handleDocumentClick)
+    document.removeEventListener('keydown', handleKeyDown)
   })
 
   return {

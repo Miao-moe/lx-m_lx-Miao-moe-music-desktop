@@ -38,9 +38,10 @@ export default {
   line-height: 1.4;
   padding: 8px 16px;
   color: var(--color-font);
-  border-radius: 4px;
-  background: var(--color-content-background);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, .3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popup);
   pointer-events: none;
   white-space: nowrap;
   max-width: 80%;
@@ -48,10 +49,12 @@ export default {
   text-overflow: ellipsis;
 }
 :global(.toast-fade-enter-active), :global(.toast-fade-leave-active) {
-  transition: opacity .25s;
+  transition: var(--duration-normal) var(--ease-standard);
+  transition-property: opacity, transform;
 }
-:global(.toast-fade-enter), :global(.toast-fade-leave-to) {
+:global(.toast-fade-enter-from), :global(.toast-fade-leave-to) {
   opacity: 0;
+  transform: translate(-50%, calc(-50% + 4px));
 }
 
 </style>

@@ -1,6 +1,9 @@
 <template>
   <div class="content" :class="[$style.select, show ? $style.active : '']">
-    <div ref="dom_btn" class="label-content" :class="$style.label" @click="handleShow">
+    <div
+      ref="dom_btn" class="label-content" :class="$style.label" role="combobox" tabindex="0"
+      :aria-expanded="show" @click="handleShow" @keydown.enter.space.prevent="handleShow" @keydown.esc.prevent="handleKeyboardHide"
+    >
       <span class="label">{{ label }}</span>
       <div class="icon" :class="$style.icon">
         <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 451.847 451.847" space="preserve">
@@ -11,7 +14,7 @@
     <ul v-if="show" ref="dom_list" class="selection-list scroll" :class="$style.list" :style="listStyles">
       <li
         v-for="(item, index) in list" :key="index" :class="[$style.listItem, (itemKey ? item[itemKey] : item) == modelValue ? $style.active : null]"
-        :aria-label="itemName ? item[itemName] : item" @click="handleClick(item)"
+        tabindex="0" :aria-label="itemName ? item[itemName] : item" @click="handleClick(item)" @keydown.enter.space.prevent="handleClick(item)"
       >
         {{ itemName ? item[itemName] : item }}
       </li>
@@ -81,6 +84,13 @@ export default {
         this.show = false
       }, 50)
     },
+    handleKeyboardHide() {
+      if (!this.show) return
+      this.listStyles.transform = 'scaleY(0) translateY(0)'
+      setTimeout(() => {
+        this.show = false
+      }, 50)
+    },
     handleClick(item) {
       // console.log(this.modelValue)
       if (item === this.modelValue) return
@@ -140,13 +150,14 @@ export default {
 .label {
   background-color: var(--color-button-background);
   padding: 0 10px;
-  transition: background-color @transition-normal;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: background-color, box-shadow;
   height: @selection-height;
   // line-height: 27px;
   line-height: 1.5;
   box-sizing: border-box;
   color: var(--color-button-font);
-  border-radius: @form-radius;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -161,7 +172,7 @@ export default {
     line-height: 0;
     svg {
       width: 1em;
-      transition: transform .2s ease;
+      transition: transform var(--duration-fast) var(--ease-standard);
       transform: rotate(0);
     }
   }
@@ -172,6 +183,9 @@ export default {
   &:active {
     background-color: var(--color-button-background-active);
   }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+  }
 }
 
 .list {
@@ -179,15 +193,16 @@ export default {
   top: 0;
   left: 0;
   width: 100%;
-  background-color: var(--color-content-background);
+  background-color: var(--color-surface-elevated);
   opacity: 0;
   transform: scaleY(0) translateY(0);
   transform-origin: 0 (@selection-height / 2) 0;
-  transition: .25s ease;
+  transition: var(--duration-normal) var(--ease-standard);
   transition-property: transform, opacity;
   z-index: 10;
-  border-radius: @form-radius;
-  box-shadow: 0 0 4px rgba(0, 0, 0, .15);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popup);
   overflow: auto;
   max-height: 200px;
 }
@@ -197,7 +212,7 @@ export default {
   line-height: @selection-height;
   // color: var(--color-button-font);
   outline: none;
-  transition: background-color @transition-normal;
+  transition: background-color var(--duration-fast) var(--ease-standard);
   background-color: transparent;
   box-sizing: border-box;
   .mixin-ellipsis-1();
@@ -209,7 +224,11 @@ export default {
     background-color: var(--color-button-background-active);
   }
   &.active {
-    color: var(--color-button-font);
+    color: var(--color-accent);
+    background-color: var(--color-selected);
+  }
+  &:focus-visible {
+    box-shadow: inset var(--focus-ring);
   }
 }
 

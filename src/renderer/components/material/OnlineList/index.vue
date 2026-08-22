@@ -35,7 +35,7 @@
               >
                 <div class="list-item-cell no-select num" style="flex: 0 0 5%;" @click.stop>{{ index + 1 }}</div>
                 <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-                  <img v-if="getCover(item)" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError">
+                   <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError(item)">
                   <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                     <use xlink:href="#icon-music" />
                   </svg>
@@ -67,7 +67,7 @@
               >
                 <div class="list-item-cell no-select num" style="flex: 0 0 5%;" @click.stop>{{ index + 1 }}</div>
                 <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-                  <img v-if="getCover(item)" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError">
+                   <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError(item)">
                   <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                     <use xlink:href="#icon-music" />
                   </svg>
@@ -90,7 +90,11 @@
           </base-virtualized-list>
         </div>
         <transition enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
-          <div v-show="noItem" :class="$style.noitem">
+          <div
+            v-show="noItem" :class="[$style.noitem, 'ui-state', { 'ui-state-error': noItem === $t('list__load_failed') }]"
+            role="status" :aria-busy="noItem === $t('list__loading')"
+          >
+            <span v-if="noItem === $t('list__loading')" class="ui-spinner" />
             <p v-text="noItem" />
           </div>
         </transition>
@@ -272,17 +276,19 @@ export default {
     }
 
     const coverMap = reactive(new Map())
+    const coverErrorSet = reactive(new Set())
+    const getCoverKey = (item) => `${item.source}__${item.id}`
     const getCover = (item) => {
       if (item.img || item.meta?.picUrl) return item.img || item.meta?.picUrl
-      const key = `${item.source}__${item.id}`
+      const key = getCoverKey(item)
       if (coverMap.has(key)) return coverMap.get(key)
       getMusicCoverUrl(item).then(url => {
         if (url) coverMap.set(key, url)
       })
       return ''
     }
-    const handleCoverError = (event) => {
-      event.target.style.display = 'none'
+    const handleCoverError = (item) => {
+      coverErrorSet.add(getCoverKey(item))
     }
     const qualityBadgeLabel = (item) => {
       const maxQ = getMaxQuality(item, qualityList.value[item.source] || [])
@@ -332,6 +338,8 @@ export default {
       hasQuality,
       qualityBadgeLabel,
       getCover,
+      getCoverKey,
+      coverErrorSet,
       handleCoverError,
     }
   },
@@ -390,7 +398,7 @@ export default {
   img {
     width: var(--list-cover-size);
     height: var(--list-cover-size);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     object-fit: cover;
   }
 
@@ -425,5 +433,6 @@ export default {
     color: var(--color-font-label);
   }
 }
+
 
 </style>

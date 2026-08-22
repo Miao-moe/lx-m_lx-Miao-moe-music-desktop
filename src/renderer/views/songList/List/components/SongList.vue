@@ -2,9 +2,15 @@
   <div :class="$style.container">
     <div v-show="!props.listInfo.noItemLabel" ref="dom_list_ref" :class="$style.listContent" class="scroll">
       <ul>
-        <li v-for="item in props.listInfo.list" :key="item.id" :class="$style.item" @click="toDetail(item)">
+        <li
+          v-for="item in props.listInfo.list" :key="item.id" :class="$style.item" role="button" tabindex="0"
+          :aria-label="item.name" @click="toDetail(item)" @keydown.enter.space.prevent="toDetail(item)"
+        >
           <div :class="$style.image">
-            <img :class="$style.img" loading="lazy" decoding="async" :src="item.img">
+            <img v-if="item.img && !imageErrorSet.has(getItemKey(item))" :class="$style.img" loading="lazy" decoding="async" :src="item.img" :alt="item.name" @error="imageErrorSet.add(getItemKey(item))">
+            <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24 24" space="preserve">
+              <use xlink:href="#icon-music" />
+            </svg>
           </div>
           <div :class="$style.desc">
             <h4>{{ item.name }}</h4>
@@ -26,7 +32,11 @@
       </div>
     </div>
     <transition enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
-      <div v-show="props.listInfo.noItemLabel" :class="$style.noitem">
+      <div
+        v-show="props.listInfo.noItemLabel" :class="[$style.noitem, 'ui-state', { 'ui-state-error': props.listInfo.noItemLabel === $t('list__load_failed') }]"
+        role="status" :aria-busy="props.listInfo.noItemLabel === $t('list__loading')"
+      >
+        <span v-if="props.listInfo.noItemLabel === $t('list__loading')" class="ui-spinner" />
         <p v-text="props.listInfo.noItemLabel" />
       </div>
     </transition>
@@ -34,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from '@common/utils/vueTools'
+import { reactive, ref } from '@common/utils/vueTools'
 import type { ListInfo, ListInfoItem } from '@renderer/store/songList/state'
 import { useRoute, useRouter } from '@common/utils/vueRouter'
 
@@ -50,6 +60,8 @@ const router = useRouter()
 const route = useRoute()
 
 const dom_list_ref = ref<HTMLElement | null>(null)
+const imageErrorSet = reactive(new Set<string>())
+const getItemKey = (item: ListInfoItem) => `${item.source}__${item.id}`
 
 const emit = defineEmits(['toggle-page'])
 
@@ -123,9 +135,19 @@ defineExpose({
   // padding: 10px;
   margin-bottom: 20px;
   cursor: pointer;
-  transition: opacity @transition-normal;
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, opacity, box-shadow;
   &:hover {
-    opacity: .7;
+    color: var(--color-accent);
+
+    .img {
+      transform: scale(1.025);
+    }
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
   }
 }
 .image {
@@ -134,17 +156,26 @@ defineExpose({
   display: flex;
   background-position: center;
   background-size: cover;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   opacity: .9;
   aspect-ratio: 1 / 1;
 
-  box-shadow: 0 0 2px 0 rgba(0,0,0,.2);
+  background-color: var(--color-active);
+
+  svg {
+    width: 34%;
+    margin: auto;
+    fill: var(--color-text-muted);
+    opacity: .45;
+  }
 }
 .img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform var(--duration-normal) var(--ease-standard);
+  animation: songlist-cover-in var(--duration-normal) var(--ease-standard) both;
 }
 
 .desc {
@@ -214,6 +245,11 @@ defineExpose({
     font-size: 24px;
     color: var(--color-font-label);
   }
+}
+
+@keyframes songlist-cover-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 </style>

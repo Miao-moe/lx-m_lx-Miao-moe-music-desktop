@@ -22,11 +22,11 @@ const STYLE_ID = 'lx-smooth-anim-style'
 const STYLE_CONTENT = `
 :root {
   --anim-speed: 1;
-  --anim-easing: cubic-bezier(0.4, 0, 0.2, 1);
-  --anim-duration-fast: calc(0.2s / var(--anim-speed));
-  --anim-duration-normal: calc(0.35s / var(--anim-speed));
-  --anim-duration-slow: calc(0.5s / var(--anim-speed));
-  --anim-duration-page: calc(0.6s / var(--anim-speed));
+  --anim-easing: var(--ease-standard, cubic-bezier(.2, 0, 0, 1));
+  --anim-duration-fast: calc(0.14s / var(--anim-speed));
+  --anim-duration-normal: calc(0.2s / var(--anim-speed));
+  --anim-duration-slow: calc(0.24s / var(--anim-speed));
+  --anim-duration-page: calc(0.2s / var(--anim-speed));
 }
 
 /* 渐入渐出（弹窗、模态框、Toast） */
@@ -65,7 +65,7 @@ const STYLE_CONTENT = `
   opacity: 0;
 }
 
-/* 页面切换（横向滑动） */
+/* 页面切换：仅内容层轻微淡入，不移动固定导航和播放栏。 */
 .smooth-page-enter-active,
 .smooth-page-leave-active {
   transition:
@@ -73,11 +73,11 @@ const STYLE_CONTENT = `
     opacity var(--anim-duration-page) var(--anim-easing);
 }
 .smooth-page-enter-from {
-  transform: translateX(20px);
+  transform: translateY(6px);
   opacity: 0;
 }
 .smooth-page-leave-to {
-  transform: translateX(-20px);
+  transform: translateY(-3px);
   opacity: 0;
 }
 
@@ -137,20 +137,9 @@ const STYLE_CONTENT = `
   transform: translateX(-10px);
 }
 
-/* 尊重「减少动态」系统偏好 */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
 `
 
 let styleEl: HTMLStyleElement | null = null
-let speedWatcher: (() => void) | null = null
 
 const injectStyle = () => {
   if (styleEl) return

@@ -1,5 +1,9 @@
 <template>
-  <div :class="[$style.sliderContent, { [$style.disabled]: disabled }, className]">
+  <div
+    :class="[$style.sliderContent, { [$style.disabled]: disabled }, className]" role="slider" :tabindex="disabled ? -1 : 0"
+    :aria-valuemin="min" :aria-valuemax="max" :aria-valuenow="value" :aria-disabled="disabled"
+    @keydown.left.down.prevent="handleKeyStep(-1)" @keydown.right.up.prevent="handleKeyStep(1)"
+  >
     <div :class="[$style.slider]">
       <div ref="dom_sliderBar" :class="$style.sliderBar" :style="{ transform: `scaleX(${(value - min) / (max - min) || 0})` }" />
     </div>
@@ -89,6 +93,10 @@ export default {
       const rawValue = ratio * getRange() + props.min
       emitSteppedValue(rawValue)
     }
+    const handleKeyStep = direction => {
+      if (props.disabled) return
+      emitSteppedValue(props.value + props.step * direction)
+    }
 
     document.addEventListener('mousemove', handleSliderMsMove)
     document.addEventListener('mouseup', handleSliderMsUp)
@@ -99,6 +107,7 @@ export default {
 
     return {
       handleSliderMsDown,
+      handleKeyStep,
       dom_sliderBar,
     }
   },
@@ -116,10 +125,19 @@ export default {
   // margin-right: 10px;
   display: flex;
   align-items: center;
-  opacity: .5;
-  transition: opacity @transition-normal;
+  opacity: .7;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--duration-fast) var(--ease-standard);
   &:hover {
     opacity: 1;
+
+    .slider {
+      transform: scaleY(1.35);
+    }
+  }
+  &:focus-visible {
+    opacity: 1;
+    box-shadow: var(--focus-ring);
   }
   &.disabled {
     opacity: .3;
@@ -133,10 +151,10 @@ export default {
   // cursor: pointer;
   width: 100%;
   height: 5px;
-  border-radius: 20px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  transition: @transition-normal;
-  transition-property: background-color, opacity;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: background-color, opacity, transform;
   background-color: var(--color-primary-alpha-700);
   // background-color: #f5f5f5;
   position: relative;
@@ -154,13 +172,12 @@ export default {
   transform: scaleX(0);
   transform-origin: 0;
   transition-property: transform;
-  transition-timing-function: ease;
+  transition-timing-function: var(--ease-standard);
   width: 100%;
   height: 100%;
   // border-radius: @radius-progress-border;
-  transition-duration: 0.2s;
+  transition-duration: var(--duration-fast);
   background-color: var(--color-button-font);
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
 }
 
 .sliderMask {

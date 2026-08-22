@@ -67,7 +67,7 @@ body {
   color: var(--color-font);
   background: var(--background-image) var(--background-image-position) no-repeat;
   background-size: var(--background-image-size);
-  transition: background-color @transition-normal;
+  transition: background-color var(--duration-normal) var(--ease-standard);
   background-color: var(--color-content-background);
   box-sizing: border-box;
 }
@@ -139,13 +139,14 @@ body {
   flex: auto;
   display: flex;
   flex-flow: column nowrap;
-  transition: background-color @transition-normal;
-  background-color: var(--color-main-background);
+  min-width: 0;
+  transition: background-color var(--duration-normal) var(--ease-standard);
+  background-color: var(--color-surface);
 
   border-top-left-radius: @radius-border;
   border-bottom-left-radius: @radius-border;
   overflow: hidden;
-  box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: inset 1px 0 0 var(--color-border);
 }
 #toolbar, #player {
   flex: none;
@@ -158,7 +159,7 @@ body {
 }
 
 .view-container {
-  transition: opacity @transition-normal;
+  transition: opacity var(--duration-normal) var(--ease-standard);
 }
 #root.show-modal > .view-container {
   opacity: .9;

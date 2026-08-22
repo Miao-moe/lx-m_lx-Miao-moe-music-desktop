@@ -89,11 +89,12 @@ export default {
   opacity: 0;
   transform: scale(0);
   transform-origin: 0 0 0;
-  transition: .14s ease;
+  transition: var(--duration-fast) var(--ease-standard);
   transition-property: transform, opacity;
-  border-radius: @radius-border;
-  background-color: var(--color-content-background);
-  box-shadow: 0 1px 8px 0 rgba(0,0,0,.2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popup);
   z-index: 10;
   overflow: hidden;
   // will-change: transform;
@@ -106,7 +107,7 @@ export default {
   padding: 0 10px;
   text-align: center;
   outline: none;
-  transition: @transition-normal;
+  transition: var(--duration-fast) var(--ease-standard);
   transition-property: background-color, opacity;
   box-sizing: border-box;
   .mixin-ellipsis-1();
@@ -117,6 +118,11 @@ export default {
   }
   &:active {
     background-color: var(--color-primary-background-active);
+  }
+  &:focus-visible {
+    position: relative;
+    z-index: 1;
+    box-shadow: inset var(--focus-ring);
   }
 
   &[disabled] {

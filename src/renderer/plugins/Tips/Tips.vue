@@ -82,25 +82,26 @@ export default {
   // transform: scale(1);
   line-height: 1.2;
   word-wrap: break-word;
-  padding: 4px 5px;
+  padding: 5px 7px;
   z-index: 10001;
   font-size: 12px;
   // max-width: 80%;
   color: var(--color-font);
-  border-radius: 3px;
-  background: var(--color-content-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
   overflow: hidden;
   pointer-events: none;
   // text-align: justify;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-popup);
   white-space: pre-wrap;
   box-sizing: border-box;
 }
 
 :global(.tips-fade-enter-active), :global(.tips-fade-leave-active) {
-  transition: opacity .2s;
+  transition: opacity var(--duration-fast) var(--ease-standard);
 }
-:global(.tips-fade-enter), :global(.tips-fade-leave-to) {
+:global(.tips-fade-enter-from), :global(.tips-fade-leave-to) {
   opacity: 0;
 }
 

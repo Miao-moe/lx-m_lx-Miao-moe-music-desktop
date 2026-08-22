@@ -72,8 +72,9 @@ export default {
   flex: none;
   height: 100%;
   width: 24px;
-  transition: @transition-fast;
-  transition-property: color, opacity;
+  border-radius: var(--radius-sm);
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, opacity, background-color, box-shadow, transform;
   // color: var(--color-button-font);
   display: flex;
   flex-flow: column nowrap;
@@ -92,9 +93,15 @@ export default {
   }
   &:hover {
     opacity: 1;
+    background-color: var(--color-hover);
   }
   &:active {
     opacity: 1;
+    transform: scale(.94);
+  }
+  &:focus-visible {
+    opacity: 1;
+    box-shadow: var(--focus-ring);
   }
 }
 

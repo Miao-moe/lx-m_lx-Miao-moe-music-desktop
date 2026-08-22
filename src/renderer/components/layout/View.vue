@@ -1,9 +1,9 @@
 <template>
   <div :class="$style.view">
-    <router-view v-slot="{ Component }">
-      <!-- <transition enter-active-class="animated-fast fadeIn" leave-active-class="animated-fast fadeOut"> -->
-      <component :is="Component" class="view-container" />
-      <!-- </transition> -->
+    <router-view v-slot="{ Component, route }">
+      <transition name="smooth-page">
+        <component :is="Component" :key="route.name" class="view-container" />
+      </transition>
     </router-view>
   </div>
 </template>

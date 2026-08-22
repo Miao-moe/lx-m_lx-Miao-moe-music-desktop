@@ -105,17 +105,28 @@ export default {
 
 .btns {
   line-height: 1.2;
+  opacity: .42;
+  transform: translateX(2px);
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: opacity, transform;
+
+  :global(.list-item:hover) &,
+  &:focus-within {
+    opacity: 1;
+    transform: translateX(0);
+  }
 
   button {
     background-color: transparent;
     border: none;
-    border-radius: @form-radius;
+    border-radius: var(--radius-sm);
     margin-right: 5px;
     cursor: pointer;
     padding: 4px 7px;
     color: var(--color-button-font);
     outline: none;
-    transition: background-color 0.2s ease;
+    transition: var(--duration-fast) var(--ease-standard);
+    transition-property: background-color, color, transform, box-shadow;
     line-height: 0;
     &:last-child {
       margin-right: 0;
@@ -136,6 +147,10 @@ export default {
     }
     &:active {
       background-color: var(--color-button-background-active);
+      transform: scale(.94);
+    }
+    &:focus-visible {
+      box-shadow: var(--focus-ring);
     }
   }
 }

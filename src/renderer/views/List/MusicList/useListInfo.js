@@ -1,5 +1,5 @@
 import { ref, watch, computed, onBeforeUnmount } from '@common/utils/vueTools'
-import { playMusicInfo, playInfo } from '@renderer/store/player/state'
+import { playMusicInfo, playInfo, isPlay } from '@renderer/store/player/state'
 import { getListMusics } from '@renderer/store/list/action'
 import { appSetting } from '@renderer/store/setting'
 
@@ -27,6 +27,7 @@ export default ({ props, onLoadedList }) => {
   const playerInfo = computed(() => ({
     isPlayList: playMusicInfo.listId == props.listId,
     playIndex: playInfo.playIndex,
+    isPlay: isPlay.value,
   }))
 
   const setSelectedIndex = index => {

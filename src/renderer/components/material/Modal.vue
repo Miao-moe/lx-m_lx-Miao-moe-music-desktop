@@ -1,12 +1,12 @@
 <template>
   <teleport :to="teleport">
     <div v-if="showModal" ref="dom_container" :class="$style.container">
-      <transition enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
+      <transition enter-active-class="ui-backdrop-enter" leave-active-class="ui-backdrop-leave">
         <div v-show="showContent" :class="[$style.modal, {[$style.filter]: filter}]" @click="bgClose && close()">
           <transition :enter-active-class="inClass" :leave-active-class="outClass" @after-enter="$emit('after-enter', $event)" @after-leave="handleAfterLeave">
             <div v-show="showContent" :class="$style.content" :style="contentStyle" @click.stop>
               <header :class="$style.header">
-                <button v-if="closeBtn" type="button" @click="close">
+                <button v-if="closeBtn" type="button" :aria-label="$t('close')" @click="close">
                   <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 212.982 212.982" space="preserve">
                     <use xlink:href="#icon-delete" />
                   </svg>
@@ -139,8 +139,8 @@ export default {
       //   'slideOutUp',
       //   'hinge',
       // ],
-      inClass: 'animated jackInTheBox',
-      outClass: 'animated slideOutRight',
+      inClass: 'ui-modal-enter',
+      outClass: 'ui-modal-leave',
       showModal: false,
       showContent: false,
       modalCount: false,
@@ -204,15 +204,17 @@ export default {
     },
     setRandomAnimation() {
       if (appSetting['common.randomAnimate']) {
-        const [animIn, animOut] = this.animates[getRandom(0, this.animates.length)]
-        // const [animIn, animOut] = this.animates[this.ai]
-        // if (++this.ai >= this.animates.length) this.ai = 0
-        // console.log(animIn, animOut)
-        // this.inClass = 'animated ' + animIn
-        // this.outClass = 'animated ' + animOut
-        this.inClass = 'animated ' + animIn[getRandom(0, animIn.length)]
-        this.outClass = 'animated ' + animOut[getRandom(0, animOut.length)]
+        const variants = [
+          ['ui-modal-enter', 'ui-modal-leave'],
+          ['ui-modal-enter-alt', 'ui-modal-leave-alt'],
+        ]
+        const [inClass, outClass] = variants[getRandom(0, variants.length)]
+        this.inClass = inClass
+        this.outClass = outClass
+        return
       }
+      this.inClass = 'ui-modal-enter'
+      this.outClass = 'ui-modal-leave'
     },
     close() {
       this.$emit('close')
@@ -252,7 +254,8 @@ export default {
   // will-change: transform;
 
   &.filter {
-    backdrop-filter: grayscale(70%);
+    background-color: rgba(0, 0, 0, .12);
+    backdrop-filter: grayscale(35%);
   }
 
   // &:before {
@@ -269,8 +272,9 @@ export default {
 
 .content {
   position: relative;
-  border-radius: 4px;
-  box-shadow: 0 0 4px rgba(0, 0, 0, .25);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
   overflow: hidden;
   // max-height: 80%;
   // max-width: 76%;
@@ -279,7 +283,7 @@ export default {
   display: flex;
   flex-flow: column nowrap;
   z-index: 100;
-  background-color: var(--color-content-background);
+  background-color: var(--color-surface-elevated);
 }
 
 .header {
@@ -296,8 +300,9 @@ export default {
     padding: 4px 7px;
     background-color: transparent;
     color: var(--color-primary-dark-500-alpha-500);
+    border-radius: var(--radius-sm);
     outline: none;
-    transition: background-color 0.2s ease;
+    transition: background-color var(--duration-fast) var(--ease-standard);
     line-height: 0;
 
     svg {
@@ -310,6 +315,87 @@ export default {
     &:active {
       background-color: var(--color-primary-dark-200-alpha-600);
     }
+    &:focus-visible {
+      box-shadow: var(--focus-ring);
+    }
+  }
+}
+
+:global(.ui-backdrop-enter) {
+  animation: ui-backdrop-in var(--duration-normal) var(--ease-standard) both;
+}
+
+:global(.ui-backdrop-leave) {
+  animation: ui-backdrop-out var(--duration-fast) var(--ease-standard) both;
+}
+
+:global(.ui-modal-enter) {
+  animation: ui-modal-in var(--duration-normal) var(--ease-emphasized) both;
+}
+
+:global(.ui-modal-leave) {
+  animation: ui-modal-out var(--duration-fast) var(--ease-standard) both;
+}
+
+:global(.ui-modal-enter-alt) {
+  animation: ui-modal-in-alt var(--duration-normal) var(--ease-emphasized) both;
+}
+
+:global(.ui-modal-leave-alt) {
+  animation: ui-modal-out-alt var(--duration-fast) var(--ease-standard) both;
+}
+
+@keyframes ui-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ui-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes ui-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(.98) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes ui-modal-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(.99) translateY(2px);
+  }
+}
+
+@keyframes ui-modal-in-alt {
+  from {
+    opacity: 0;
+    transform: scale(.985) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes ui-modal-out-alt {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(.99) translateY(-2px);
   }
 }
 

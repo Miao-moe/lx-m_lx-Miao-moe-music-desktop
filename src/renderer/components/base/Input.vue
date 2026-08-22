@@ -94,13 +94,15 @@ export default {
 .input {
   display: inline-block;
   border: none;
-  border-radius: @form-radius;
+  border-radius: var(--radius-md);
   padding: 7px 8px;
   color: var(--color-button-font);
   outline: none;
-  transition: background-color 0.2s ease;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: background-color, box-shadow, color;
   background-color: var(--color-primary-background);
   font-size: 13.3px;
+  box-shadow: inset 0 0 0 1px var(--color-border);
 
   &::-webkit-outer-spin-button,
   &::-webkit-inner-spin-button {
@@ -110,13 +112,20 @@ export default {
 
   &[disabled] {
     opacity: .4;
+    cursor: not-allowed;
   }
 
   &:hover, &:focus {
     background-color: var(--color-primary-background-hover);
   }
+  &:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--color-accent), var(--focus-ring);
+  }
   &:active {
     background-color: var(--color-primary-background-active);
+  }
+  &[aria-invalid='true'] {
+    box-shadow: inset 0 0 0 1px var(--color-danger);
   }
 }
 

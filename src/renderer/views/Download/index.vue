@@ -31,9 +31,7 @@
             <div class="list-item-cell no-select" :class="$style.num" style="flex: 0 0 5%;">
               <transition name="play-active">
                 <div v-if="playTaskId == item.id" :class="$style.playIcon">
-                  <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="50%" viewBox="0 0 512 512" space="preserve">
-                    <use xlink:href="#icon-play-outline" />
-                  </svg>
+                  <span class="playing-equalizer" :class="{ paused: !isPlay }" aria-hidden="true"><span /><span /><span /></span>
                 </div>
                 <div v-else class="num">{{ index + 1 }}</div>
               </transition>
@@ -56,7 +54,7 @@
           </div>
         </base-virtualized-list>
       </div>
-      <div v-else :class="$style.noItem">
+      <div v-else :class="[$style.noItem, 'ui-state']" role="status">
         <p v-text="$t('no_item')" />
       </div>
       <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
@@ -80,6 +78,7 @@ import useTaskActions from './useTaskActions'
 import useMusicAdd from './useMusicAdd'
 import { downloadStatus } from '@renderer/store/download/state'
 import { appSetting } from '@renderer/store/setting'
+import { isPlay } from '@renderer/store/player/state'
 import { formatMusicName } from '@renderer/utils'
 
 export default {
@@ -249,6 +248,7 @@ export default {
 
       getName,
       getTypeName,
+      isPlay,
     }
   },
 }

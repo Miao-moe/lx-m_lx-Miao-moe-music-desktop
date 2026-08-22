@@ -17,13 +17,13 @@
           @contextmenu="handleContextMenu"
         >
         <transition enter-active-class="animated zoomIn" leave-active-class="animated zoomOut">
-          <button v-show="text" type="button" @click="handleClearList">
+          <button v-show="text" type="button" :aria-label="$t('close')" @click="handleClearList">
             <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-window-close" />
             </svg>
           </button>
         </transition>
-        <button type="button" @click="handleSearch">
+        <button type="button" :aria-label="$t('search')" @click="handleSearch">
           <slot>
             <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 30.239 30.239" space="preserve">
               <use xlink:href="#icon-search" />
@@ -211,15 +211,16 @@ export default {
 .search {
   position: absolute;
   width: 100%;
-  border-radius: @form-radius;
-  transition: box-shadow .4s ease, background-color @transition-normal;
+  border-radius: var(--radius-md);
+  transition: var(--duration-normal) var(--ease-standard);
+  transition-property: box-shadow, background-color;
   display: flex;
   flex-flow: column nowrap;
   background-color: var(--color-primary-light-300-alpha-700);
 
   &.active {
     background-color: var(--color-primary-light-600-alpha-100);
-    box-shadow: 0 1px 5px 0 rgba(0,0,0,.2);
+    box-shadow: inset 0 0 0 1px var(--color-border), var(--focus-ring), var(--shadow-popup);
     .form {
       input {
         border-bottom-left-radius: 0;
@@ -266,7 +267,7 @@ export default {
       height: 100%;
       padding: 6px 7px;
       color: var(--color-button-font);
-      transition: background-color .2s ease;
+      transition: background-color var(--duration-fast) var(--ease-standard);
 
       &:last-child {
         border-top-right-radius: 3px;
@@ -284,14 +285,13 @@ export default {
   .list {
     // background-color: @color-search-form-background;
     font-size: 13px;
-    transition: .3s ease;
+    transition: height var(--duration-normal) var(--ease-standard);
     height: 0;
-    transition-property: height;
     overflow: hidden;
     li {
       cursor: pointer;
       padding: 8px 5px;
-      transition: background-color .2s ease;
+      transition: background-color var(--duration-fast) var(--ease-standard);
       line-height: 1.3;
       span {
         .mixin-ellipsis-2();

@@ -1,14 +1,22 @@
 <template>
   <div :class="$style.player">
     <div :class="$style.picContent" :aria-label="$t('player__pic_tip')" @contextmenu="handleToMusicLocation" @click="showPlayerDetail">
-      <img v-if="musicInfo.pic" :src="musicInfo.pic" decoding="async" @error="imgError">
-      <div v-else :class="$style.emptyPic">L<span>X</span></div>
+      <transition name="cover-swap">
+        <img v-if="musicInfo.pic" :key="musicInfo.pic" :src="musicInfo.pic" decoding="async" @error="imgError">
+        <div v-else key="empty-cover" :class="$style.emptyPic">L<span>X</span></div>
+      </transition>
     </div>
-    <div :class="$style.infoContent">
-      <div :class="$style.title" :aria-label="title + $t('copy_tip')" @click="handleCopy(title)">
-        {{ title }}
-      </div>
-      <div :class="$style.status">{{ statusText }}</div>
+    <div :class="$style.infoSlot">
+      <transition name="track-info">
+        <div :key="musicInfo.id || 'empty-track'" :class="$style.infoContent">
+          <div :class="$style.title" :aria-label="title + $t('copy_tip')" @click="handleCopy(title)">
+            {{ title }}
+          </div>
+          <div :class="[$style.status, { [$style.busyStatus]: isBuffering }]">
+            <span>{{ statusText }}</span>
+          </div>
+        </div>
+      </transition>
     </div>
     <!-- <div :class="$style.timeContainer">
       <div :class="$style.timeContent">
@@ -23,24 +31,26 @@
     <play-progress />
     <control-btns />
     <div :class="$style.playBtnContent">
-      <div :class="$style.playBtn" :aria-label="$t('player__prev')" @click="playPrev()">
+      <button type="button" :class="$style.playBtn" :aria-label="$t('player__prev')" @click="playPrev()">
         <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
           <use xlink:href="#icon-prevMusic" />
         </svg>
-      </div>
-      <div :class="$style.playBtn" :aria-label="isPlay ? $t('player__pause') : $t('player__play')" @click="togglePlay">
-        <svg v-if="isPlay" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
-          <use xlink:href="#icon-pause" />
-        </svg>
-        <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
-          <use xlink:href="#icon-play" />
-        </svg>
-      </div>
-      <div :class="$style.playBtn" :aria-label="$t('player__next')" @click="playNext()">
+      </button>
+      <button type="button" :class="[$style.playBtn, $style.primaryPlayBtn]" :aria-label="isPlay ? $t('player__pause') : $t('player__play')" @click="togglePlay">
+        <transition name="control-swap">
+          <svg v-if="isPlay" key="pause" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
+            <use xlink:href="#icon-pause" />
+          </svg>
+          <svg v-else key="play" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
+            <use xlink:href="#icon-play" />
+          </svg>
+        </transition>
+      </button>
+      <button type="button" :class="$style.playBtn" :aria-label="$t('player__next')" @click="playNext()">
         <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
           <use xlink:href="#icon-nextMusic" />
         </svg>
-      </div>
+      </button>
     </div>
   </div>
 </template>
@@ -118,6 +128,18 @@ export default {
         ? formatMusicName(appSetting['download.fileName'], musicInfo.name, musicInfo.singer)
         : ''
     })
+    const isBuffering = computed(() => {
+      const text = statusText.value
+      const retryText = window.i18n.t('player__getting_url_delay_retry', { time: '__TIME__' })
+      const [retryPrefix, retrySuffix] = retryText.split('__TIME__')
+      return [
+        window.i18n.t('player__loading'),
+        window.i18n.t('player__buffering'),
+        window.i18n.t('player__getting_url'),
+        window.i18n.t('player__refresh_url'),
+        window.i18n.t('toggle_source_try'),
+      ].includes(text) || (text.startsWith(retryPrefix) && text.endsWith(retrySuffix))
+    })
 
     // onBeforeUnmount(() => {
     // window.eventHub.emit(eventPlayerNames.setTogglePlay)
@@ -141,6 +163,7 @@ export default {
       playPrev,
       handleToMusicLocation,
       isShowPlayerDetail,
+      isBuffering,
     }
   },
 }
@@ -181,6 +204,8 @@ export default {
 .picContent {
   height: 100%;
   aspect-ratio: 1 / 1;
+  position: relative;
+  overflow: hidden;
 
   // color: var(--color-primary);
   // transition: @transition-normal;
@@ -202,9 +227,12 @@ export default {
   //   fill: currentColor;
   // }
   img {
+    position: absolute;
+    inset: 0;
     box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
-    max-width: 100%;
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     transition: @transition-normal;
     transition-property: border-color;
     // border-radius: 50%;
@@ -213,6 +241,8 @@ export default {
   }
 
   .emptyPic {
+    position: absolute;
+    inset: 0;
     background-color: var(--color-primary-light-900-alpha-200);
     border-radius: @radius-border;
     width: 100%;
@@ -231,7 +261,16 @@ export default {
   }
 }
 
+.infoSlot {
+  position: relative;
+  height: 100%;
+  flex: auto;
+  min-width: 0;
+}
+
 .infoContent {
+  position: absolute;
+  inset: 0;
   padding: 0 10px;
   flex: auto;
   display: flex;
@@ -255,6 +294,24 @@ export default {
   height: 23px;
   .mixin-ellipsis-1();
   max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  span {
+    .mixin-ellipsis-1();
+  }
+
+  &.busyStatus:before {
+    content: '';
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border: 1px solid var(--color-primary-alpha-700);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: player-buffering .8s linear infinite;
+  }
 }
 
 // .timeContainer {
@@ -312,29 +369,60 @@ export default {
   align-items: center;
   padding-left: 10px;
   padding-right: 15px;
-  gap: 18px;
+  gap: 10px;
 }
 
 .playBtn {
   flex: none;
-  height: 52%;
-  // margin-top: -2px;
-  transition: @transition-fast;
-  transition-property: color, opacity;
+  position: relative;
+  width: 34px;
+  height: 34px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, background-color, opacity, transform, box-shadow;
   color: var(--color-button-font);
   opacity: 1;
   cursor: pointer;
 
   svg {
+    position: absolute;
+    inset: 20%;
+    width: 100%;
+    height: 100%;
     fill: currentColor;
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
-    opacity: 0.8;
+    background-color: var(--color-hover);
   }
   &:active {
-    opacity: 0.6;
+    opacity: .75;
+    transform: scale(.94);
   }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.playBtn > svg {
+  width: 60%;
+  height: 60%;
+}
+
+.primaryPlayBtn {
+  width: 42px;
+  height: 42px;
+  padding: 8px;
+  color: var(--color-accent);
+  background-color: transparent;
+  box-shadow: none;
+}
+
+@keyframes player-buffering {
+  to { transform: rotate(360deg); }
 }
 
 </style>

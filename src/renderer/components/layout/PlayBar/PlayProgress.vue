@@ -129,6 +129,7 @@ export default {
   // flex: none;
   color: var(--color-550);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
   // padding-left: 10px;
   // display: flex;
   // flex-flow: column nowrap;
@@ -150,7 +151,8 @@ export default {
   height: 2px;
   opacity: .24;
   overflow: hidden;
-  transition: @transition-normal;
+  transform-origin: 50% 50%;
+  transition: var(--duration-fast) var(--ease-standard);
   transition-property: background-color, opacity;
   background-color: var(--color-primary-light-100-alpha-800);
 
@@ -167,8 +169,8 @@ export default {
 
   .barTransition {
     transition-property: transform;
-    transition-timing-function: ease-out;
-    transition-duration: 0.2s;
+    transition-timing-function: var(--ease-standard);
+    transition-duration: var(--duration-fast);
   }
 }
 

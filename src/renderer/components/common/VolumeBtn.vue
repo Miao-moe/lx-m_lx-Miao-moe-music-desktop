@@ -1,6 +1,6 @@
 <template>
   <material-popup-btn :class="$style.btnContent">
-    <button :class="$style.btn" :aria-label="isMute ? $t('player__volume_muted') : `${$t('player__volume')}${Math.trunc(volume * maxVolume * 100)}%`" @wheel.prevent="handleWheel">
+    <button :class="[$style.btn, { [$style.active]: isMute }]" :aria-label="isMute ? $t('player__volume_muted') : `${$t('player__volume')}${Math.trunc(volume * maxVolume * 100)}%`" @wheel.prevent="handleWheel">
       <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="100%" viewBox="0 0 24 24" space="preserve">
         <use :xlink:href="icon" />
       </svg>
@@ -65,7 +65,9 @@ const icon = computed(() => {
   // color: var(--color-button-font);
   justify-content: center;
   align-items: center;
-  transition: color @transition-normal;
+  border-radius: var(--radius-sm);
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, background-color, box-shadow, transform;
   cursor: pointer;
   background-color: transparent;
   border: none;
@@ -80,14 +82,23 @@ const icon = computed(() => {
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
+    background-color: var(--color-hover);
     svg {
       opacity: .9;
     }
   }
   &:active {
+    transform: scale(.94);
     svg {
       opacity: 1;
     }
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+  }
+  &.active {
+    color: var(--color-accent);
+    background-color: var(--color-selected);
   }
 }
 

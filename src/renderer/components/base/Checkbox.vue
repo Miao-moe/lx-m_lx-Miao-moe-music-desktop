@@ -160,6 +160,7 @@ export default {
   cursor: pointer;
   display: flex;
   color: var(--color-primary);
+  border-radius: var(--radius-sm);
   // border: 1px solid #ccc;
   &:after {
     position: absolute;
@@ -169,15 +170,23 @@ export default {
     left: 0;
     right: 0;
     border: 1px solid var(--color-font-label);
-    transition: border-color 0.2s ease;
-    border-radius: 2px;
+    transition: var(--duration-fast) var(--ease-standard);
+    transition-property: border-color, background-color;
+    border-radius: var(--radius-sm);
+  }
+  &:hover:after {
+    border-color: var(--color-accent);
+    background-color: var(--color-hover);
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
   }
 }
 .icon {
-  transition: 0.3s ease;
+  transition: var(--duration-fast) var(--ease-emphasized);
   transition-property: transform;
   transform: scale(0);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   // opacity: 0;
 }
 

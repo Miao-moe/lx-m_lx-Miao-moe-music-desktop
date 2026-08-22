@@ -2,8 +2,8 @@
   <ul :class="[$style.list, $style[align]]" role="tablist">
     <li
       v-for="item in list"
-      :key="item[itemKey]" :class="[$style.listItem, {[$style.active]: modelValue == item[itemKey]}]" tabindex="-1" role="tab"
-      :aria-label="item[itemLabel]" ignore-tip :aria-selected="modelValue == item[itemKey]" @click="handleToggle(item[itemKey])"
+      :key="item[itemKey]" :class="[$style.listItem, {[$style.active]: modelValue == item[itemKey]}]" :tabindex="modelValue == item[itemKey] ? 0 : -1" role="tab"
+      :aria-label="item[itemLabel]" ignore-tip :aria-selected="modelValue == item[itemKey]" @click="handleToggle(item[itemKey])" @keydown.enter.space.prevent="handleToggle(item[itemKey])"
     >
       <span :class="$style.label">{{ item[itemLabel] }}</span>
     </li>
@@ -76,11 +76,18 @@ export default {
   display: block;
   // padding: 5px 15px;
   cursor: pointer;
-  transition: color @transition-normal;
+  border-radius: var(--radius-sm);
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, background-color, box-shadow;
 
 
   &:hover {
     color: var(--color-primary);
+    background-color: var(--color-hover);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
   }
 
 
@@ -113,7 +120,7 @@ export default {
     transform: translateY(-4px);
     opacity: 0;
     background-color: var(--color-primary-alpha-300);
-    transition: @transition-fast;
+    transition: var(--duration-fast) var(--ease-standard);
     transition-property: transform, opacity;
   }
 }

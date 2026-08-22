@@ -1,6 +1,6 @@
 <template>
   <material-popup-btn ref="btn_ref" :class="$style.btnContent">
-    <button :class="$style.btn" :aria-label="nextTogglePlayName">
+    <button :class="[$style.btn, { [$style.active]: appSetting['player.togglePlayMethod'] != 'none' }]" :aria-label="nextTogglePlayName">
       <svg
         v-if="appSetting['player.togglePlayMethod'] == 'listLoop'"
         version="1.1"
@@ -107,7 +107,9 @@ const toggleMode = (mode) => {
   // color: var(--color-button-font);
   justify-content: center;
   align-items: center;
-  transition: color @transition-normal;
+  border-radius: var(--radius-sm);
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, background-color, box-shadow, transform;
   cursor: pointer;
   background-color: transparent;
   border: none;
@@ -122,14 +124,23 @@ const toggleMode = (mode) => {
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
+    background-color: var(--color-hover);
     svg {
       opacity: .9;
     }
   }
   &:active {
+    transform: scale(.94);
     svg {
       opacity: 1;
     }
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+  }
+  &.active {
+    color: var(--color-accent);
+    background-color: transparent;
   }
 }
 

@@ -36,15 +36,13 @@
           <div class="list-item-cell no-select" :class="$style.num" style="flex: 0 0 5%;">
             <transition name="play-active">
               <div v-if="playerInfo.isPlayList && playerInfo.playIndex === index" :class="$style.playIcon">
-                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="50%" viewBox="0 0 512 512" space="preserve">
-                  <use xlink:href="#icon-play-outline" />
-                </svg>
+                <span class="playing-equalizer" :class="{ paused: !playerInfo.isPlay }" aria-hidden="true"><span /><span /><span /></span>
               </div>
               <div v-else class="num">{{ index + 1 }}</div>
             </transition>
           </div>
           <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-            <img v-if="getCover(item)" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError">
+            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
             </svg>
@@ -74,15 +72,13 @@
           <div class="list-item-cell no-select" :class="$style.num" style="flex: 0 0 5%;">
             <transition name="play-active">
               <div v-if="playerInfo.isPlayList && playerInfo.playIndex === index" :class="$style.playIcon">
-                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="50%" viewBox="0 0 512 512" space="preserve">
-                  <use xlink:href="#icon-play-outline" />
-                </svg>
+                <span class="playing-equalizer" :class="{ paused: !playerInfo.isPlay }" aria-hidden="true"><span /><span /><span /></span>
               </div>
               <div v-else class="num">{{ index + 1 }}</div>
             </transition>
           </div>
           <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-            <img v-if="getCover(item)" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError">
+            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
             </svg>
@@ -97,7 +93,7 @@
         </div>
       </base-virtualized-list>
     </div>
-    <div v-show="!list.length" :class="$style.noItem">
+    <div v-show="!list.length" :class="[$style.noItem, 'ui-state']" role="status">
       <p v-text="$t('no_item')" />
     </div>
     <common-list-add-modal
@@ -167,14 +163,15 @@ export default {
       void restoreScroll(scrollIndex, isAnimation)
     }
 
-    const handleCoverError = (event) => {
-      event.target.style.display = 'none'
-    }
-
     const coverMap = reactive(new Map())
+    const coverErrorSet = reactive(new Set())
+    const getCoverKey = (item) => `${item.source}__${item.id}`
+    const handleCoverError = (item) => {
+      coverErrorSet.add(getCoverKey(item))
+    }
     const getCover = (item) => {
       if (item.img || item.meta?.picUrl) return item.img || item.meta?.picUrl
-      const key = `${item.source}__${item.id}`
+      const key = getCoverKey(item)
       if (coverMap.has(key)) return coverMap.get(key)
       getMusicCoverUrl(item).then(url => {
         if (url) coverMap.set(key, url)
@@ -389,6 +386,8 @@ export default {
 
       handleCoverError,
       getCover,
+      getCoverKey,
+      coverErrorSet,
     }
   },
 }
@@ -450,7 +449,7 @@ export default {
   img {
     width: var(--list-cover-size);
     height: var(--list-cover-size);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     object-fit: cover;
   }
 
@@ -495,5 +494,6 @@ export default {
     color: var(--color-font-label);
   }
 }
+
 
 </style>

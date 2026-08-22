@@ -15,24 +15,26 @@
       <div :class="$style.timeLabel"><span :class="$style.status" style="margin-right: 15px">{{ status }}</span><span>{{ nowPlayTimeStr }}</span><span style="margin: 0 5px;">/</span><span>{{ maxPlayTimeStr }}</span></div>
     </div>
     <div :class="$style.playControl">
-      <div :class="$style.playBtn" :aria-label="$t('player__prev')" @click="playPrev()">
+      <button type="button" :class="$style.playBtn" :aria-label="$t('player__prev')" @click="playPrev()">
         <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
           <use xlink:href="#icon-prevMusic" />
         </svg>
-      </div>
-      <div :class="$style.playBtn" :aria-label="isPlay ? $t('player__pause') : $t('player__play')" @click="togglePlay">
-        <svg v-if="isPlay" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
-          <use xlink:href="#icon-pause" />
-        </svg>
-        <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
-          <use xlink:href="#icon-play" />
-        </svg>
-      </div>
-      <div :class="$style.playBtn" :aria-label="$t('player__next')" @click="playNext()">
+      </button>
+      <button type="button" :class="[$style.playBtn, $style.primaryPlayBtn]" :aria-label="isPlay ? $t('player__pause') : $t('player__play')" @click="togglePlay">
+        <transition name="control-swap">
+          <svg v-if="isPlay" key="pause" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
+            <use xlink:href="#icon-pause" />
+          </svg>
+          <svg v-else key="play" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
+            <use xlink:href="#icon-play" />
+          </svg>
+        </transition>
+      </button>
+      <button type="button" :class="$style.playBtn" :aria-label="$t('player__next')" @click="playNext()">
         <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 1024 1024" space="preserve">
           <use xlink:href="#icon-nextMusic" />
         </svg>
-      </div>
+      </button>
     </div>
   </div>
 </template>
@@ -96,6 +98,7 @@ const {
   width: 100%;
   height: 18px;
   display: flex;
+  font-variant-numeric: tabular-nums;
   span {
     font-size: 13px;
   }
@@ -112,32 +115,58 @@ const {
   align-items: center;
   padding: 0 25px;
   color: var(--color-button-font);
+  gap: 10px;
 }
 .playBtn {
-  height: 40%;
-  padding: 5px;
+  position: relative;
+  width: 40px;
+  height: 40px;
+  padding: 7px;
+  border: none;
+  border-radius: var(--radius-md);
+  background-color: transparent;
   cursor: pointer;
   flex: none;
   // transition: @transition-normal;
   // transition-property: color;
   color: var(--color-button-font);
-  transition: opacity 0.2s ease;
+  transition: var(--duration-fast) var(--ease-standard);
+  transition-property: color, background-color, opacity, transform, box-shadow;
   opacity: 1;
   cursor: pointer;
 
-  +.playBtn {
-    margin-left: 10px;
-  }
   svg {
+    position: absolute;
+    inset: 20%;
+    width: 100%;
+    height: 100%;
     fill: currentColor;
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
-    opacity: 0.8;
+    background-color: var(--color-hover);
   }
   &:active {
-    opacity: 0.6;
+    opacity: .75;
+    transform: scale(.94);
   }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.playBtn > svg {
+  width: 60%;
+  height: 60%;
+}
+
+.primaryPlayBtn {
+  width: 48px;
+  height: 48px;
+  padding: 10px;
+  color: var(--color-accent);
+  background-color: transparent;
+  box-shadow: none;
 }
 
 </style>
