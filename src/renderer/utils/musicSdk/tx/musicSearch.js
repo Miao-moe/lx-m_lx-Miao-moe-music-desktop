@@ -8,7 +8,7 @@ export default {
   page: 0,
   allPage: 1,
   successCode: 0,
-  musicSearch(str, page, limit, retryNum = 0) {
+  musicSearch(str, page, limit, retryNum = 0, searchType = 0) {
     if (retryNum > 5) return Promise.reject(new Error('搜索失败'))
     const searchRequest = signRequest({
       comm: {
@@ -44,7 +44,7 @@ export default {
         module: 'music.search.SearchCgiService',
         method: 'DoSearchForQQMusicMobile',
         param: {
-          search_type: 0,
+          search_type: searchType,
           searchid: Math.random().toString().slice(2),
           query: str,
           page_num: page,
@@ -62,7 +62,7 @@ export default {
     return searchRequest.then(({ body }) => {
       // console.log(body)
       if (!body || !body.req || body.code != this.successCode || body.req.code != this.successCode) {
-        return this.musicSearch(str, page, limit, ++retryNum)
+        return this.musicSearch(str, page, limit, ++retryNum, searchType)
       }
       return body.req.data
     })

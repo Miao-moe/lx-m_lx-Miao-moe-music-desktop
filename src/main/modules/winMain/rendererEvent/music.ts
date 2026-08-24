@@ -1,5 +1,6 @@
 import { WIN_MAIN_RENDERER_EVENT_NAME } from '@common/ipcNames'
 import { mainHandle } from '@common/mainIpc'
+import { getMusicUrlCacheExpireTime } from '@common/utils/musicUrl'
 
 
 export default () => {
@@ -47,7 +48,14 @@ export default () => {
     return (await global.lx.worker.dbService.getMusicUrl(id)) ?? ''
   })
   mainHandle<LX.Music.MusicUrlInfo>(WIN_MAIN_RENDERER_EVENT_NAME.save_music_url, async({ params: { id, url } }) => {
-    await global.lx.worker.dbService.musicUrlSave([{ id, url }])
+    const now = Date.now()
+    const expireTime = getMusicUrlCacheExpireTime(url, now)
+    if (expireTime <= now) return
+    await global.lx.worker.dbService.musicUrlSave([{
+      id,
+      url,
+      expire_time: expireTime,
+    }])
   })
   mainHandle(WIN_MAIN_RENDERER_EVENT_NAME.clear_music_url, async() => {
     await global.lx.worker.dbService.musicUrlClear()

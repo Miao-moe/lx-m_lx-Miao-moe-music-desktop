@@ -117,6 +117,7 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
       if (key != listInfo!.key) return []
       return setList(data, page, text)
     }).catch((error: any) => {
+      if (key != listInfo!.key) return []
       resetListInfo(sourceId)
       listInfo!.noItemLabel = window.i18n.t('list__load_failed')
       console.log(error)
@@ -124,4 +125,3 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
     })
   }
 }
-

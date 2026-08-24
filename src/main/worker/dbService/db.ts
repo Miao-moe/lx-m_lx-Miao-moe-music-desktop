@@ -38,10 +38,18 @@ export const init = (lxDataPath: string): boolean | null => {
   }
   db.pragma('journal_mode = WAL')
 
-  if (dbFileExists) migrateData(db)
-
-  // https://www.sqlite.org/pragma.html#pragma_optimize
-  if (dbFileExists) db.exec('PRAGMA optimize;')
+  if (dbFileExists) {
+    try {
+      migrateData(db)
+      db.prepare('DELETE FROM "main"."music_url" WHERE "expire_time"<=?').run(Date.now())
+      // https://www.sqlite.org/pragma.html#pragma_optimize
+      db.exec('PRAGMA optimize;')
+    } catch (error) {
+      console.error(error)
+      db.close()
+      return null
+    }
+  }
   if (!verifyDB(db)) {
     db.close()
     return null

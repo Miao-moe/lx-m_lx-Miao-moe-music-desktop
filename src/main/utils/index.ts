@@ -184,17 +184,20 @@ export const initHotKey = async() => {
     electronStore_hotKey.set('global', globalConfig)
   }
 
+  const resolvedLocalConfig: LX.HotKeyConfig = localConfig ?? JSON.parse(JSON.stringify(defaultHotKey.local))
+  if (!localConfig) electronStore_hotKey.set('local', resolvedLocalConfig)
+
   if (hotKeyVersion < 1) {
     const listSearchHotKey = defaultHotKey.local.keys['mod+f']
-    if (!Object.values(localConfig!.keys).some(info => info.action == listSearchHotKey.action) && !localConfig!.keys['mod+f']) {
-      localConfig!.keys['mod+f'] = { ...listSearchHotKey }
-      electronStore_hotKey.set('local', localConfig)
+    if (!Object.values(resolvedLocalConfig.keys).some(info => info.action == listSearchHotKey.action) && !resolvedLocalConfig.keys['mod+f']) {
+      resolvedLocalConfig.keys['mod+f'] = { ...listSearchHotKey }
+      electronStore_hotKey.set('local', resolvedLocalConfig)
     }
     electronStore_hotKey.set('version', 1)
   }
 
   return {
-    local: localConfig!,
+    local: resolvedLocalConfig,
     global: globalConfig!,
   }
 }

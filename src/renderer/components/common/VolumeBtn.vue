@@ -1,6 +1,6 @@
 <template>
   <material-popup-btn :class="$style.btnContent">
-    <button :class="[$style.btn, { [$style.active]: isMute }]" :aria-label="isMute ? $t('player__volume_muted') : `${$t('player__volume')}${Math.trunc(volume * maxVolume * 100)}%`" @wheel.prevent="handleWheel">
+    <button :class="[$style.btn, { [$style.active]: isMute }]" :aria-label="isMute ? $t('player__volume_muted') : `${$t('player__volume')}${displayVolumePercent}%`" @wheel.prevent="handleWheel">
       <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="100%" viewBox="0 0 24 24" space="preserve">
         <use :xlink:href="icon" />
       </svg>
@@ -8,7 +8,7 @@
     <template #content>
       <div :class="$style.setting" @wheel.prevent="handleWheel">
         <div :class="$style.info">
-          <span>{{ Math.trunc(volume * maxVolume * 100) }}%</span>
+          <span>{{ displayVolumePercent }}%</span>
           <base-checkbox
             id="player__volume_mute"
             :model-value="isMute"
@@ -16,28 +16,70 @@
             @update:model-value="saveVolumeIsMute($event)"
           />
         </div>
-        <base-slider-bar :class="$style.slider" :value="volume * maxVolume" :min="0" :max="maxVolume" :step="0.01" @change="handleUpdateVolume" />
+        <base-slider-bar :class="$style.slider" :value="volume * maxVolume" :min="0" :max="maxVolume" :step="0.001" @change="handleUpdateVolume" />
       </div>
     </template>
   </material-popup-btn>
 </template>
 
 <script setup>
-import { computed } from '@common/utils/vueTools'
+import { computed, onBeforeUnmount } from '@common/utils/vueTools'
 import { saveVolumeIsMute, appSetting } from '@renderer/store/setting'
 import { volume, isMute } from '@renderer/store/player/volume'
 
+const VOLUME_FINE_STEP = 0.001
 const maxVolume = computed(() => appSetting['player.maxVolume'] ?? 1)
+const volumePercent = computed(() => Math.round(volume.value * maxVolume.value * 1000) / 10)
+const displayVolumePercent = computed(() => Math.trunc(volumePercent.value))
+
+let targetVolume = null
+let volumeFrameId = null
+
+const stopVolumeTransition = () => {
+  if (volumeFrameId != null) cancelAnimationFrame(volumeFrameId)
+  volumeFrameId = null
+  targetVolume = null
+}
+
+const updateVolume = () => {
+  if (targetVolume == null) return
+  const currentVolume = volume.value * maxVolume.value
+  const distance = targetVolume - currentVolume
+  const absoluteDistance = Math.abs(distance)
+
+  if (absoluteDistance <= VOLUME_FINE_STEP) {
+    window.app_event.setVolume(targetVolume / maxVolume.value)
+    volumeFrameId = null
+    targetVolume = null
+    return
+  }
+
+  // A compact track skips pointer positions, so fill small gaps one 0.1% step per frame.
+  const step = absoluteDistance <= 0.01
+    ? VOLUME_FINE_STEP
+    : Math.max(VOLUME_FINE_STEP, absoluteDistance * 0.3)
+  const nextVolume = currentVolume + Math.sign(distance) * Math.min(absoluteDistance, step)
+  const steppedVolume = Math.round(nextVolume / VOLUME_FINE_STEP) * VOLUME_FINE_STEP
+  window.app_event.setVolume(steppedVolume / maxVolume.value)
+  volumeFrameId = requestAnimationFrame(updateVolume)
+}
 
 const handleWheel = (event) => {
-  const step = 0.01
-  const delta = event.deltaY > 0 ? -step : step
-  window.app_event.setVolume(Math.max(0, Math.min(1, volume.value + delta)))
+  if (event.deltaY == 0) return
+  stopVolumeTransition()
+  const percent = event.deltaY > 0
+    ? Math.ceil(volumePercent.value) - 1
+    : Math.floor(volumePercent.value) + 1
+  const targetPercent = Math.max(0, Math.min(maxVolume.value * 100, percent))
+  window.app_event.setVolume(targetPercent / 100 / maxVolume.value)
 }
 
 const handleUpdateVolume = (val) => {
-  window.app_event.setVolume(val / maxVolume.value)
+  targetVolume = val
+  if (volumeFrameId == null) volumeFrameId = requestAnimationFrame(updateVolume)
 }
+
+onBeforeUnmount(stopVolumeTransition)
 
 const icon = computed(() => {
   return isMute.value

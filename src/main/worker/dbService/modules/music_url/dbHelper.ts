@@ -3,6 +3,7 @@ import {
   createQueryStatement,
   createInsertStatement,
   createDeleteStatement,
+  createDeleteExpiredStatement,
   // createUpdateStatement,
   createClearStatement,
   createCountStatement,
@@ -15,7 +16,7 @@ import {
  */
 export const queryMusicUrl = (id: string) => {
   const queryStatement = createQueryStatement()
-  return (queryStatement.get(id) as { url: string } | null)?.url ?? null
+  return (queryStatement.get(id, Date.now()) as { url: string } | null)?.url ?? null
 }
 
 /**
@@ -26,7 +27,9 @@ export const insertMusicUrl = (urlInfo: LX.DBService.MusicUrlInfo[]) => {
   const db = getDB()
   const insertStatement = createInsertStatement()
   const deleteStatement = createDeleteStatement()
+  const deleteExpiredStatement = createDeleteExpiredStatement()
   db.transaction((urlInfo: LX.DBService.MusicUrlInfo[]) => {
+    deleteExpiredStatement.run(Date.now())
     for (const info of urlInfo) {
       deleteStatement.run(info.id)
       insertStatement.run(info)
@@ -70,6 +73,8 @@ export const clearMusicUrl = () => {
  * 统计歌曲信息数量
  */
 export const countMusicUrl = () => {
+  const deleteExpiredStatement = createDeleteExpiredStatement()
+  deleteExpiredStatement.run(Date.now())
   const countStatement = createCountStatement()
-  return (countStatement.get() as { count: number }).count
+  return (countStatement.get(Date.now()) as { count: number }).count
 }

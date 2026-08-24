@@ -6,10 +6,10 @@ import { getDB } from '../../db'
  */
 export const createQueryStatement = () => {
   const db = getDB()
-  return db.prepare<[string]>(`
+  return db.prepare<[string, number]>(`
     SELECT "url"
     FROM "main"."music_url"
-    WHERE "id"=?
+    WHERE "id"=? AND "expire_time">?
     `)
 }
 
@@ -20,8 +20,8 @@ export const createQueryStatement = () => {
 export const createInsertStatement = () => {
   const db = getDB()
   return db.prepare<[LX.DBService.MusicUrlInfo]>(`
-    INSERT INTO "main"."music_url" ("id", "url")
-    VALUES (@id, @url)`)
+    INSERT INTO "main"."music_url" ("id", "url", "expire_time")
+    VALUES (@id, @url, @expire_time)`)
 }
 
 /**
@@ -48,6 +48,18 @@ export const createDeleteStatement = () => {
 }
 
 /**
+ * 创建过期歌曲url清理语句
+ * @returns 清理语句
+ */
+export const createDeleteExpiredStatement = () => {
+  const db = getDB()
+  return db.prepare<[number]>(`
+    DELETE FROM "main"."music_url"
+    WHERE "expire_time"<=?
+  `)
+}
+
+/**
  * 创建歌曲url更新语句
  * @returns 更新语句
  */
@@ -55,7 +67,7 @@ export const createUpdateStatement = () => {
   const db = getDB()
   return db.prepare<[LX.DBService.MusicUrlInfo]>(`
     UPDATE "main"."music_url"
-    SET "url"=@url
+    SET "url"=@url, "expire_time"=@expire_time
     WHERE "id"=@id`)
 }
 
@@ -65,5 +77,5 @@ export const createUpdateStatement = () => {
  */
 export const createCountStatement = () => {
   const db = getDB()
-  return db.prepare<[]>('SELECT COUNT(*) as count FROM "main"."music_url"')
+  return db.prepare<[number]>('SELECT COUNT(*) as count FROM "main"."music_url" WHERE "expire_time">?')
 }

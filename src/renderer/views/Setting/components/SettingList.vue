@@ -12,10 +12,16 @@ dd
 dd
   h3#list_cover_size {{ $t('setting__list_cover_size') }}
   div
-    base-checkbox.gap-left(
-      v-for="size in coverSizeList" :id="`setting_list_cover_size_${size}`" :key="size"
-      name="setting_list_cover_size" need :model-value="appSetting['list.coverSize']" :value="size" :label="`${size} px`"
-      @update:model-value="updateSetting({'list.coverSize': $event})")
+    input.gap-left(
+      id="setting_list_cover_size"
+      type="number"
+      style="width: 80px; padding: 4px 8px; border: 1px solid var(--color-primary-light-200-alpha-700); border-radius: 4px; background: var(--color-main-background); color: var(--color-font); font-size: 13px;"
+      :value="appSetting['list.coverSize']"
+      min="20" max="100" step="1"
+      @change="handleUpdateCoverSize"
+    )
+    span(style="margin-left: 4px; font-size: 13px;") px
+    span(v-if="coverSizeHint" style="margin-left: 8px; color: var(--color-font-label); font-size: 12px;") {{ coverSizeHint }}
 dd(:aria-label="$t('setting__basic_sourcename_title')")
   h3#list_addMusicLocationType {{ $t('setting__list_add_music_location_type') }}
   div
@@ -31,18 +37,53 @@ dd(:aria-label="$t('setting__basic_sourcename_title')")
 </template>
 
 <script>
-// import { ref, onBeforeUnmount } from '@common/utils/vueTools'
+import { onBeforeUnmount, ref } from '@common/utils/vueTools'
 import { appSetting, updateSetting } from '@renderer/store/setting'
-
-const coverSizeList = [20, 28, 36, 44, 52, 60, 68, 76, 84, 92, 100]
+import { useI18n } from '@renderer/plugins/i18n'
 
 export default {
   name: 'SettingList',
   setup() {
+    const t = useI18n()
+    const coverSizeHint = ref('')
+    let coverSizeHintTimer
+
+    const clearCoverSizeHint = () => {
+      if (coverSizeHintTimer) clearTimeout(coverSizeHintTimer)
+      coverSizeHintTimer = null
+      coverSizeHint.value = ''
+    }
+    const showCoverSizeHint = (key) => {
+      clearCoverSizeHint()
+      coverSizeHint.value = t(key)
+      coverSizeHintTimer = setTimeout(clearCoverSizeHint, 3000)
+    }
+
+    const handleUpdateCoverSize = (event) => {
+      let size = parseInt(event.target.value)
+      if (isNaN(size)) {
+        size = appSetting['list.coverSize']
+      }
+      if (size < 20) {
+        size = 20
+        showCoverSizeHint('setting__list_cover_size_min')
+      } else if (size > 100) {
+        size = 100
+        showCoverSizeHint('setting__list_cover_size_max')
+      } else {
+        clearCoverSizeHint()
+      }
+      event.target.value = size
+      updateSetting({ 'list.coverSize': size })
+    }
+
+    onBeforeUnmount(clearCoverSizeHint)
+
     return {
       appSetting,
       updateSetting,
-      coverSizeList,
+      coverSizeHint,
+      handleUpdateCoverSize,
     }
   },
 }

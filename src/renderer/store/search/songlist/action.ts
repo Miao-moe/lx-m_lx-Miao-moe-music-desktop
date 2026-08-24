@@ -3,7 +3,7 @@ import music from '@renderer/utils/musicSdk'
 import { sortInsert, similar } from '@common/utils/common'
 
 import type { ListInfoItem } from './state'
-import { sources, maxPages, listInfos } from './state'
+import { sources, listInfos } from './state'
 
 interface SearchResult {
   list: ListInfoItem[]
@@ -31,9 +31,6 @@ const handleSortList = (list: ListInfoItem[], keyword: string) => {
 }
 
 
-let maxTotals: Partial<Record<LX.OnlineSource, number>> = {
-
-}
 const setLists = (results: SearchResult[], page: number, text: string): ListInfoItem[] => {
   let totals = []
   let limit = 0
@@ -41,8 +38,6 @@ const setLists = (results: SearchResult[], page: number, text: string): ListInfo
   for (const source of results) {
     list.push(...source.list)
     totals.push(source.total)
-    maxTotals[source.source] = source.total
-    maxPages[source.source] = Math.ceil(source.total / source.limit)
     limit = Math.max(source.limit, limit)
   }
   markRawList(list)
@@ -95,7 +90,7 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
     listInfo.key = key
     let task = []
     for (const source of sources) {
-      if (source == 'all' || (page > 1 && page > (maxPages[source]!))) continue
+      if (source == 'all') continue
       task.push((music[source]?.songList.search(text, page, listInfos.all.limit) ?? Promise.reject(new Error('source not found: ' + source))).catch((error: any) => {
         console.log(error)
         return {
@@ -118,6 +113,7 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
       if (key != listInfo.key) return []
       return setList(data, page, text)
     }) ?? Promise.reject(new Error('source not found: ' + sourceId))).catch((error: any) => {
+      if (key != listInfo.key) return []
       resetListInfo(sourceId)
       listInfo.noItemLabel = window.i18n.t('list__load_failed')
       console.log(error)
@@ -125,4 +121,3 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
     })
   }
 }
-

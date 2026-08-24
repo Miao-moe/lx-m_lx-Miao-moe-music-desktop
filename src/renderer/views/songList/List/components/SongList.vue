@@ -3,7 +3,7 @@
     <div v-show="!props.listInfo.noItemLabel" ref="dom_list_ref" :class="$style.listContent" class="scroll">
       <ul>
         <li
-          v-for="item in props.listInfo.list" :key="item.id" :class="$style.item" role="button" tabindex="0"
+          v-for="item in props.listInfo.list" :key="getItemKey(item)" :class="$style.item" role="button" tabindex="0"
           :aria-label="item.name" @click="toDetail(item)" @keydown.enter.space.prevent="toDetail(item)"
         >
           <div :class="$style.image">
@@ -19,7 +19,7 @@
               <p v-if="item.time" :class="$style.time">{{ item.time }}</p>
               <div :class="$style.songlist_info">
                 <span v-if="item.total != null"><svg-icon name="music" />{{ item.total }}</span>
-                <span v-if="item.play_count != null"><svg-icon name="headphones" />{{ item.play_count }}</span>
+                <span v-if="item.play_count != null && item.play_count !== ''"><svg-icon name="headphones" />{{ item.play_count }}</span>
                 <span v-if="visibleSource">{{ item.source }}</span>
               </div>
             </div>
@@ -52,8 +52,12 @@ import { useRoute, useRouter } from '@common/utils/vueRouter'
 const props = withDefaults(defineProps<{
   listInfo: ListInfo
   visibleSource?: boolean
+  searchOnClick?: boolean
+  searchResultType?: 'singer' | 'album'
 }>(), {
   visibleSource: false,
+  searchOnClick: false,
+  searchResultType: 'singer',
 })
 
 const router = useRouter()
@@ -71,6 +75,20 @@ const togglePage = (page: number) => {
 }
 
 const toDetail = (info: ListInfoItem) => {
+  if (props.searchOnClick) {
+    const text = props.searchResultType == 'album' && info.author ? `${info.name} ${info.author}` : info.name
+    void router.push({
+      path: '/search',
+      query: {
+        ...route.query,
+        source: info.source,
+        type: 'music',
+        page: 1,
+        text,
+      },
+    })
+    return
+  }
   void router.push({
     path: '/songList/detail',
     query: {

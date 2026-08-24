@@ -56,6 +56,7 @@ declare namespace LX {
     interface MusicUrlInfo {
       id: string
       url: string
+      expire_time: number
     }
 
     interface DownloadMusicInfo {

@@ -10,6 +10,7 @@ import songList from './songList'
 import hotSearch from './hotSearch'
 import comment from './comment'
 import recommend from './recommend'
+import entitySearch from './entitySearch'
 
 const kw = {
   _musicInfoRequestObj: null,
@@ -40,6 +41,7 @@ const kw = {
   hotSearch,
   comment,
   recommend,
+  entitySearch,
   getLyric(songInfo, isGetLyricx) {
     // let singer = songInfo.singer.indexOf('、') > -1 ? songInfo.singer.split('、')[0] : songInfo.singer
     return lyric.getLyric(songInfo, isGetLyricx)

@@ -111,6 +111,8 @@ type Tables = 'db_info'
 | 'index_music_info_other_source'
 | 'lyric'
 | 'music_url'
+| 'index_music_url_id'
+| 'index_music_url_expire_time'
 | 'download_list'
 | 'dislike_list'
 
@@ -197,7 +199,18 @@ tables.set('lyric', `
 tables.set('music_url', `
   CREATE TABLE "music_url" (
     "id" TEXT NOT NULL,
-    "url" TEXT NOT NULL
+    "url" TEXT NOT NULL,
+    "expire_time" INTEGER NOT NULL DEFAULT 0
+  );
+`)
+tables.set('index_music_url_id', `
+  CREATE UNIQUE INDEX "index_music_url_id" ON "music_url" (
+    "id"
+  );
+`)
+tables.set('index_music_url_expire_time', `
+  CREATE INDEX "index_music_url_expire_time" ON "music_url" (
+    "expire_time"
   );
 `)
 tables.set('download_list', `
@@ -228,4 +241,4 @@ tables.set('dislike_list', `
 
 export default tables
 
-export const DB_VERSION = '2'
+export const DB_VERSION = '3'
