@@ -474,6 +474,7 @@
   "setting__download_use_other_source_tip": "當無法從歌曲的原始來源下載時，嘗試變更到其他來源下載。\n註：此功能不 100% 保證變更來源後的歌曲與原版一致。",
   "setting__hot_key": "快速鍵設定",
   "setting__hot_key_common_focus_search_input": "聚焦搜尋框",
+  "setting__hot_key_common_focus_list_search_input": "歌單內搜尋歌曲",
   "setting__hot_key_common_min": "最小化軟體",
   "setting__hot_key_common_toggle_close": "退出軟體",
   "setting__hot_key_common_toggle_hide": "顯示/隱藏軟體",

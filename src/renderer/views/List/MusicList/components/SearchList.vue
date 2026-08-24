@@ -41,6 +41,7 @@
 import { debounce } from '@common/utils'
 import { clipboardReadText } from '@common/utils/electron'
 import { toRaw } from '@common/utils/vueTools'
+import { HOTKEY_COMMON } from '@common/hotKey'
 
 export default {
   props: {
@@ -109,12 +110,12 @@ export default {
     this.init()
     // window.key_event.on('key_mod_down', this.handle_key_mod_down)
     // window.key_event.on('key_mod_up', this.handle_key_mod_up)
-    window.key_event.on('key_mod+f_down', this.handle_key_mod_f_down)
+    window.key_event.on(HOTKEY_COMMON.focusListSearchInput.action, this.handleFocusInput)
   },
   beforeUnmount() {
     // window.key_event.off('key_mod_down', this.handle_key_mod_down)
     // window.key_event.off('key_mod_up', this.handle_key_mod_up)
-    window.key_event.off('key_mod+f_down', this.handle_key_mod_f_down)
+    window.key_event.off(HOTKEY_COMMON.focusListSearchInput.action, this.handleFocusInput)
   },
   methods: {
     init() {
@@ -143,7 +144,7 @@ export default {
     handle_key_mod_up() {
       this.isModDown &&= false
     },
-    handle_key_mod_f_down() {
+    handleFocusInput() {
       if (this.visible) this.$refs.dom_input.focus()
     },
     handleAnimated() {

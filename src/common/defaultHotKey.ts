@@ -23,6 +23,11 @@ const local: LX.HotKeyConfig = {
       name: HOTKEY_COMMON.focusSearchInput.name,
       action: HOTKEY_COMMON.focusSearchInput.action,
     },
+    'mod+f': {
+      type: HOTKEY_COMMON.focusListSearchInput.type,
+      name: HOTKEY_COMMON.focusListSearchInput.name,
+      action: HOTKEY_COMMON.focusListSearchInput.action,
+    },
   },
 }
 

@@ -1,4 +1,5 @@
 import { ref, onBeforeUnmount } from '@common/utils/vueTools'
+import { HOTKEY_COMMON } from '@common/hotKey'
 
 export default ({ setSelectedIndex, handlePlayMusic, listRef }) => {
   const isShowSearchBar = ref(false)
@@ -24,10 +25,10 @@ export default ({ setSelectedIndex, handlePlayMusic, listRef }) => {
     }
   }
 
-  window.key_event.on('key_mod+f_down', handleShowSearchBar)
+  window.key_event.on(HOTKEY_COMMON.focusListSearchInput.action, handleShowSearchBar)
 
   onBeforeUnmount(() => {
-    window.key_event.off('key_mod+f_down', handleShowSearchBar)
+    window.key_event.off(HOTKEY_COMMON.focusListSearchInput.action, handleShowSearchBar)
   })
 
   return {

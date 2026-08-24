@@ -494,6 +494,7 @@
   "setting__download_use_other_source_tip": "When the song cannot be downloaded from the original source, try to switch to another source to download.\nNOTE: This does not 100% guarantee that the version of the song after changing the source is consistent with the original version.",
   "setting__hot_key": "Shortcuts",
   "setting__hot_key_common_focus_search_input": "Focus Search Box",
+  "setting__hot_key_common_focus_list_search_input": "Search Songs in Playlist",
   "setting__hot_key_common_min": "Minimize App",
   "setting__hot_key_common_toggle_close": "Exit App",
   "setting__hot_key_common_toggle_hide": "Show/Hide App",

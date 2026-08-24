@@ -362,6 +362,11 @@ export const allHotKeys = markRaw({
       type: APP_EVENT_NAMES.winMainName,
     },
     {
+      name: hotKeys.HOTKEY_COMMON.focusListSearchInput.name,
+      action: hotKeys.HOTKEY_COMMON.focusListSearchInput.action,
+      type: APP_EVENT_NAMES.winMainName,
+    },
+    {
       name: hotKeys.HOTKEY_COMMON.min.name,
       action: hotKeys.HOTKEY_COMMON.min.action,
       type: APP_EVENT_NAMES.winMainName,

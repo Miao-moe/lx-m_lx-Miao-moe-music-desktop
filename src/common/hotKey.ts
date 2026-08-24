@@ -34,6 +34,11 @@ const hotKey = {
       action: 'focus_search_input',
       type: '',
     },
+    focusListSearchInput: {
+      name: 'focus_list_search_input',
+      action: 'focus_list_search_input',
+      type: '',
+    },
   },
   player: {
     toggle_play: {

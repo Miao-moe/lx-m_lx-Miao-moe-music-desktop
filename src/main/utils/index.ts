@@ -159,6 +159,7 @@ export const initHotKey = async() => {
 
   let localConfig = electronStore_hotKey.get('local') as LX.HotKeyConfig | null
   let globalConfig = electronStore_hotKey.get('global') as LX.HotKeyConfig | null
+  const hotKeyVersion = electronStore_hotKey.get<number>('version') ?? 0
 
   if (globalConfig) {
     // 移除v2.2.0及之前设置的全局媒体快捷键注册
@@ -181,6 +182,15 @@ export const initHotKey = async() => {
 
     electronStore_hotKey.set('local', localConfig)
     electronStore_hotKey.set('global', globalConfig)
+  }
+
+  if (hotKeyVersion < 1) {
+    const listSearchHotKey = defaultHotKey.local.keys['mod+f']
+    if (!Object.values(localConfig!.keys).some(info => info.action == listSearchHotKey.action) && !localConfig!.keys['mod+f']) {
+      localConfig!.keys['mod+f'] = { ...listSearchHotKey }
+      electronStore_hotKey.set('local', localConfig)
+    }
+    electronStore_hotKey.set('version', 1)
   }
 
   return {
