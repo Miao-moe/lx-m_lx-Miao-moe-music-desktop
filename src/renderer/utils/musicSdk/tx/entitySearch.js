@@ -1,64 +1,119 @@
+import { httpFetch } from '../../request'
 import { decodeName } from '../../index'
 import { formatSingerName } from '../utils'
 import musicSearch from './musicSearch'
 
-const getList = (body, type) => {
-  if (type == 'singer') return body?.item_singer || body?.singer?.list || []
-  return body?.item_album || body?.album?.list || []
+const getId = value => value == null ? '' : String(value)
+const getSingerImage = mid => mid ? `https://y.gtimg.cn/music/photo_new/T001R500x500M000${mid}.jpg` : ''
+const getAlbumImage = mid => mid ? `https://y.gtimg.cn/music/photo_new/T002R500x500M000${mid}.jpg` : ''
+
+const searchSuggest = (str) => {
+  const url = `https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?format=json&key=${encodeURIComponent(str)}&inCharset=utf8&outCharset=utf-8&platform=yqq`
+  return httpFetch(url).promise.then(({ body }) => {
+    if (!body || body.code != 0 || !body.data) throw new Error('Search failed')
+    return body.data
+  })
 }
 
-const getAlias = item => {
-  const alias = item.alias || item.aliases || item.subtitle || ''
-  if (!Array.isArray(alias)) return decodeName(alias)
-  return decodeName(alias.map(info => typeof info == 'string' ? info : info.name).filter(Boolean).join('、'))
+const filterSingerSuggest = (data) => (data.singer?.itemlist ?? []).map(item => {
+  const mid = getId(item.mid)
+  return {
+    play_count: '',
+    id: mid,
+    author: '',
+    name: decodeName(item.name),
+    img: getSingerImage(mid),
+    desc: '',
+    source: 'tx',
+    total: undefined,
+  }
+}).filter(item => item.id && item.name)
+
+const filterAlbumSuggest = (data) => (data.album?.itemlist ?? []).map(item => {
+  const mid = getId(item.mid)
+  return {
+    play_count: '',
+    id: mid,
+    author: decodeName(item.singer ?? ''),
+    name: decodeName(item.name),
+    time: '',
+    img: getAlbumImage(mid),
+    desc: '',
+    source: 'tx',
+    total: undefined,
+  }
+}).filter(item => item.id && item.name)
+
+const collectSingersFromSongs = (songs, exists) => {
+  const list = []
+  for (const song of songs) {
+    for (const singer of song.singer ?? []) {
+      const mid = getId(singer.mid)
+      const name = decodeName(singer.name || singer.title || '')
+      if (!mid || !name || exists.has(mid)) continue
+      exists.add(mid)
+      list.push({
+        play_count: '',
+        id: mid,
+        author: '',
+        name,
+        img: getSingerImage(mid),
+        desc: '',
+        source: 'tx',
+        total: undefined,
+      })
+    }
+  }
+  return list
 }
-const getId = value => value == null ? '' : String(value)
+
+const collectAlbumsFromSongs = (songs, exists) => {
+  const list = []
+  for (const song of songs) {
+    const album = song.album
+    const mid = getId(album?.mid)
+    const name = decodeName(album?.name || album?.title || '')
+    if (!mid || !name || exists.has(mid)) continue
+    exists.add(mid)
+    list.push({
+      play_count: '',
+      id: mid,
+      author: formatSingerName(song.singer, 'name'),
+      name,
+      time: album?.time_public ?? '',
+      img: getAlbumImage(mid),
+      desc: '',
+      source: 'tx',
+      total: undefined,
+    })
+  }
+  return list
+}
 
 export default {
   limit: 18,
-  search(type, str, page = 1, limit) {
+  async search(type, str, page = 1, limit) {
     if (limit == null) limit = this.limit
-    const searchType = type == 'singer' ? 1 : 2
-
-    return musicSearch.musicSearch(str, page, limit, 0, searchType).then((data) => {
-      if (!data) throw new Error('Search response data missing')
-      const { body, meta } = data
-      const list = getList(body, type).map(item => {
-        const info = item.basic_info || item
-        const mid = info.mid || info.singer_mid || info.album_mid || ''
-        if (type == 'singer') {
-          return {
-            play_count: '',
-            id: getId(mid || info.id),
-            author: getAlias(info),
-            name: decodeName(info.name || info.title || info.singer_name),
-            img: mid ? `https://y.gtimg.cn/music/photo_new/T001R500x500M000${mid}.jpg` : '',
-            desc: decodeName(info.desc || ''),
-            source: 'tx',
-            total: info.song_num == null && info.songNum == null ? undefined : String(info.song_num ?? info.songNum),
-          }
-        }
-        return {
-          play_count: '',
-          id: getId(mid || info.id),
-          author: formatSingerName(info.singer || info.singer_list || info.author || [], 'name'),
-          name: decodeName(info.name || info.title || info.album_name),
-          time: info.time_public || info.publish_date || '',
-          img: mid ? `https://y.gtimg.cn/music/photo_new/T002R500x500M000${mid}.jpg` : '',
-          desc: decodeName(info.desc || ''),
-          source: 'tx',
-          total: info.song_count == null && info.song_num == null ? undefined : String(info.song_count ?? info.song_num),
-        }
-      }).filter(item => item.id && item.name)
-      const total = Number(meta?.estimate_sum ?? meta?.sum) || list.length
-
-      return {
-        list,
-        allPage: Math.max(list.length ? 1 : 0, Math.ceil(total / limit)),
-        limit,
-        total,
-        source: 'tx',
-      }
+    let list = await searchSuggest(str).then(data => {
+      return type == 'singer' ? filterSingerSuggest(data) : filterAlbumSuggest(data)
+    }).catch(err => {
+      console.log(err)
+      return []
     })
+    if (!list.length) {
+      const exists = new Set()
+      list = await musicSearch.musicSearch(str, 1, 50, 0, 0).then((data) => {
+        const songs = data?.body?.item_song ?? []
+        return type == 'singer' ? collectSingersFromSongs(songs, exists) : collectAlbumsFromSongs(songs, exists)
+      })
+    }
+
+    return {
+      list,
+      allPage: 1,
+      limit,
+      total: list.length,
+      source: 'tx',
+    }
   },
 }
