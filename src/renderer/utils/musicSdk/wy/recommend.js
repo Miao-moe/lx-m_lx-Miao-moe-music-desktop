@@ -1,12 +1,13 @@
 /**
  * 网易云音乐 主页推荐歌单（个人定向）
  *
- * 通过项目指定的 Enhanced REST 服务（见 api-cookie.js）调用 /personalized：
+ * 直接调用网易官方 weapi 接口 /weapi/personalized/playlist：
  *  - 已设置 Cookie（登录）时：返回登录用户主页的个性化推荐歌单
  *  - 未设置 Cookie 时：返回通用推荐歌单
  */
-import { apiGet } from './api-cookie'
-import { getCookie } from '../../cookieManager'
+import { httpFetch } from '../../request'
+import { getCookie, getCookieValue } from '../../cookieManager'
+import { weapi } from './utils/crypto'
 
 const formatPlayCount = (num) => {
   if (num == null) return ''
@@ -37,11 +38,29 @@ export default {
    * @param limit 数量
    */
   getRecommendList(page = 1, limit = this.limit) {
-    return apiGet('/personalized', { limit: String(limit) }, getCookie('wy')).then(body => ({
-      list: filterList(body.result),
-      total: body.result?.length ?? 0,
-      limit,
-      source: 'wy',
-    }))
+    const cookie = getCookie('wy')
+    return httpFetch('https://music.163.com/weapi/personalized/playlist', {
+      method: 'post',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
+        Origin: 'https://music.163.com',
+        Referer: 'https://music.163.com/',
+        Cookie: cookie,
+      },
+      form: weapi({
+        limit,
+        total: true,
+        n: 1000,
+        csrf_token: getCookieValue(cookie, '__csrf') ?? '',
+      }),
+    }).promise.then(({ body, statusCode }) => {
+      if (statusCode != 200 || !body || body.code !== this.successCode) throw new Error('获取推荐歌单失败')
+      return {
+        list: filterList(body.result),
+        total: body.result?.length ?? 0,
+        limit,
+        source: 'wy',
+      }
+    })
   },
 }
