@@ -1,5 +1,5 @@
 <template>
-  <div :class="$style.download">
+  <div :class="$style.download" :style="{ '--list-cover-size': `${appSetting['list.coverSize']}px` }">
     <div :class="$style.header">
       <base-tab v-model="activeTab" :class="$style.tab" :list="tabs" />
     </div>
@@ -9,6 +9,7 @@
           <thead>
             <tr>
               <th class="num" style="width: 5%;">#</th>
+              <th class="no-select" :class="$style.coverHeader">{{ $t('music_cover') }}</th>
               <th class="nobreak">{{ $t('music_name') }}</th>
               <th class="nobreak" style="width: 20%;">{{ $t('download__progress') }}</th>
               <th class="nobreak" style="width: 22%;">{{ $t('download__status') }}</th>
@@ -35,6 +36,12 @@
                 </div>
                 <div v-else class="num">{{ index + 1 }}</div>
               </transition>
+            </div>
+            <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
+              <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
+              <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
+                <use xlink:href="#icon-music" />
+              </svg>
             </div>
             <div class="list-item-cell auto name">
               <span class="select name" :aria-label="getName(item)">{{ getName(item) }}</span>
@@ -68,7 +75,7 @@
 <script>
 // import { checkPath, openDirInExplorer, openUrl } from '@common/utils/electron'
 
-import { ref } from '@common/utils/vueTools'
+import { ref, reactive } from '@common/utils/vueTools'
 import useListInfo from './useListInfo'
 import useList from './useList'
 import useTab from './useTab'
@@ -80,6 +87,7 @@ import { downloadStatus } from '@renderer/store/download/state'
 import { appSetting } from '@renderer/store/setting'
 import { isPlay } from '@renderer/store/player/state'
 import { formatMusicName } from '@renderer/utils'
+import { getMusicCoverUrl } from '@renderer/utils/musicCover'
 
 export default {
   name: 'Download',
@@ -205,6 +213,25 @@ export default {
     const getName = (downloadInfo) => {
       return formatMusicName(appSetting['download.fileName'], downloadInfo.metadata.musicInfo.name, downloadInfo.metadata.musicInfo.singer)
     }
+    const coverMap = reactive(new Map())
+    const coverErrorSet = reactive(new Set())
+    const getCoverKey = (item) => {
+      const info = item.metadata.musicInfo
+      return `${info.source}__${info.id}`
+    }
+    const handleCoverError = (item) => {
+      coverErrorSet.add(getCoverKey(item))
+    }
+    const getCover = (item) => {
+      const info = item.metadata.musicInfo
+      if (info.img || info.meta?.picUrl) return info.img || info.meta?.picUrl
+      const key = getCoverKey(item)
+      if (coverMap.has(key)) return coverMap.get(key)
+      getMusicCoverUrl(info).then(url => {
+        if (url) coverMap.set(key, url)
+      })
+      return ''
+    }
     const getTypeName = (quality) => {
       switch (quality) {
         case 'flac24bit':
@@ -249,6 +276,11 @@ export default {
       getName,
       getTypeName,
       isPlay,
+      appSetting,
+      getCover,
+      getCoverKey,
+      coverErrorSet,
+      handleCoverError,
     }
   },
 }
@@ -276,6 +308,32 @@ export default {
   align-items: center;
   justify-content: center;
   position: relative;
+}
+.coverHeader {
+  width: calc(var(--list-cover-size) + 12px);
+  box-sizing: border-box;
+  text-align: center;
+}
+.cover {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+
+  img {
+    width: var(--list-cover-size);
+    height: var(--list-cover-size);
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+  }
+
+  svg {
+    width: 60%;
+    height: auto;
+    fill: var(--color-font-label);
+    opacity: .5;
+  }
 }
 .playIcon {
   position: absolute;
