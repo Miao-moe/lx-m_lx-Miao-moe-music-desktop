@@ -11,6 +11,7 @@
       check-api-source
       @toggle-page="handleTogglePage"
       @play-list="handlePlayList"
+      @retry="handleRetry"
     />
   </div>
 </template>
@@ -58,6 +59,10 @@ const handleTogglePage = (page: number) => {
       page,
     },
   })
+}
+
+const handleRetry = () => {
+  search(searchText.value, props.sourceId, props.page || 1)
 }
 
 

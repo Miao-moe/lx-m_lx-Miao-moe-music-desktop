@@ -1,5 +1,5 @@
 <template>
-  <SongList ref="list_ref" :list-info="listInfo" @toggle-page="togglePage" />
+  <SongList ref="list_ref" :list-info="listInfo" @toggle-page="togglePage" @retry="handleRetry" />
 </template>
 
 <script setup lang="ts">
@@ -51,12 +51,16 @@ const togglePage = (page: number) => {
   // getListData(props.source, props.tagId, props.sortId ?? '', page)
 }
 
+const handleRetry = () => {
+  void getListData(props.source, props.tagId, props.sortId ?? '', props.page).catch(() => {})
+}
+
 watch(() => [props.source, props.tagId, props.sortId, props.page], ([source, tagId, sortId, page]) => {
   // const source = (await getLeaderboardSetting()).source as LX.OnlineSource
   // console.log(source, tagId, sortId)
   if (!source || !sortId) return
   // console.log(source, tagId, sortId, page)
-  void getListData(source as LX.OnlineSource, tagId as string, sortId as string, page as number)
+  void getListData(source as LX.OnlineSource, tagId as string, sortId as string, page as number).catch(() => {})
 }, {
   immediate: true,
 })

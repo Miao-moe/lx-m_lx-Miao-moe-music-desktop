@@ -124,6 +124,10 @@ export default {
       type: Array,
       required: true,
     },
+    overscan: {
+      type: Number,
+      default: 0,
+    },
   },
   emits: ['scroll'],
   setup(props, { emit }) {
@@ -167,8 +171,8 @@ export default {
       const scrollContainerHeight = scrollContainer.clientHeight
       const currentEndIndex = currentStartIndex + Math.ceil(scrollContainerHeight / itemHeight)
       const continuous = currentStartIndex <= endIndex && currentEndIndex >= startIndex
-      const currentStartRenderIndex = Math.max(currentStartIndex, 0)
-      const currentEndRenderIndex = currentEndIndex + 1
+      const currentStartRenderIndex = Math.max(currentStartIndex - props.overscan, 0)
+      const currentEndRenderIndex = Math.min(currentEndIndex + props.overscan + 1, props.list.length)
       // console.log(continuous)
       // debugger
       if (continuous) {
@@ -295,7 +299,7 @@ export default {
         views.value = []
       }
     }
-    watch(() => props.itemHeight, () => {
+    watch([() => props.itemHeight, () => props.overscan], () => {
       handleReset(props.list)
     })
     watch(() => props.list, (list) => {

@@ -26,7 +26,7 @@
     <div v-show="list.length" ref="dom_listContent" :class="$style.content">
       <base-virtualized-list
         v-if="actionButtonsVisible" ref="listRef" v-slot="{ item, index }" :list="list" key-name="id"
-        :item-height="listItemHeight" container-class="scroll" content-class="list"
+        :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list"
         @scroll="saveListPosition" @contextmenu.capture="handleListRightClick"
       >
         <div
@@ -42,7 +42,7 @@
             </transition>
           </div>
           <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
+            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="eager" decoding="async" @error="handleCoverError(item)">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
             </svg>
@@ -77,7 +77,7 @@
       </base-virtualized-list>
       <base-virtualized-list
         v-else ref="listRef" v-slot="{ item, index }" :list="list" key-name="id"
-        :item-height="listItemHeight" container-class="scroll" content-class="list"
+        :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list"
         @scroll="saveListPosition" @contextmenu.capture="handleListRightClick"
       >
         <div
@@ -94,7 +94,7 @@
             </transition>
           </div>
           <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
+            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="eager" decoding="async" @error="handleCoverError(item)">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
             </svg>
@@ -146,9 +146,10 @@
 </template>
 
 <script>
-import { reactive } from '@common/utils/vueTools'
+import { onBeforeUnmount, reactive } from '@common/utils/vueTools'
 import { clipboardWriteText } from '@common/utils/electron'
 import { assertApiSupport } from '@renderer/store/utils'
+import { updateListMusics } from '@renderer/store/list/action'
 import { getMusicCoverUrl } from '@renderer/utils/musicCover'
 import SearchList from './components/SearchList.vue'
 import MusicSortModal from './components/MusicSortModal.vue'
@@ -199,19 +200,54 @@ export default {
 
     const coverMap = reactive(new Map())
     const coverErrorSet = reactive(new Set())
+    const pendingCoverUpdates = new Map()
+    let saveCoverTimer = null
+    let isUnmounted = false
     const getCoverKey = (item) => `${item.source}__${item.id}`
     const handleCoverError = (item) => {
       coverErrorSet.add(getCoverKey(item))
     }
+    const flushCoverUpdates = () => {
+      saveCoverTimer = null
+      if (!pendingCoverUpdates.size) return
+      const updates = Array.from(pendingCoverUpdates.values())
+      pendingCoverUpdates.clear()
+      void updateListMusics(updates)
+    }
+    const saveCover = (listId, item, url) => {
+      item.meta.picUrl = url
+      const update = { id: listId, musicInfo: item }
+      if (isUnmounted) {
+        void updateListMusics([update])
+        return
+      }
+      // 写回列表数据，后续进入列表时可直接复用稳定 URL 与 Electron 磁盘缓存。
+      pendingCoverUpdates.set(`${listId}__${item.id}`, update)
+      if (saveCoverTimer) clearTimeout(saveCoverTimer)
+      saveCoverTimer = setTimeout(flushCoverUpdates, 300)
+    }
     const getCover = (item) => {
       if (item.img || item.meta?.picUrl) return item.img || item.meta?.picUrl
       const key = getCoverKey(item)
-      if (coverMap.has(key)) return coverMap.get(key)
+      if (coverMap.has(key)) {
+        const url = coverMap.get(key)
+        saveCover(props.listId, item, url)
+        return url
+      }
+      const listId = props.listId
       getMusicCoverUrl(item).then(url => {
-        if (url) coverMap.set(key, url)
+        if (!url) return
+        if (!isUnmounted) coverMap.set(key, url)
+        saveCover(listId, item, url)
       })
       return ''
     }
+
+    onBeforeUnmount(() => {
+      isUnmounted = true
+      if (saveCoverTimer) clearTimeout(saveCoverTimer)
+      flushCoverUpdates()
+    })
 
     const {
       rightClickSelectedIndex,

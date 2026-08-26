@@ -29,6 +29,7 @@
         :no-item="entityDetailInfo.noItemLabel"
         @play-list="handlePlayList"
         @toggle-page="togglePage"
+        @retry="handleRetry"
       />
     </div>
   </div>
@@ -116,6 +117,17 @@ const handlePlayList = (index: number) => {
   void playEntityDetail(type.value, id.value, source.value, summary.value, entityDetailInfo.list, index)
 }
 
+const loadEntityDetail = async(currentType: EntityType, currentId: string, currentSource: LX.OnlineSource, currentPage: number, currentSummary: EntitySummary) => {
+  await getAndSetEntityDetail(currentType, currentId, currentSource, currentPage, currentSummary).catch(() => {})
+  await nextTick()
+  listRef.value?.scrollToTop()
+}
+
+const handleRetry = () => {
+  if (source.value == 'all') return
+  void loadEntityDetail(type.value, id.value, source.value, page.value, summary.value)
+}
+
 watch(coverUrl, () => {
   coverError.value = false
 })
@@ -124,9 +136,7 @@ watch([routeType, type, source, id, page, summary], async([currentRouteType, cur
     await router.replace(getFallbackRoute())
     return
   }
-  await getAndSetEntityDetail(currentType, currentId, currentSource, currentPage, currentSummary).catch(() => {})
-  await nextTick()
-  listRef.value?.scrollToTop()
+  await loadEntityDetail(currentType, currentId, currentSource, currentPage, currentSummary)
 }, { immediate: true })
 
 useKeyBack(handleBack)

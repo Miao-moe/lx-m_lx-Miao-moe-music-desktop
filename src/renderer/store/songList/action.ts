@@ -128,6 +128,7 @@ export const getAndSetList = async(source: LX.OnlineSource, tabId: string, sortI
     if (key != listInfo.key) return
     setList(result, tabId, sortId, page)
   }).catch((error: any) => {
+    if (key != listInfo.key) return
     clearList()
     listInfo.noItemLabel = window.i18n.t('list__load_failed')
     console.log(error)
@@ -210,6 +211,7 @@ export const getAndSetListDetail = async(id: string, source: LX.OnlineSource, pa
     if (key != listDetailInfo.key) return
     setListDetail(result, id, page)
   }).catch((error: any) => {
+    if (key != listDetailInfo.key) return
     clearListDetail()
     listDetailInfo.noItemLabel = window.i18n.t('list__load_failed')
     console.log(error)

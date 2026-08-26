@@ -27,7 +27,7 @@
       </div>
       <div :class="$style.content">
         <div v-show="!noItem" ref="dom_listContent" :class="$style.content">
-          <base-virtualized-list v-if="actionButtonsVisible" ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
+          <base-virtualized-list v-if="actionButtonsVisible" ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
             <template #default="{ item, index }">
               <div
                 class="list-item" :class="[{ selected: rightClickSelectedIndex == index }, { active: selectedList.includes(item) }]"
@@ -35,7 +35,7 @@
               >
                 <div class="list-item-cell no-select num" style="flex: 0 0 5%;" @click.stop>{{ index + 1 }}</div>
                 <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-                   <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError(item)">
+                   <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" :alt="item.name" loading="eager" decoding="async" @error="handleCoverError(item)">
                   <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                     <use xlink:href="#icon-music" />
                   </svg>
@@ -75,7 +75,7 @@
               </div>
             </template>
           </base-virtualized-list>
-          <base-virtualized-list v-else ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
+          <base-virtualized-list v-else ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
             <template #default="{ item, index }">
               <div
                 class="list-item" :class="[{ selected: rightClickSelectedIndex == index }, { active: selectedList.includes(item) }]"
@@ -83,7 +83,7 @@
               >
                 <div class="list-item-cell no-select num" style="flex: 0 0 5%;" @click.stop>{{ index + 1 }}</div>
                 <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-                   <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" :alt="item.name" loading="lazy" decoding="async" @error="handleCoverError(item)">
+                   <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" :alt="item.name" loading="eager" decoding="async" @error="handleCoverError(item)">
                   <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                     <use xlink:href="#icon-music" />
                   </svg>
@@ -123,11 +123,12 @@
         </div>
         <transition enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
           <div
-            v-show="noItem" :class="[$style.noitem, 'ui-state', { 'ui-state-error': noItem === $t('list__load_failed') }]"
-            role="status" :aria-busy="noItem === $t('list__loading')"
+            v-show="noItem" :class="[$style.noitem, 'ui-state', { 'ui-state-error': isMessage(noItem, 'list__load_failed') }]"
+            role="status" :aria-busy="isMessage(noItem, 'list__loading')"
           >
-            <span v-if="noItem === $t('list__loading')" class="ui-spinner" />
+            <span v-if="isMessage(noItem, 'list__loading')" class="ui-spinner" />
             <p v-text="noItem" />
+            <base-btn v-if="isMessage(noItem, 'list__load_failed')" class="ui-state-retry" min @click="$emit('retry')">{{ $t('reload') }}</base-btn>
           </div>
         </transition>
       </div>
@@ -193,13 +194,14 @@ export default {
       default: false,
     },
   },
-  emits: ['show-menu', 'play-list', 'togglePage'],
+  emits: ['show-menu', 'play-list', 'togglePage', 'retry'],
   setup(props, { emit }) {
     const actionButtonsVisible = appSetting['list.actionButtonsVisible']
     const { canOpenEntity, getSingerNames, openEntityDetail } = useEntityDetailNavigation()
     const rightClickSelectedIndex = ref(-1)
     const dom_listContent = ref(null)
     const listRef = ref(null)
+    const isMessage = (text, key) => Object.values(window.i18n.messages).some(messages => messages[key] == text)
 
     const {
       selectedList,
@@ -341,6 +343,7 @@ export default {
 
     return {
       listItemHeight,
+      isMessage,
       handleListItemClick,
       selectedList,
       handleListItemRightClick,

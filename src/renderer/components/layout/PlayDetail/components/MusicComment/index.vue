@@ -18,7 +18,9 @@ div.comment(ref="dom_container" :class="$style.comment")
       main(ref="dom_tabMain" :class="$style.tab_main")
         div(:class="$style.tab_content")
           div.scroll(ref="dom_commentHot" :class="$style.tab_content_scroll")
-            p(v-if="hotComment.isLoadError" :class="$style.commentLabel" style="cursor: pointer;" @click="handleGetHotComment(currentMusicInfo, hotComment.nextPage, hotComment.limit)") {{ $t('comment__hot_load_error') }}
+            div(v-if="hotComment.isLoadError" :class="$style.commentError")
+              p(:class="$style.commentLabel") {{ $t('comment__hot_load_error') }}
+              base-btn(min class="ui-state-retry" @click="handleGetHotComment(currentMusicInfo, hotComment.nextPage, hotComment.limit)") {{ $t('reload') }}
             p(v-else-if="hotComment.isLoading && !hotComment.list.length" :class="$style.commentLabel") {{ $t('comment__hot_loading') }}
             comment-floor(v-if="!hotComment.isLoadError && hotComment.list.length" :class="[$style.commentFloor, hotComment.isLoading ? $style.loading : null]" :comments="hotComment.list")
             p(v-else-if="!hotComment.isLoadError && !hotComment.isLoading" :class="$style.commentLabel") {{ $t('comment__no_content') }}
@@ -26,7 +28,9 @@ div.comment(ref="dom_container" :class="$style.comment")
               material-pagination(:count="hotComment.total" :btn-length="5" :limit="hotComment.limit" :page="hotComment.page" @btn-click="handleToggleHotCommentPage")
         div(:class="$style.tab_content")
           div.scroll(ref="dom_commentNew" :class="$style.tab_content_scroll")
-            p(v-if="newComment.isLoadError" :class="$style.commentLabel" style="cursor: pointer;" @click="handleGetNewComment(currentMusicInfo, newComment.nextPage, newComment.limit)") {{ $t('comment__new_load_error') }}
+            div(v-if="newComment.isLoadError" :class="$style.commentError")
+              p(:class="$style.commentLabel") {{ $t('comment__new_load_error') }}
+              base-btn(min class="ui-state-retry" @click="handleGetNewComment(currentMusicInfo, newComment.nextPage, newComment.limit)") {{ $t('reload') }}
             p(v-else-if="newComment.isLoading && !newComment.list.length" :class="$style.commentLabel") {{ $t('comment__new_loading') }}
             comment-floor(v-if="!newComment.isLoadError && newComment.list.length" :class="[$style.commentFloor, newComment.isLoading ? $style.loading : null]" :comments="newComment.list")
             p(v-else-if="!newComment.isLoadError && !newComment.isLoading" :class="$style.commentLabel") {{ $t('comment__no_content') }}
@@ -327,6 +331,11 @@ export default {
   padding: 15px;
   color: var(--color-font-label);
   font-size: 14px;
+}
+.commentError {
+  display: flex;
+  flex-flow: column nowrap;
+  align-items: center;
 }
 .commentType {
   padding: 5px;

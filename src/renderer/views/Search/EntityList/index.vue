@@ -2,7 +2,7 @@
   <div :class="$style.container">
     <SongList
       ref="listRef" :list-info="listInfo" :visible-source="sourceId == 'all'" search-on-click
-      :search-result-type="type" @toggle-page="togglePage"
+      :search-result-type="type" @toggle-page="togglePage" @retry="handleRetry"
     />
   </div>
 </template>
@@ -43,6 +43,10 @@ const togglePage = (page: number) => {
       page,
     },
   })
+}
+
+const handleRetry = () => {
+  search(props.type, searchText.value, props.sourceId, props.page || 1)
 }
 </script>
 

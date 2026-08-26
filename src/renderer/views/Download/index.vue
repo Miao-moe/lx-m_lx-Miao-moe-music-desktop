@@ -22,7 +22,7 @@
       <div v-if="list.length" ref="dom_listContent" :class="$style.content">
         <base-virtualized-list
           ref="listRef" v-slot="{ item, index }" :list="list" key-name="id" :item-height="listItemHeight"
-          container-class="scroll" content-class="list"
+          :overscan="10" container-class="scroll" content-class="list"
         >
           <div
             class="list-item"
@@ -38,7 +38,7 @@
               </transition>
             </div>
             <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-              <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
+              <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="eager" decoding="async" @error="handleCoverError(item)">
               <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                 <use xlink:href="#icon-music" />
               </svg>

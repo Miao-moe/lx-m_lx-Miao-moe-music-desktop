@@ -28,6 +28,7 @@
         </template>
         <div v-else :class="$style.noItem">
           <p v-text="noItemLabel" />
+          <base-btn v-if="isError" class="ui-state-retry" min @click="loadList">{{ $t('reload') }}</base-btn>
         </div>
       </div>
       <div :class="$style.footer">
@@ -108,42 +109,43 @@ export default {
   },
   watch: {
     show(n) {
-      if (n) {
-        this.isError = false
-        this.toggleMusicInfo = null
-        const musicInfo = this.musicInfo
-        this.tabs = []
-        this.lists = {}
-        this.loading = true
-        const searchKey = this.searchKey = Math.random()
-        void musicSdk.searchMusic({
-          name: musicInfo.name,
-          singer: musicInfo.singer,
-          source: '',
-          albumName: musicInfo.meta.albumName,
-          interval: musicInfo.interval ?? '',
-        }).then((lists) => {
-          if (this.searchKey != searchKey) return
-          const prefix = getSourceI18nPrefix()
-          this.tabs = lists.map(item => {
-            return {
-              id: item.source,
-              label: window.i18n.t(prefix + item.source),
-            }
-          })
-          if (lists.length) this.source = lists[0].source
-          for (const s of lists) this.lists[s.source] = s.list.map(s => markRaw(toNewMusicInfo(s)))
-        }).catch(() => {
-          if (this.searchKey != searchKey) return
-          this.isError = true
-        }).finally(() => {
-          if (this.searchKey != searchKey) return
-          this.loading = false
-        })
-      }
+      if (n) this.loadList()
     },
   },
   methods: {
+    loadList() {
+      this.isError = false
+      this.toggleMusicInfo = null
+      const musicInfo = this.musicInfo
+      this.tabs = []
+      this.lists = {}
+      this.loading = true
+      const searchKey = this.searchKey = Math.random()
+      void musicSdk.searchMusic({
+        name: musicInfo.name,
+        singer: musicInfo.singer,
+        source: '',
+        albumName: musicInfo.meta.albumName,
+        interval: musicInfo.interval ?? '',
+      }).then((lists) => {
+        if (this.searchKey != searchKey) return
+        const prefix = getSourceI18nPrefix()
+        this.tabs = lists.map(item => {
+          return {
+            id: item.source,
+            label: window.i18n.t(prefix + item.source),
+          }
+        })
+        if (lists.length) this.source = lists[0].source
+        for (const s of lists) this.lists[s.source] = s.list.map(s => markRaw(toNewMusicInfo(s)))
+      }).catch(() => {
+        if (this.searchKey != searchKey) return
+        this.isError = true
+      }).finally(() => {
+        if (this.searchKey != searchKey) return
+        this.loading = false
+      })
+    },
     handleClose() {
       this.$emit('update:show', false)
     },

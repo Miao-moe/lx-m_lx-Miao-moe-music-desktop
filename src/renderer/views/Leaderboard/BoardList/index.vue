@@ -1,5 +1,5 @@
 <template>
-  <ul ref="dom_lists_list" class="scroll" :class="$style.listsContent">
+  <ul v-show="!loadStatus" ref="dom_lists_list" class="scroll" :class="$style.listsContent">
     <li
       v-for="(item, index) in list"
       :key="item.id" :class="[$style.listsItem, { [$style.active]: item.id == boardId }, { [$style.clicked]: rightClickItemIndex == index }]"
@@ -13,6 +13,14 @@
       </span>
     </li>
   </ul>
+  <div
+    v-if="loadStatus" :class="[$style.loadState, 'ui-state', { 'ui-state-error': loadStatus == 'error' }]"
+    role="status" :aria-busy="loadStatus == 'loading'"
+  >
+    <span v-if="loadStatus == 'loading'" class="ui-spinner" />
+    <p>{{ $t(loadStatus == 'loading' ? 'list__loading' : 'list__load_failed') }}</p>
+    <base-btn v-if="loadStatus == 'error'" class="ui-state-retry" min @click="loadBoards">{{ $t('reload') }}</base-btn>
+  </div>
   <base-menu
     v-model="isShowMenu"
     :menus="menus"
@@ -47,6 +55,8 @@ const route = useRoute()
 
 const list = shallowReactive([])
 const rightClickItemIndex = ref(-1)
+const loadStatus = ref('')
+let loadKey = 0
 
 const handleToggleList = (id) => {
   void router.replace({
@@ -78,12 +88,27 @@ const handleMenuClick = (action) => {
 }
 
 
-watch(() => props.source, async(source) => {
-  // const source = (await getLeaderboardSetting()).source as LX.OnlineSource
-  let boardList = boards[source]
-  if (boardList == null) setBoard(boardList = await getBoardsList(source), source)
-  list.splice(0, list.length, ...boardList.list)
-  if (!props.boardId && boardList.list.length) handleToggleList(boardList.list[0].id)
+const loadBoards = async() => {
+  const source = props.source
+  const key = ++loadKey
+  loadStatus.value = 'loading'
+  list.splice(0, list.length)
+  try {
+    let boardList = boards[source]
+    if (boardList == null) setBoard(boardList = await getBoardsList(source), source)
+    if (key != loadKey || source != props.source) return
+    list.splice(0, list.length, ...boardList.list)
+    loadStatus.value = ''
+    if (!props.boardId && boardList.list.length) handleToggleList(boardList.list[0].id)
+  } catch (error) {
+    if (key != loadKey || source != props.source) return
+    console.log(error)
+    loadStatus.value = 'error'
+  }
+}
+
+watch(() => props.source, () => {
+  void loadBoards()
 }, {
   immediate: true,
 })
@@ -101,6 +126,16 @@ defineExpose({ hideMenu: handleMenuClick })
   overflow-y: scroll;
   // overflow-y: scroll !important;
   // border-right: 1px solid rgba(0, 0, 0, 0.12);
+}
+.loadState {
+  flex: auto;
+  min-height: 0;
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  text-align: center;
 }
 .listsItem {
   position: relative;
@@ -149,4 +184,3 @@ defineExpose({ hideMenu: handleMenuClick })
 
 
 </style>
-

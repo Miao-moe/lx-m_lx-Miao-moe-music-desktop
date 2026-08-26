@@ -36,6 +36,7 @@
         :no-item="listDetailInfo.noItemLabel"
         @play-list="handlePlayList"
         @toggle-page="togglePage"
+        @retry="handleRetry"
       />
     </div>
   </div>
@@ -118,7 +119,11 @@ export default {
 
 
     const togglePage = (page: number) => {
-      void getListData(source.value, id.value, page, refresh.value)
+      void getListData(source.value, id.value, page, refresh.value).catch(() => {})
+    }
+
+    const handleRetry = () => {
+      void getListData(source.value, id.value, page.value, refresh.value).catch(() => {})
     }
 
     const handleBack = () => {
@@ -136,7 +141,7 @@ export default {
       // id.value = _id
       // refresh.value = _refresh
       // page.value = _page ?? 1
-      void getListData(_source, _id, _page, _refresh)
+      void getListData(_source, _id, _page, _refresh).catch(() => {})
     }, {
       immediate: true,
     })
@@ -149,6 +154,7 @@ export default {
       listDetailInfo,
       listRef,
       togglePage,
+      handleRetry,
       addSongListDetail,
       playSongListDetail,
       handlePlayList,
@@ -247,4 +253,3 @@ export default {
   height: 100%;
 }
 </style>
-

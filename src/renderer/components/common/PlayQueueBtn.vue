@@ -25,6 +25,7 @@
             :list="queueList"
             key-name="key"
             :item-height="rowHeight"
+            :overscan="10"
             container-class="scroll"
             content-class="list"
           >
@@ -41,7 +42,7 @@
                 <svg v-if="!getCover(item) || imgErrorSet.has(item.key)" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                   <use xlink:href="#icon-music" />
                 </svg>
-                <img v-else :src="getCover(item)" :alt="getMusicName(item)" loading="lazy" decoding="async" @error="handleImgError(item.key)" />
+                <img v-else :src="getCover(item)" :alt="getMusicName(item)" loading="eager" decoding="async" @error="handleImgError(item.key)" />
               </div>
               <div :class="$style.itemInfo">
                 <div :class="$style.itemName">{{ getMusicName(item) }}</div>

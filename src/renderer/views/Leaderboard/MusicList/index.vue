@@ -10,6 +10,7 @@
       @show-menu="hideListsMenu"
       @play-list="handlePlayList"
       @toggle-page="togglePage"
+      @retry="retry"
     />
   </div>
 </template>
@@ -30,6 +31,7 @@ const {
   listRef,
   listDetailInfo,
   getList,
+  retry,
   handlePlayList,
 } = useList()
 
