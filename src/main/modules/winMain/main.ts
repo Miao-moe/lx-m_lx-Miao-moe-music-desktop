@@ -1,13 +1,17 @@
 import { BrowserWindow, dialog, session } from 'electron'
 import path from 'node:path'
 import { createTaskBarButtons, getWindowSizeInfo } from './utils'
-import { getPlatform, isLinux, isWin } from '@common/utils'
+import { getPlatform, isLinux, isWin, log } from '@common/utils'
 import { getProxy, openDevTools as handleOpenDevTools } from '@main/utils'
 import { mainSend } from '@common/mainIpc'
 import { sendFocus, sendTaskbarButtonClick } from './rendererEvent'
 import { encodePath } from '@common/utils/electron'
 
 let browserWindow: Electron.BrowserWindow | null = null
+let rendererRecoveryAttempts = 0
+let rendererRecoveryResetTimer: ReturnType<typeof setTimeout> | null = null
+
+const RENDERER_RECOVERY_RESET_DELAY = 30_000
 
 const winEvent = () => {
   if (!browserWindow) return
@@ -47,6 +51,33 @@ const winEvent = () => {
       setThumbarButtons()
     }
     global.lx.event_app.main_window_ready_to_show()
+  })
+
+  const webContents = browserWindow.webContents
+  webContents.on('did-finish-load', () => {
+    if (rendererRecoveryResetTimer) clearTimeout(rendererRecoveryResetTimer)
+    rendererRecoveryResetTimer = setTimeout(() => {
+      rendererRecoveryAttempts = 0
+      rendererRecoveryResetTimer = null
+    }, RENDERER_RECOVERY_RESET_DELAY)
+  })
+  webContents.on('render-process-gone', (_event, details) => {
+    log.error(`Main renderer process gone: ${details.reason} (${details.exitCode})`)
+    if (rendererRecoveryResetTimer) {
+      clearTimeout(rendererRecoveryResetTimer)
+      rendererRecoveryResetTimer = null
+    }
+    if (details.reason == 'clean-exit' || details.reason == 'launch-failed') return
+    if (rendererRecoveryAttempts > 0) {
+      log.error('Main renderer recovery skipped after repeated failure')
+      return
+    }
+    rendererRecoveryAttempts++
+
+    setTimeout(() => {
+      if (webContents.isDestroyed()) return
+      webContents.reload()
+    }, 300)
   })
 
   browserWindow.on('show', () => {

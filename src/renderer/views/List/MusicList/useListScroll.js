@@ -12,7 +12,7 @@ export default ({ props, listRef, list, handleRestoreScroll }) => {
   }
 
   const handleScrollList = (index, isAnimation, callback = () => {}) => {
-    listRef.value.scrollToIndex(index, -150, isAnimation, callback)
+    listRef.value?.scrollToIndex(index, -150, isAnimation, callback)
   }
 
   const restoreScroll = async(index, isAnimation) => {

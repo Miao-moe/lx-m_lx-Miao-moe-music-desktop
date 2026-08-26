@@ -88,7 +88,7 @@ const handleScroll = (element, to, duration = 300, callback = () => {}, onCancel
   }
   animateScroll()
   return (callback) => {
-    cancelCallback = callback
+    cancelCallback = callback || (() => {})
     cancel = true
   }
 }
@@ -138,6 +138,7 @@ export default {
     let cancelScroll = null
     let isAutoScrolling = false
     let scrollToValue = 0
+    let resizeTimer = null
 
     const createList = (startIndex, endIndex) => {
       const cache = cachedList.slice(startIndex, endIndex)
@@ -156,11 +157,14 @@ export default {
       return list
     }
 
-    const updateView = (currentScrollTop = dom_scrollContainer.value.scrollTop) => {
+    const updateView = (currentScrollTop) => {
+      const scrollContainer = dom_scrollContainer.value
+      if (!scrollContainer) return
+      currentScrollTop ??= scrollContainer.scrollTop
       // const currentScrollTop = this.$refs.dom_scrollContainer.scrollTop
       const itemHeight = props.itemHeight
       const currentStartIndex = Math.floor(currentScrollTop / itemHeight)
-      const scrollContainerHeight = dom_scrollContainer.value.clientHeight
+      const scrollContainerHeight = scrollContainer.clientHeight
       const currentEndIndex = currentStartIndex + Math.ceil(scrollContainerHeight / itemHeight)
       const continuous = currentStartIndex <= endIndex && currentEndIndex >= startIndex
       const currentStartRenderIndex = Math.max(currentStartIndex, 0)
@@ -185,10 +189,12 @@ export default {
         // } else return
         if (currentScrollTop == scrollTop && endIndex >= currentEndIndex) return
         requestAnimationFrame(() => {
+          if (!dom_scrollContainer.value) return
           views.value = createList(currentStartRenderIndex, currentEndRenderIndex)
         })
       } else {
         requestAnimationFrame(() => {
+          if (!dom_scrollContainer.value) return
           views.value = createList(currentStartRenderIndex, currentEndRenderIndex)
         })
       }
@@ -202,10 +208,12 @@ export default {
       isListScrollingRef.value = false
     }, 200)
     const onScroll = event => {
+      const scrollContainer = dom_scrollContainer.value
+      if (!scrollContainer) return
       if (!isListScrolling) isListScrolling = isListScrollingRef.value = true
       setStopScrollStatus()
 
-      const currentScrollTop = dom_scrollContainer.value.scrollTop
+      const currentScrollTop = scrollContainer.scrollTop
       if (Math.abs(currentScrollTop - scrollTop) > props.itemHeight * 0.6) {
         updateView(currentScrollTop)
       }
@@ -213,6 +221,7 @@ export default {
     }
 
     const scrollTo = (scrollTop, animate = false, onScrollEnd) => {
+      if (!dom_scrollContainer.value) return
       if (onScrollEnd) {
         void new Promise(resolve => {
           if (cancelScroll) {
@@ -221,10 +230,12 @@ export default {
             resolve()
           }
         }).then(() => {
+          const scrollContainer = dom_scrollContainer.value
+          if (!scrollContainer) return
           if (animate) {
             isAutoScrolling = true
             scrollToValue = scrollTop
-            cancelScroll = handleScroll(dom_scrollContainer.value, scrollTop, 300, () => {
+            cancelScroll = handleScroll(scrollContainer, scrollTop, 300, () => {
               cancelScroll = null
               isAutoScrolling = false
               onScrollEnd(true)
@@ -234,7 +245,7 @@ export default {
               onScrollEnd('canceled')
             })
           } else {
-            dom_scrollContainer.value.scrollTop = scrollTop
+            scrollContainer.scrollTop = scrollTop
           }
         })
       } else {
@@ -250,11 +261,15 @@ export default {
     }
 
     const getScrollTop = () => {
-      return isAutoScrolling ? scrollToValue : dom_scrollContainer.value.scrollTop
+      return isAutoScrolling ? scrollToValue : (dom_scrollContainer.value?.scrollTop ?? 0)
     }
 
     const handleResize = () => {
-      window.setTimeout(updateView)
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = null
+        updateView()
+      })
     }
 
     const contentStyle = computed(() => {
@@ -307,8 +322,9 @@ export default {
       window.addEventListener('resize', handleResize)
     })
     onBeforeUnmount(() => {
-      dom_scrollContainer.value.removeEventListener('scroll', onScroll)
+      dom_scrollContainer.value?.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', handleResize)
+      if (resizeTimer) clearTimeout(resizeTimer)
       if (cancelScroll) cancelScroll()
     })
 

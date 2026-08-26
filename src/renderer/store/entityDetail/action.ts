@@ -1,7 +1,7 @@
 import { markRaw, markRawList } from '@common/utils/vueTools'
 import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
 import musicSdk from '@renderer/utils/musicSdk'
-import type { EntityType } from '@renderer/store/search/entity'
+import type { EntityType, ListInfoItem } from '@renderer/store/search/entity'
 import type { ListDetailInfo } from '@renderer/store/songList/state'
 import { entityDetailInfo } from './state'
 import type { EntityDetailInfo, EntitySummary } from './state'
@@ -23,6 +23,9 @@ interface RawDetailResult {
 }
 
 interface EntitySdk {
+  entitySearch?: {
+    search: (type: EntityType, text: string, page: number, limit: number) => Promise<{ list: ListInfoItem[] }>
+  }
   singer?: {
     getSongList: (id: string, page: number, limit: number) => Promise<RawDetailResult>
   }
@@ -36,6 +39,7 @@ interface EntitySdk {
 }
 
 const cache = new Map<string, EntityDetailInfo>()
+const resolvedEntityCache = new Map<string, { id: string, summary: EntitySummary }>()
 
 const getSdk = (source: LX.OnlineSource) => musicSdk[source] as unknown as EntitySdk
 
@@ -49,6 +53,35 @@ const getExactDetail = (type: EntityType, id: string, source: LX.OnlineSource, p
 }
 
 const normalizeText = (text = '') => text.toLowerCase().replace(/\s|'|\.|,|，|&|"|、|\(|\)|（|）|`|~|-|<|>|\||\/|\]|\[|!|！/g, '')
+
+const resolveEntity = async(type: EntityType, source: LX.OnlineSource, summary: EntitySummary) => {
+  const key = `${type}__${source}__${normalizeText(summary.name)}__${normalizeText(summary.author)}`
+  if (resolvedEntityCache.has(key)) return resolvedEntityCache.get(key)!
+
+  const entitySearch = getSdk(source).entitySearch
+  if (!entitySearch) return null
+  const result = await entitySearch.search(type, summary.name, 1, 18)
+  const sameNameList = result.list.filter(info => normalizeText(info.name) == normalizeText(summary.name))
+  const author = normalizeText(summary.author)
+  let info = sameNameList[0]
+  if (type == 'album' && author) {
+    info = sameNameList.find(info => normalizeText(info.author) == author) ?? info
+  }
+  if (!info) return null
+
+  const resolvedEntity = {
+    id: info.id,
+    summary: {
+      name: info.name || summary.name,
+      author: info.author || summary.author,
+      img: info.img || summary.img,
+      desc: info.desc || summary.desc,
+      total: Math.max(0, Number(info.total) || summary.total),
+    },
+  }
+  resolvedEntityCache.set(key, resolvedEntity)
+  return resolvedEntity
+}
 
 const filterFallbackList = (list: RawMusicInfo[], type: EntityType, summary: EntitySummary) => {
   const target = normalizeText(summary.name)
@@ -95,18 +128,32 @@ const normalizeResult = (result: RawDetailResult, type: EntityType, id: string, 
 }
 
 const loadEntityDetail = async(type: EntityType, id: string, source: LX.OnlineSource, page: number, summary: EntitySummary) => {
-  const request = getExactDetail(type, id, source, page)
-  if (request) {
+  let exactId = id
+  let detailSummary = summary
+  if (id.startsWith('search__')) {
     try {
-      const result = await request
-      if (!Array.isArray(result.list)) throw new Error('Invalid entity detail response')
-      return normalizeResult(result, type, id, page, summary, false)
+      const resolvedEntity = await resolveEntity(type, source, summary)
+      if (resolvedEntity) {
+        exactId = resolvedEntity.id
+        detailSummary = resolvedEntity.summary
+      }
     } catch (error) {
       console.log(error)
     }
   }
-  const result = await getFallbackDetail(type, source, page, summary)
-  return normalizeResult(result, type, id, page, summary, true)
+
+  const request = exactId.startsWith('search__') ? null : getExactDetail(type, exactId, source, page)
+  if (request) {
+    try {
+      const result = await request
+      if (!Array.isArray(result.list)) throw new Error('Invalid entity detail response')
+      return normalizeResult(result, type, id, page, detailSummary, false)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+  const result = await getFallbackDetail(type, source, page, detailSummary)
+  return normalizeResult(result, type, id, page, detailSummary, true)
 }
 
 export const getEntityDetail = async(type: EntityType, id: string, source: LX.OnlineSource, page: number, summary: EntitySummary, isRefresh = false) => {
@@ -161,14 +208,23 @@ export const getAndSetEntityDetail = async(type: EntityType, id: string, source:
 }
 
 export const getEntityDetailAll = async(type: EntityType, id: string, source: LX.OnlineSource, summary: EntitySummary, isRefresh = false) => {
-  const firstPage = await getEntityDetail(type, id, source, 1, summary, isRefresh)
-  if ((firstPage.isFallback && !summary.total) || firstPage.total <= firstPage.limit) return firstPage.list
+  let detailSummary = summary
+  if (id.startsWith('search__')) {
+    try {
+      detailSummary = (await resolveEntity(type, source, summary))?.summary ?? summary
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  const firstPage = await getEntityDetail(type, id, source, 1, detailSummary, isRefresh)
+  if ((firstPage.isFallback && !detailSummary.total) || firstPage.total <= firstPage.limit) return firstPage.list
 
   const list = [...firstPage.list]
   const maxPage = Math.ceil(firstPage.total / firstPage.limit)
   for (let page = 2; page <= maxPage; page++) {
     try {
-      const result = await getEntityDetail(type, id, source, page, summary, isRefresh)
+      const result = await getEntityDetail(type, id, source, page, detailSummary, isRefresh)
       if (result.isFallback != firstPage.isFallback) break
       list.push(...result.list)
     } catch (error) {

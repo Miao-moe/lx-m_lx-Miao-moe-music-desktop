@@ -14,7 +14,7 @@ export default ({ setSelectedIndex, handlePlayMusic, listRef }) => {
     switch (action) {
       case 'listClick':
         if (index < 0) return
-        listRef.value.scrollToIndex(index, -150, true, () => {
+        listRef.value?.scrollToIndex(index, -150, true, () => {
           setSelectedIndex(index)
           setTimeout(() => {
             setSelectedIndex(-1)

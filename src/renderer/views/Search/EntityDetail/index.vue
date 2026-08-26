@@ -83,8 +83,14 @@ const getFallbackRoute = () => ({
 
 const handleBack = () => {
   const from = getQueryString(route.query.from)
-  if (from.startsWith('/search') && !from.startsWith('/search/entity/detail')) void router.replace(from)
-  else void router.replace(getFallbackRoute())
+  if (from.startsWith('/') && !from.startsWith('//')) {
+    const target = router.resolve(from)
+    if (target.fullPath != route.fullPath) {
+      void router.replace(target)
+      return
+    }
+  }
+  void router.replace(getFallbackRoute())
 }
 
 const togglePage = (targetPage: number) => {

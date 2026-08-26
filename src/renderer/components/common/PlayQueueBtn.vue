@@ -45,7 +45,15 @@
               </div>
               <div :class="$style.itemInfo">
                 <div :class="$style.itemName">{{ getMusicName(item) }}</div>
-                <div :class="$style.itemSinger">{{ getMusicSinger(item) }}</div>
+                <div :class="$style.itemSinger">
+                  <template v-if="canOpenEntity(getMusicInfo(item)) && getSingerNames(getMusicInfo(item)).length">
+                    <template v-for="(singer, singerIndex) in getSingerNames(getMusicInfo(item))" :key="`${singer}__${singerIndex}`">
+                      <span v-if="singerIndex">、</span>
+                      <button :class="$style.entityLink" type="button" @click.stop="handleOpenSinger(item, singer)">{{ singer }}</button>
+                    </template>
+                  </template>
+                  <template v-else>{{ getMusicSinger(item) }}</template>
+                </div>
               </div>
               <button :class="$style.removeBtn" :aria-label="$t('player__play_list_remove')" @click.stop="handleRemove(index)">
                 <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="100%" height="100%" viewBox="0 0 24 24" space="preserve">
@@ -76,6 +84,7 @@ import { removePlayQueue, clearPlayQueue, updatePlayIndex, setPlayMusicInfo } fr
 import { getMusicCoverUrl } from '@renderer/utils/musicCover'
 import { getFontSizeWithScreen } from '@renderer/utils'
 import { playQueueById, stop } from '@renderer/core/player'
+import useEntityDetailNavigation from '@renderer/utils/compositions/useEntityDetailNavigation'
 
 const basePanelWidth = 400
 const maxVisibleRows = 9
@@ -89,6 +98,7 @@ const headerHeight = computed(() => Math.ceil(uiFontSize.value * 3))
 const dom_btn = ref(null)
 const listRef = ref(null)
 const isShow = ref(false)
+const { canOpenEntity, getSingerNames, openEntityDetail } = useEntityDetailNavigation()
 
 const popupStyle = reactive({
   left: '0px',
@@ -183,6 +193,11 @@ const handleDocumentClick = () => {
 }
 const handleDocumentKeydown = (event) => {
   if (event.key == 'Escape') handleDocumentClick()
+}
+
+const handleOpenSinger = (item, singer) => {
+  handleDocumentClick()
+  openEntityDetail(getMusicInfo(item), 'singer', singer)
 }
 
 const toggleShow = () => {
@@ -462,6 +477,26 @@ onBeforeUnmount(() => {
   margin-top: 2px;
   font-size: 11px;
   color: var(--color-font-label);
+}
+
+.entityLink {
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+    outline: none;
+  }
 }
 
 .removeBtn {
