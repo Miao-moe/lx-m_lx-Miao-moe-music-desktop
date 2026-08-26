@@ -7,6 +7,7 @@ import hotSearch from './hotSearch'
 import comment from './comment'
 import recommend from './recommend'
 import entitySearch from './entitySearch'
+import singer from './singer'
 // import tipSearch from './tipSearch'
 
 const tx = {
@@ -18,6 +19,7 @@ const tx = {
   comment,
   recommend,
   entitySearch,
+  singer,
 
   getMusicUrl(songInfo, type) {
     // 高音质解锁依赖自定义音源（用户 API），详见「设置 → 基本设置 → 自定义源」

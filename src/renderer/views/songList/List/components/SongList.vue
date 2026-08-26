@@ -76,15 +76,19 @@ const togglePage = (page: number) => {
 
 const toDetail = (info: ListInfoItem) => {
   if (props.searchOnClick) {
-    const text = props.searchResultType == 'album' && info.author ? `${info.name} ${info.author}` : info.name
     void router.push({
-      path: '/search',
+      path: '/search/entity/detail',
       query: {
-        ...route.query,
         source: info.source,
-        type: 'music',
+        type: props.searchResultType,
+        id: info.id,
+        name: info.name,
+        author: info.author || undefined,
+        picUrl: info.img || undefined,
+        desc: info.desc ? info.desc : undefined,
+        total: info.total ? info.total : undefined,
         page: 1,
-        text,
+        from: route.fullPath,
       },
     })
     return

@@ -8,6 +8,7 @@ import hotSearch from './hotSearch'
 import comment from './comment'
 import recommend from './recommend'
 import entitySearch from './entitySearch'
+import album from './album'
 // import tipSearch from './tipSearch'
 
 const mg = {
@@ -19,6 +20,7 @@ const mg = {
   comment,
   recommend,
   entitySearch,
+  album,
   getMusicUrl(songInfo, type) {
     return apis('mg').getMusicUrl(songInfo, type)
   },

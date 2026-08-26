@@ -166,7 +166,6 @@ export default {
    * @param {*} limit
    */
   getAlbumList(id, page = 1, limit = 10) {
-    if (page === 1) page = 0
     return createMusicuFetch({
       req: {
         module: 'music.musichallAlbum.AlbumListServer',
@@ -174,7 +173,7 @@ export default {
         param: {
           singerMid: id,
           order: 0,
-          begin: page * limit,
+          begin: (page - 1) * limit,
           num: limit,
           songNumTag: 0,
           singerID: 0,
@@ -200,7 +199,6 @@ export default {
    * @param {*} limit
    */
   async getSongList(id, page = 1, limit = 100) {
-    if (page === 1) page = 0
     return createMusicuFetch({
       req: {
         module: 'musichall.song_list_server',
@@ -208,7 +206,7 @@ export default {
         param: {
           singerMid: id,
           order: 1,
-          begin: page * limit,
+          begin: (page - 1) * limit,
           num: limit,
         },
       },
@@ -241,9 +239,8 @@ export default {
     })
   },
   filterSongList(raw) {
-    raw.map(item => {
+    return raw.map(item => {
       return filterMusicInfoItem(item.songInfo)
     })
   },
 }
-

@@ -15,6 +15,14 @@ const router = createRouter({
       },
     },
     {
+      path: '/search/entity/detail',
+      name: 'SearchEntityDetail',
+      component: require('./views/Search/EntityDetail/index.vue').default,
+      meta: {
+        name: 'Search',
+      },
+    },
+    {
       path: '/songList/list',
       name: 'SongList',
       component: require('./views/songList/List/index.vue').default,
