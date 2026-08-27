@@ -78,12 +78,13 @@ const togglePage = (page: number) => {
 
 const toDetail = (info: ListInfoItem) => {
   if (props.searchOnClick) {
+    const entityId = props.searchResultType == 'singer' ? `search__singer__${info.name}` : info.id
     void router.push({
       path: '/search/entity/detail',
       query: {
         source: info.source,
         type: props.searchResultType,
-        id: info.id,
+        id: entityId,
         name: info.name,
         author: info.author || undefined,
         picUrl: info.img || undefined,
