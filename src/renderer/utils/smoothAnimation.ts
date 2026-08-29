@@ -65,19 +65,18 @@ const STYLE_CONTENT = `
   opacity: 0;
 }
 
-/* 页面切换：仅内容层轻微淡入，不移动固定导航和播放栏。 */
-.smooth-page-enter-active,
-.smooth-page-leave-active {
+/* 页面切换：进入时淡入+上滑，离开时仅淡化不位移。
+   注意 leave 动画不能使用 opacity→0，否则快速切换时新旧组件同时透明导致白屏。 */
+.smooth-page-enter-active {
   transition:
     transform var(--anim-duration-page) var(--anim-easing),
     opacity var(--anim-duration-page) var(--anim-easing);
 }
-.smooth-page-enter-from {
-  transform: translateY(6px);
-  opacity: 0;
+.smooth-page-leave-active {
+  transition: none;
 }
-.smooth-page-leave-to {
-  transform: translateY(-3px);
+.smooth-page-enter-from {
+  transform: translateY(4px);
   opacity: 0;
 }
 

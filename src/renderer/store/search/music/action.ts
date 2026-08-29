@@ -94,16 +94,28 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
     let task = []
     for (const source of sources) {
       if (source == 'all') continue
-      task.push((music[source]?.musicSearch.search(text, page, listInfos.all.limit) ?? Promise.reject(new Error('source not found: ' + source))).catch((error: any) => {
-        console.log(error)
-        return {
+      const searchPromise = music[source]?.musicSearch?.search(text, page, listInfos.all.limit)
+      if (!searchPromise) {
+        console.log(new Error('source not found: ' + source))
+        task.push(Promise.resolve({
           allPage: 1,
           limit: 30,
           list: [],
           source,
           total: 0,
-        }
-      }))
+        }))
+      } else {
+        task.push(searchPromise.catch((error: any) => {
+          console.log(error)
+          return {
+            allPage: 1,
+            limit: 30,
+            list: [],
+            source,
+            total: 0,
+          }
+        }))
+      }
     }
     return Promise.all(task).then((results: SearchResult[]) => {
       if (key != listInfo!.key) return []

@@ -1,9 +1,11 @@
 <template>
   <div :class="$style.view">
     <router-view v-slot="{ Component, route }">
-      <transition name="smooth-page">
-        <component :is="Component" :key="route.name" class="view-container" />
-      </transition>
+      <keep-alive>
+        <transition name="smooth-page">
+          <component :is="Component" :key="route.name" class="view-container" />
+        </transition>
+      </keep-alive>
     </router-view>
   </div>
 </template>
@@ -21,8 +23,6 @@
     height: 100%;
     width: 100%;
   }
-  // background: #fff;
-  // overflow: hidden;
 }
 
 </style>

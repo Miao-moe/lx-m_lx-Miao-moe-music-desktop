@@ -15,7 +15,7 @@ module.exports = merge(baseConfig, {
   devtool: false,
   entry: {
     main: path.join(__dirname, '../../src/main/index.ts'),
-    // 'dbService.worker': path.join(__dirname, '../../src/main/worker/dbService/index.ts'),
+    'dbService.worker': path.join(__dirname, '../../src/main/worker/dbService/index.ts'),
   },
   node: {
     __dirname: false,

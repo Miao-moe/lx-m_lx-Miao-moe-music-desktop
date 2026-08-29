@@ -1,6 +1,6 @@
 {
   "name": "lx-music-desktop",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "一个免费的音乐查找助手",
   "main": "./dist/main.js",
   "scripts": {
@@ -167,8 +167,8 @@
   },
   "dependencies": {
     "@simonwep/pickr": "^1.9.1",
+    "app-builder-bin": "^5.0.0-alpha.12",
     "better-sqlite3": "^12.9.0",
-    "bufferutil": "^4.1.0",
     "comlink": "~4.3.1",
     "crypto-js": "^4.2.0",
     "electron-log": "^5.4.3",
@@ -185,7 +185,6 @@
     "sortablejs": "^1.15.7",
     "tunnel": "^0.0.6",
     "undici": "^7.25.0",
-    "utf-8-validate": "^6.0.6",
     "vue": "~3.3.13",
     "vue-router": "~4.5.1",
     "ws": "^8.20.0"

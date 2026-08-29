@@ -10,6 +10,8 @@ import { encodePath } from '@common/utils/electron'
 
 let browserWindow: Electron.BrowserWindow | null = null
 let isWinBoundsUpdateing = false
+let lastSetBoundsTime = 0
+const SET_BOUNDS_GRACE_MS = 800
 
 const saveBoundsConfig = debounce((config: Partial<LX.AppSetting>) => {
   global.lx.event_app.update_config(config)
@@ -33,7 +35,7 @@ const winEvent = () => {
   browserWindow.on('move', () => {
     // bounds = browserWindow.getBounds()
     // console.log('move', isWinBoundsUpdateing)
-    if (isWinBoundsUpdateing) {
+    if (isWinBoundsUpdateing || Date.now() - lastSetBoundsTime < SET_BOUNDS_GRACE_MS) {
       const bounds = browserWindow!.getBounds()
       saveBoundsConfig({
         'desktopLyric.x': bounds.x,
@@ -180,6 +182,7 @@ export const getBounds = (): Electron.Rectangle | null => {
 export const setBounds = (bounds: Electron.Rectangle) => {
   if (!browserWindow) return
   isWinBoundsUpdateing = true
+  lastSetBoundsTime = Date.now()
   browserWindow.setBounds(bounds)
 }
 

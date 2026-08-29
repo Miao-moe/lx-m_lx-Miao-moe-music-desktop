@@ -85,7 +85,6 @@ import SettingHotKey from './components/SettingHotKey.vue'
 import SettingNetwork from './components/SettingNetwork.vue'
 import SettingCookie from './components/SettingCookie.vue'
 import SettingAdvanced from './components/SettingAdvanced.vue'
-import SettingOdc from './components/SettingOdc.vue'
 import SettingBackup from './components/SettingBackup.vue'
 import SettingOther from './components/SettingOther.vue'
 import SettingUpdate from './components/SettingUpdate.vue'
@@ -107,7 +106,6 @@ export default {
     SettingNetwork,
     SettingCookie,
     SettingAdvanced,
-    SettingOdc,
     SettingBackup,
     SettingOther,
     SettingUpdate,
@@ -136,7 +134,6 @@ export default {
         { id: 'SettingNetwork', title: t('setting__network'), prefixes: ['setting__network'] },
         { id: 'SettingCookie', title: t('setting__cookie'), prefixes: ['setting__cookie'] },
         { id: 'SettingAdvanced', title: t('setting__advanced'), prefixes: ['setting__advanced'] },
-        { id: 'SettingOdc', title: t('setting__odc'), prefixes: ['setting__odc'] },
         { id: 'SettingBackup', title: t('setting__backup'), prefixes: ['setting__backup'] },
         { id: 'SettingOther', title: t('setting__other'), prefixes: ['setting__other'] },
         { id: 'SettingUpdate', title: t('setting__update'), prefixes: ['setting__update'] },
@@ -347,7 +344,7 @@ export default {
 }
 
 .toc {
-  flex: 0 0 16%;
+  flex: 0 0 180px;
   overflow-y: scroll;
 }
 .searchBox {

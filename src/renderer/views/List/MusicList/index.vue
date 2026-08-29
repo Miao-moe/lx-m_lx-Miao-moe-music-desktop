@@ -26,7 +26,7 @@
     <div v-show="list.length" ref="dom_listContent" :class="$style.content">
       <base-virtualized-list
         v-if="actionButtonsVisible" ref="listRef" v-slot="{ item, index }" :list="list" key-name="id"
-        :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list"
+        :item-height="listItemHeight" container-class="scroll" content-class="list"
         @scroll="saveListPosition" @contextmenu.capture="handleListRightClick"
       >
         <div
@@ -42,7 +42,7 @@
             </transition>
           </div>
           <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="eager" decoding="async" @error="handleCoverError(item)">
+            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
             </svg>
@@ -51,24 +51,8 @@
             <span class="select name">{{ item.name }}</span>
             <span v-if="isShowSource" class="no-select label-source">{{ item.source }}</span>
           </div>
-          <div class="list-item-cell" style="flex: 0 0 22%;">
-            <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
-              <template v-for="(singer, singerIndex) in getSingerNames(item)" :key="`${singer}__${singerIndex}`">
-                <span v-if="singerIndex" :class="$style.entitySeparator">、</span>
-                <button type="button" :class="$style.entityLink" @click.stop="openEntityDetail(item, 'singer', singer)">{{ singer }}</button>
-              </template>
-            </span>
-            <span v-else class="select" :aria-label="item.singer">{{ item.singer }}</span>
-          </div>
-          <div class="list-item-cell" style="flex: 0 0 22%;">
-            <button
-              v-if="canOpenEntity(item) && item.meta.albumName" type="button" class="select" :class="$style.entityLink"
-              :aria-label="item.meta.albumName" @click.stop="openEntityDetail(item, 'album', item.meta.albumName)"
-            >
-              {{ item.meta.albumName }}
-            </button>
-            <span v-else class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span>
-          </div>
+          <div class="list-item-cell" style="flex: 0 0 22%;"><span class="select" :aria-label="item.singer">{{ item.singer }}</span></div>
+          <div class="list-item-cell" style="flex: 0 0 22%;"><span class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span></div>
           <div class="list-item-cell" style="flex: 0 0 9%;"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
           <div class="list-item-cell" style="flex: 0 0 16%; padding-left: 0; padding-right: 0;">
             <material-list-buttons :index="index" :download-btn="assertApiSupport(item.source) && item.source != 'local'" @btn-click="handleListBtnClick" />
@@ -77,7 +61,7 @@
       </base-virtualized-list>
       <base-virtualized-list
         v-else ref="listRef" v-slot="{ item, index }" :list="list" key-name="id"
-        :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list"
+        :item-height="listItemHeight" container-class="scroll" content-class="list"
         @scroll="saveListPosition" @contextmenu.capture="handleListRightClick"
       >
         <div
@@ -94,7 +78,7 @@
             </transition>
           </div>
           <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
-            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="eager" decoding="async" @error="handleCoverError(item)">
+            <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
             <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
               <use xlink:href="#icon-music" />
             </svg>
@@ -103,24 +87,8 @@
             <span class="select name" :aria-label="item.name">{{ item.name }}</span>
             <span v-if="isShowSource" class="no-select label-source">{{ item.source }}</span>
           </div>
-          <div class="list-item-cell" style="flex: 0 0 25%;">
-            <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
-              <template v-for="(singer, singerIndex) in getSingerNames(item)" :key="`${singer}__${singerIndex}`">
-                <span v-if="singerIndex" :class="$style.entitySeparator">、</span>
-                <button type="button" :class="$style.entityLink" @click.stop="openEntityDetail(item, 'singer', singer)">{{ singer }}</button>
-              </template>
-            </span>
-            <span v-else class="select" :aria-label="item.singer">{{ item.singer }}</span>
-          </div>
-          <div class="list-item-cell" style="flex: 0 0 28%;">
-            <button
-              v-if="canOpenEntity(item) && item.meta.albumName" type="button" class="select" :class="$style.entityLink"
-              :aria-label="item.meta.albumName" @click.stop="openEntityDetail(item, 'album', item.meta.albumName)"
-            >
-              {{ item.meta.albumName }}
-            </button>
-            <span v-else class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span>
-          </div>
+          <div class="list-item-cell" style="flex: 0 0 25%;"><span class="select" :aria-label="item.singer">{{ item.singer }}</span></div>
+          <div class="list-item-cell" style="flex: 0 0 28%;"><span class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span></div>
           <div class="list-item-cell" style="flex: 0 0 10%;"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
         </div>
       </base-virtualized-list>
@@ -146,11 +114,10 @@
 </template>
 
 <script>
-import { onBeforeUnmount, reactive } from '@common/utils/vueTools'
+import { reactive } from '@common/utils/vueTools'
 import { clipboardWriteText } from '@common/utils/electron'
 import { assertApiSupport } from '@renderer/store/utils'
-import { updateListMusics } from '@renderer/store/list/action'
-import { getMusicCoverUrl } from '@renderer/utils/musicCover'
+import { getCachedCoverUrl, prefetchCover, getCoverKey } from '@renderer/utils/musicCover'
 import SearchList from './components/SearchList.vue'
 import MusicSortModal from './components/MusicSortModal.vue'
 import MusicToggleModal from './components/MusicToggleModal.vue'
@@ -166,7 +133,6 @@ import useSearch from './useSearch'
 import useListScroll from './useListScroll'
 import useMusicToggle from './useMusicToggle'
 import { appSetting } from '@renderer/store/setting'
-import useEntityDetailNavigation from '@renderer/utils/compositions/useEntityDetailNavigation'
 export default {
   name: 'MusicList',
   components: {
@@ -183,7 +149,6 @@ export default {
   emits: ['show-menu'],
   setup(props, { emit }) {
     const actionButtonsVisible = appSetting['list.actionButtonsVisible']
-    const { canOpenEntity, getSingerNames, openEntityDetail } = useEntityDetailNavigation()
 
     let scrollIndex = null
     let isAnimation = false
@@ -198,56 +163,16 @@ export default {
       void restoreScroll(scrollIndex, isAnimation)
     }
 
-    const coverMap = reactive(new Map())
     const coverErrorSet = reactive(new Set())
-    const pendingCoverUpdates = new Map()
-    let saveCoverTimer = null
-    let isUnmounted = false
-    const getCoverKey = (item) => `${item.source}__${item.id}`
     const handleCoverError = (item) => {
       coverErrorSet.add(getCoverKey(item))
     }
-    const flushCoverUpdates = () => {
-      saveCoverTimer = null
-      if (!pendingCoverUpdates.size) return
-      const updates = Array.from(pendingCoverUpdates.values())
-      pendingCoverUpdates.clear()
-      void updateListMusics(updates)
-    }
-    const saveCover = (listId, item, url) => {
-      item.meta.picUrl = url
-      const update = { id: listId, musicInfo: item }
-      if (isUnmounted) {
-        void updateListMusics([update])
-        return
-      }
-      // 写回列表数据，后续进入列表时可直接复用稳定 URL 与 Electron 磁盘缓存。
-      pendingCoverUpdates.set(`${listId}__${item.id}`, update)
-      if (saveCoverTimer) clearTimeout(saveCoverTimer)
-      saveCoverTimer = setTimeout(flushCoverUpdates, 300)
-    }
     const getCover = (item) => {
-      if (item.img || item.meta?.picUrl) return item.img || item.meta?.picUrl
-      const key = getCoverKey(item)
-      if (coverMap.has(key)) {
-        const url = coverMap.get(key)
-        saveCover(props.listId, item, url)
-        return url
-      }
-      const listId = props.listId
-      getMusicCoverUrl(item).then(url => {
-        if (!url) return
-        if (!isUnmounted) coverMap.set(key, url)
-        saveCover(listId, item, url)
-      })
+      const cached = getCachedCoverUrl(item)
+      if (cached) return cached
+      prefetchCover(item)
       return ''
     }
-
-    onBeforeUnmount(() => {
-      isUnmounted = true
-      if (saveCoverTimer) clearTimeout(saveCoverTimer)
-      flushCoverUpdates()
-    })
 
     const {
       rightClickSelectedIndex,
@@ -395,7 +320,7 @@ export default {
       }
     }
     const scrollToTop = () => {
-      listRef.value?.scrollTo(0, true)
+      listRef.value.scrollTo(0, true)
     }
 
     return {
@@ -458,9 +383,6 @@ export default {
       getCover,
       getCoverKey,
       coverErrorSet,
-      canOpenEntity,
-      getSingerNames,
-      openEntityDetail,
     }
   },
 }
@@ -552,43 +474,6 @@ export default {
   display: flex;
   flex-flow: column nowrap;
   flex: auto;
-}
-
-.entityLinks {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.entitySeparator {
-  flex: none;
-}
-
-.entityLink {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  border-radius: 2px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color var(--duration-fast) var(--ease-standard);
-
-  &:hover {
-    color: var(--color-accent);
-  }
-
-  &:focus-visible {
-    box-shadow: var(--focus-ring);
-    outline: none;
-  }
 }
 
 .noItem {

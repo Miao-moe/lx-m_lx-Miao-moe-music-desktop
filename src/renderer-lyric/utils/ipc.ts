@@ -22,8 +22,12 @@ let previousResizable: boolean | null = null
 export const setWindowResizeable = (resizable: boolean) => {
   if (previousResizable === resizable) return
   previousResizable = resizable
-  // https://github.com/electron/electron/issues/48352
-  // rendererSend<boolean>(WIN_LYRIC_RENDERER_EVENT_NAME.set_win_resizeable, resizable)
+  try {
+    rendererSend<boolean>(WIN_LYRIC_RENDERER_EVENT_NAME.set_win_resizeable, resizable)
+  } catch {
+    // https://github.com/electron/electron/issues/48352
+    // 部分 Electron 版本在透明无边框窗口上调用 setResizable 可能崩溃，忽略错误
+  }
 }
 
 export const sendConnectMainWindowEvent = () => {

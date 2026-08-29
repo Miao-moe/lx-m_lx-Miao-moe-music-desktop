@@ -32,8 +32,8 @@ const options = {
   body: changeLog,
   draft: false,
   prerelease: false,
-  repo: pkg.name,
-  owner: pkg.author,
+  repo: 'lx-m_lx-Miao-moe-music-desktop',
+  owner: 'Miao-moe',
   endpoint: 'https://api.github.com', // for GitHub enterprise, use http(s)://hostname/api/v3
   auth: {
     token,

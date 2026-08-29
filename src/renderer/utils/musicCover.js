@@ -15,6 +15,45 @@ const queue = []
 let activeCount = 0
 const MAX_CONCURRENT = 5
 
+// 全局封面显示缓存（跨组件持久化）
+const coverDisplayCache = new Map()
+
+/**
+ * 获取已缓存的封面 URL（同步，可能为空字符串）
+ * @param item 歌曲信息
+ * @returns 缓存的封面 URL，未缓存时返回空字符串
+ */
+export const getCachedCoverUrl = (item) => {
+  if (item.img || item.meta?.picUrl) return item.img || item.meta?.picUrl
+  const key = `${item.source}__${item.id}`
+  if (coverDisplayCache.has(key)) return coverDisplayCache.get(key)
+  // 尝试从底层缓存获取
+  if (coverCache.has(key)) {
+    const url = coverCache.get(key)
+    if (url) coverDisplayCache.set(key, url)
+    return url
+  }
+  return ''
+}
+
+/**
+ * 预热封面显示缓存（触发异步获取，结果存入 coverDisplayCache）
+ * @param item 歌曲信息
+ */
+export const prefetchCover = (item) => {
+  if (item.img || item.meta?.picUrl) return
+  const key = `${item.source}__${item.id}`
+  if (coverDisplayCache.has(key) || coverCache.has(key)) return
+  getMusicCoverUrl(item).then(url => {
+    if (url) coverDisplayCache.set(key, url)
+  })
+}
+
+/**
+ * 获取用于错误判断的 key
+ */
+export const getCoverKey = (item) => `${item.source}__${item.id}`
+
 const runTask = () => {
   while (activeCount < MAX_CONCURRENT && queue.length) {
     const task = queue.shift()

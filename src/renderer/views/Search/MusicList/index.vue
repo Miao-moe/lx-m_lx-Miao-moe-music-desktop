@@ -11,7 +11,8 @@
       check-api-source
       @toggle-page="handleTogglePage"
       @play-list="handlePlayList"
-      @retry="handleRetry"
+      @singer-click="handleSingerClick"
+      @album-click="handleAlbumClick"
     />
   </div>
 </template>
@@ -61,8 +62,42 @@ const handleTogglePage = (page: number) => {
   })
 }
 
-const handleRetry = () => {
-  search(searchText.value, props.sourceId, props.page || 1)
+const handleSingerClick = (item: any) => {
+  void router.push({
+    path: '/search',
+    query: {
+      source: item.source,
+      type: 'singer',
+      page: 1,
+      text: item.singer,
+    },
+  })
+}
+
+const handleAlbumClick = (item: any) => {
+  const albumId = item.meta?.albumId
+  if (albumId) {
+    void router.push({
+      path: '/album/detail',
+      query: {
+        source: item.source,
+        id: String(albumId),
+        name: item.meta?.albumName || '',
+        img: item.img || item.meta?.picUrl || '',
+        author: item.singer,
+      },
+    })
+  } else {
+    void router.push({
+      path: '/search',
+      query: {
+        source: item.source,
+        type: 'album',
+        page: 1,
+        text: item.meta?.albumName || item.singer,
+      },
+    })
+  }
 }
 
 

@@ -85,7 +85,7 @@ const resetPreloadInfo = () => {
 }
 
 const preloadNextMusicUrl = async(curTime: number) => {
-  if (preloadMusicInfo.isLoading || curTime - preloadMusicInfo.preProgress < 3) return
+  if (preloadMusicInfo.isLoading || curTime - preloadMusicInfo.preProgress < 2) return
   const currentMusicId = musicInfo.id
   if (!currentMusicId) return
 
@@ -149,7 +149,7 @@ export default () => {
   const rOnTimeupdate = onTimeupdate(() => {
     const time = getCurrentTime()
     const duration = playProgress.maxPlayTime
-    if (duration > 10 && duration - time < 10 && !preloadMusicInfo.info) {
+    if (duration > 10 && duration - time < 20 && !preloadMusicInfo.info) {
       void preloadNextMusicUrl(time)
     }
   })
