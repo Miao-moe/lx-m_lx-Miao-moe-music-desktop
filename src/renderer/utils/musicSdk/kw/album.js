@@ -76,6 +76,26 @@ export default {
     if (num > 10000) return parseInt(num / 1000) / 10 + '万'
     return num
   },
+  /**
+   * 通过专辑 id 获取专辑信息
+   * @param {*} id
+   */
+  getAlbumInfo(id, retryNum = 0) {
+    if (retryNum > 2) return Promise.reject(new Error('try max num'))
+    return httpFetch(`http://search.kuwo.cn/r.s?pn=0&rn=1&stype=albuminfo&albumid=${id}&show_copyright_off=0&encoding=utf&vipver=MUSIC_9.1.0`).promise.then(({ statusCode, body }) => {
+      if (statusCode !== 200) return this.getAlbumInfo(id, ++retryNum)
+      body = objStr2JSON(body)
+      if (!body || body.name == null) return this.getAlbumInfo(id, ++retryNum)
+      return {
+        name: decodeName(body.name),
+        author: decodeName(body.artist),
+        img: body.img || body.hts_img || '',
+        desc: decodeName(body.info || ''),
+        time: body.pub || '',
+        total: parseInt(body.songnum) || undefined,
+      }
+    })
+  },
   getAlbumListDetail(id, page, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('try max num'))
     const requestObj_listDetail = httpFetch(`http://search.kuwo.cn/r.s?pn=${page - 1}&rn=${this.limit_song}&stype=albuminfo&albumid=${id}&show_copyright_off=0&encoding=utf&vipver=MUSIC_9.1.0`)

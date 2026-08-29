@@ -138,23 +138,24 @@ export default {
         },
       },
     }).then(body => {
-      if (body.req_1.code != 0 || body.req_2 != 0 || body.req_3 != 0) throw new Error('get singer info faild.')
+      if (body.req_1.code != 0 || body.req_2.code != 0 || body.req_3.code != 0) throw new Error('get singer info faild.')
 
-      const info = body.req_1.data.singer_list[0]
+      const info = body.req_1.data?.singer_list?.[0]
+      if (!info) throw new Error('get singer info faild.')
       const music = body.req_3.data
-      const album = body.req_3.data
+      const album = body.req_2.data
       return {
         source: 'tx',
-        id: info.basic_info.singer_mid,
+        id: info.basic_info?.singer_mid ?? id,
         info: {
-          name: info.basic_info.name,
-          desc: info.ex_info.desc,
-          avatar: info.pic.pic,
-          gender: info.ex_info.genre === 1 ? 'man' : 'woman',
+          name: info.basic_info?.name ?? '',
+          desc: info.ex_info?.desc ?? info.wiki_info?.desc ?? '',
+          avatar: info.pic?.pic ?? '',
+          gender: info.ex_info?.genre === 1 ? 'man' : 'woman',
         },
         count: {
-          music: music.totalNum,
-          album: album.total,
+          music: music?.totalNum,
+          album: album?.total,
         },
       }
     })

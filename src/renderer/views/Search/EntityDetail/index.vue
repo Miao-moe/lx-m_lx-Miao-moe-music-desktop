@@ -11,7 +11,8 @@
         <p :class="$style.eyebrow">{{ entityLabel }} · {{ sourceLabel }}</p>
         <h3 :title="entityDetailInfo.info.name">{{ entityDetailInfo.info.name }}</h3>
         <p v-if="entityDetailInfo.info.author" :class="$style.author" :title="entityDetailInfo.info.author">{{ entityDetailInfo.info.author }}</p>
-        <p v-if="entityDetailInfo.info.desc" :class="$style.description" :title="entityDetailInfo.info.desc">{{ entityDetailInfo.info.desc }}</p>
+        <p v-if="metaParts.length" :class="$style.meta">{{ metaParts.join(' · ') }}</p>
+        <p v-if="displayDesc" :class="$style.description" :title="displayDesc">{{ displayDesc }}</p>
       </div>
       <div :class="$style.actions">
         <base-btn :class="$style.action" :disabled="!entityDetailInfo.list.length" @click="handlePlayAll">{{ $t('list__play') }}</base-btn>
@@ -39,11 +40,12 @@
 import { computed, nextTick, ref, watch } from '@common/utils/vueTools'
 import { useRoute, useRouter } from '@common/utils/vueRouter'
 import { sourceNames } from '@renderer/store'
-import { getAndSetEntityDetail } from '@renderer/store/entityDetail/action'
-import { entityDetailInfo } from '@renderer/store/entityDetail/state'
+import { getAndSetEntityDetail, getAndSetEntityProfile } from '@renderer/store/entityDetail/action'
+import { entityDetailInfo, entityProfileInfo } from '@renderer/store/entityDetail/state'
 import type { EntitySummary } from '@renderer/store/entityDetail/state'
 import { sources as entitySources } from '@renderer/store/search/entity'
 import type { EntityType, SearchSource } from '@renderer/store/search/entity'
+import { formatPlayCount } from '@renderer/utils'
 import useKeyBack from '@renderer/views/songList/Detail/useKeyBack'
 import { addEntityDetail, playEntityDetail } from './action'
 
@@ -70,7 +72,21 @@ const summary = computed<EntitySummary>(() => ({
 }))
 const entityLabel = computed(() => window.i18n.t(type.value == 'singer' ? 'search__type_singer' : 'search__type_album'))
 const sourceLabel = computed(() => sourceNames.value[source.value] ?? source.value)
-const coverUrl = computed(() => entityDetailInfo.info.img ?? summary.value.img)
+const pickText = (...values: Array<string | null | undefined>) => values.find(value => value) ?? ''
+const coverUrl = computed(() => pickText(entityDetailInfo.info.img, summary.value.img, entityProfileInfo.img))
+const displayDesc = computed(() => pickText(entityDetailInfo.info.desc, entityProfileInfo.desc, summary.value.desc))
+const metaParts = computed(() => {
+  const parts: string[] = []
+  if (type.value == 'singer') {
+    if (entityProfileInfo.musicCount != null) parts.push(window.i18n.t('entity_detail__songs_count', { count: formatPlayCount(entityProfileInfo.musicCount) }))
+    if (entityProfileInfo.albumCount != null) parts.push(window.i18n.t('entity_detail__albums_count', { count: formatPlayCount(entityProfileInfo.albumCount) }))
+  } else {
+    if (entityProfileInfo.publishTime) parts.push(entityProfileInfo.publishTime)
+    if (entityProfileInfo.musicCount != null) parts.push(window.i18n.t('entity_detail__songs_count', { count: formatPlayCount(entityProfileInfo.musicCount) }))
+    if (entityProfileInfo.playCount) parts.push(window.i18n.t('entity_detail__play_count', { count: entityProfileInfo.playCount }))
+  }
+  return parts
+})
 
 const getFallbackRoute = () => ({
   path: '/search',
@@ -137,6 +153,7 @@ watch([routeType, type, source, id, page, summary], async([currentRouteType, cur
     return
   }
   await loadEntityDetail(currentType, currentId, currentSource, currentPage, currentSummary)
+  void getAndSetEntityProfile(currentType, currentId, currentSource as LX.OnlineSource, currentSummary)
 }, { immediate: true })
 
 useKeyBack(handleBack)
@@ -156,9 +173,10 @@ useKeyBack(handleBack)
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 96px;
-  padding: 0 15px;
+  min-height: 96px;
+  padding: 8px 15px;
   gap: 12px;
+  box-sizing: border-box;
 }
 
 .cover {
@@ -214,6 +232,7 @@ useKeyBack(handleBack)
 }
 
 .author,
+.meta,
 .description {
   margin-top: 3px;
   font-size: 12px;
@@ -221,7 +240,8 @@ useKeyBack(handleBack)
   color: var(--color-font-label);
 }
 
-.author {
+.author,
+.meta {
   .mixin-ellipsis-1();
 }
 
@@ -263,8 +283,8 @@ useKeyBack(handleBack)
 
 @media (max-width: 760px) {
   .header {
-    height: 84px;
-    padding: 0 10px;
+    min-height: 84px;
+    padding: 8px 10px;
     gap: 8px;
   }
 

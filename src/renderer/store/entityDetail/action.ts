@@ -3,7 +3,7 @@ import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
 import musicSdk from '@renderer/utils/musicSdk'
 import type { EntityType, ListInfoItem } from '@renderer/store/search/entity'
 import type { ListDetailInfo } from '@renderer/store/songList/state'
-import { entityDetailInfo } from './state'
+import { entityDetailInfo, entityProfileInfo } from './state'
 import type { EntityDetailInfo, EntitySummary } from './state'
 
 interface RawMusicInfo {
@@ -28,18 +28,52 @@ interface EntitySdk {
   }
   singer?: {
     getSongList: (id: string, page: number, limit: number) => Promise<RawDetailResult>
+    getInfo?: (id: string) => Promise<{
+      info?: {
+        name?: string
+        desc?: string
+        avatar?: string
+      }
+      count?: {
+        music?: number | string
+        album?: number | string
+      }
+    }>
   }
   album?: {
     getAlbumDetail?: (id: string, page: number, limit: number) => Promise<RawDetailResult>
     getAlbumListDetail?: (id: string, page: number) => Promise<RawDetailResult>
+    getAlbumInfo?: (id: string) => Promise<RawAlbumInfo>
   }
   musicSearch: {
     search: (text: string, page: number, limit: number) => Promise<RawDetailResult>
   }
 }
 
+interface RawAlbumInfo {
+  name?: string
+  desc?: string
+  author?: string
+  authorName?: string
+  img?: string
+  image?: string
+  time?: string
+  play_count?: string
+  total?: number | string
+}
+
+export interface EntityProfile {
+  desc?: string
+  img?: string
+  musicCount?: number | null
+  albumCount?: number | null
+  playCount?: string
+  publishTime?: string
+}
+
 const cache = new Map<string, EntityDetailInfo>()
 const resolvedEntityCache = new Map<string, { id: string, summary: EntitySummary }>()
+const profileCache = new Map<string, EntityProfile | null>()
 
 const getSdk = (source: LX.OnlineSource) => musicSdk[source] as unknown as EntitySdk
 
@@ -233,4 +267,76 @@ export const getEntityDetailAll = async(type: EntityType, id: string, source: LX
     }
   }
   return deduplicationList(list)
+}
+
+const toCount = (value: number | string | undefined) => {
+  const num = Number(value)
+  return Number.isFinite(num) && num > 0 ? num : null
+}
+
+const toText = (value: string | null | undefined) => {
+  if (!value) return undefined
+  return value
+}
+
+export const getEntityProfile = async(type: EntityType, id: string, source: LX.OnlineSource, summary: EntitySummary): Promise<EntityProfile | null> => {
+  const sdk = getSdk(source)
+  if (type == 'singer' ? !sdk.singer?.getInfo : !sdk.album?.getAlbumInfo) return null
+
+  const key = `entity_profile__${type}__${source}__${id}`
+  if (profileCache.has(key)) return profileCache.get(key)!
+
+  let profile: EntityProfile | null = null
+  try {
+    let exactId = id
+    if (exactId.startsWith('search__')) {
+      exactId = (await resolveEntity(type, source, summary))?.id ?? id
+    }
+    if (!exactId.startsWith('search__')) {
+      if (type == 'singer') {
+        const result = await sdk.singer!.getInfo!(exactId)
+        profile = {
+          desc: toText(result.info?.desc),
+          img: toText(result.info?.avatar),
+          musicCount: toCount(result.count?.music),
+          albumCount: toCount(result.count?.album),
+        }
+      } else {
+        const info: RawAlbumInfo = await sdk.album!.getAlbumInfo!(exactId)
+        profile = {
+          desc: toText(info.desc),
+          img: toText(info.img) ?? toText(info.image),
+          publishTime: toText(info.time),
+          playCount: toText(info.play_count),
+          musicCount: toCount(info.total),
+        }
+      }
+    }
+  } catch (error) {
+    console.log(error)
+  }
+  profileCache.set(key, profile)
+  return profile
+}
+
+export const getAndSetEntityProfile = async(type: EntityType, id: string, source: LX.OnlineSource, summary: EntitySummary) => {
+  const key = `entity_profile__${type}__${source}__${id}`
+  if (entityProfileInfo.key == key) return
+
+  entityProfileInfo.key = key
+  entityProfileInfo.desc = ''
+  entityProfileInfo.img = ''
+  entityProfileInfo.musicCount = null
+  entityProfileInfo.albumCount = null
+  entityProfileInfo.playCount = ''
+  entityProfileInfo.publishTime = ''
+
+  const profile = await getEntityProfile(type, id, source, summary)
+  if (entityProfileInfo.key != key || !profile) return
+  entityProfileInfo.desc = profile.desc ?? ''
+  entityProfileInfo.img = profile.img ?? ''
+  entityProfileInfo.musicCount = profile.musicCount ?? null
+  entityProfileInfo.albumCount = profile.albumCount ?? null
+  entityProfileInfo.playCount = profile.playCount ?? ''
+  entityProfileInfo.publishTime = profile.publishTime ?? ''
 }

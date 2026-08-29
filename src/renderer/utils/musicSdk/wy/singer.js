@@ -9,15 +9,15 @@ export default {
    */
   getInfo(id) {
     return eapiRequest('/api/artist/head/info/get', { id }).promise.then(({ body }) => {
-      if (!body || body.code != 200) throw new Error('get singer info faild.')
+      if (!body || body.code != 200 || !body.artist) throw new Error('get singer info faild.')
       return {
         source: 'wy',
         id: body.artist.id,
         info: {
           name: body.artist.name,
           desc: body.artist.briefDesc,
-          avatar: body.user.avatarUrl,
-          gender: body.user.gender === 1 ? 'man' : 'woman',
+          avatar: body.user?.avatarUrl ?? body.artist.cover ?? '',
+          gender: body.user?.gender === 1 ? 'man' : 'woman',
         },
         count: {
           music: body.artist.musicSize,

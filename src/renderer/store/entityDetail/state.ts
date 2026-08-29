@@ -15,6 +15,16 @@ export interface EntityDetailInfo extends ListDetailInfo {
   isFallback: boolean
 }
 
+export interface EntityProfileInfo {
+  key: string | null
+  desc: string
+  img: string
+  musicCount: number | null
+  albumCount: number | null
+  playCount: string
+  publishTime: string
+}
+
 export const entityDetailInfo = reactive<EntityDetailInfo>({
   list: [],
   id: '',
@@ -28,4 +38,14 @@ export const entityDetailInfo = reactive<EntityDetailInfo>({
   isFallback: false,
   info: {},
   noItemLabel: '',
+})
+
+export const entityProfileInfo = reactive<EntityProfileInfo>({
+  key: null,
+  desc: '',
+  img: '',
+  musicCount: null,
+  albumCount: null,
+  playCount: '',
+  publishTime: '',
 })
