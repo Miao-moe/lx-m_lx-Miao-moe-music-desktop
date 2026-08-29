@@ -8,6 +8,7 @@
 import musicSdk from '@renderer/utils/musicSdk'
 import { userApi } from '@renderer/store'
 import { toOldMusicInfo } from '@renderer/utils'
+import { reactive } from '@common/utils/vueTools'
 
 const coverCache = new Map()
 const pending = new Map()
@@ -16,7 +17,7 @@ let activeCount = 0
 const MAX_CONCURRENT = 5
 
 // 全局封面显示缓存（跨组件持久化）
-const coverDisplayCache = new Map()
+const coverDisplayCache = reactive(new Map())
 
 /**
  * 获取已缓存的封面 URL（同步，可能为空字符串）

@@ -9,7 +9,7 @@ module.exports = merge(baseConfig, {
   mode: 'development',
   entry: {
     main: path.join(__dirname, '../../src/main/index-dev.ts'),
-    // 'dbService.worker': path.join(__dirname, '../../src/main/worker/dbService/index.ts'),
+    'dbService.worker': path.join(__dirname, '../../src/main/worker/dbService/index.ts'),
   },
   devtool: 'eval-source-map',
   plugins: [

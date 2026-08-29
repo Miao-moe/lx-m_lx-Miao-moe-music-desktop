@@ -22,7 +22,7 @@
       <div v-if="list.length" ref="dom_listContent" :class="$style.content">
         <base-virtualized-list
           ref="listRef" v-slot="{ item, index }" :list="list" key-name="id" :item-height="listItemHeight"
-          container-class="scroll" content-class="list"
+          :overscan="10" container-class="scroll" content-class="list"
         >
           <div
             class="list-item"

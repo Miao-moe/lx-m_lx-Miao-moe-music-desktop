@@ -26,7 +26,7 @@
     <div v-show="list.length" ref="dom_listContent" :class="$style.content">
       <base-virtualized-list
         v-if="actionButtonsVisible" ref="listRef" v-slot="{ item, index }" :list="list" key-name="id"
-        :item-height="listItemHeight" container-class="scroll" content-class="list"
+        :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list"
         @scroll="saveListPosition" @contextmenu.capture="handleListRightClick"
       >
         <div
@@ -51,8 +51,24 @@
             <span class="select name">{{ item.name }}</span>
             <span v-if="isShowSource" class="no-select label-source">{{ item.source }}</span>
           </div>
-          <div class="list-item-cell" style="flex: 0 0 22%;"><span class="select" :aria-label="item.singer">{{ item.singer }}</span></div>
-          <div class="list-item-cell" style="flex: 0 0 22%;"><span class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span></div>
+          <div class="list-item-cell" style="flex: 0 0 22%;">
+            <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
+              <template v-for="(singer, singerIndex) in getSingerNames(item)" :key="`${singer}__${singerIndex}`">
+                <span v-if="singerIndex" :class="$style.entitySeparator">、</span>
+                <button type="button" :class="$style.entityLink" @click.stop="openEntityDetail(item, 'singer', singer)">{{ singer }}</button>
+              </template>
+            </span>
+            <span v-else class="select" :aria-label="item.singer">{{ item.singer }}</span>
+          </div>
+          <div class="list-item-cell" style="flex: 0 0 22%;">
+            <button
+              v-if="canOpenEntity(item) && item.meta.albumName" type="button" class="select" :class="$style.entityLink"
+              :aria-label="item.meta.albumName" @click.stop="openEntityDetail(item, 'album', item.meta.albumName)"
+            >
+              {{ item.meta.albumName }}
+            </button>
+            <span v-else class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span>
+          </div>
           <div class="list-item-cell" style="flex: 0 0 9%;"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
           <div class="list-item-cell" style="flex: 0 0 16%; padding-left: 0; padding-right: 0;">
             <material-list-buttons :index="index" :download-btn="assertApiSupport(item.source) && item.source != 'local'" @btn-click="handleListBtnClick" />
@@ -61,7 +77,7 @@
       </base-virtualized-list>
       <base-virtualized-list
         v-else ref="listRef" v-slot="{ item, index }" :list="list" key-name="id"
-        :item-height="listItemHeight" container-class="scroll" content-class="list"
+        :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list"
         @scroll="saveListPosition" @contextmenu.capture="handleListRightClick"
       >
         <div
@@ -87,8 +103,24 @@
             <span class="select name" :aria-label="item.name">{{ item.name }}</span>
             <span v-if="isShowSource" class="no-select label-source">{{ item.source }}</span>
           </div>
-          <div class="list-item-cell" style="flex: 0 0 25%;"><span class="select" :aria-label="item.singer">{{ item.singer }}</span></div>
-          <div class="list-item-cell" style="flex: 0 0 28%;"><span class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span></div>
+          <div class="list-item-cell" style="flex: 0 0 25%;">
+            <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
+              <template v-for="(singer, singerIndex) in getSingerNames(item)" :key="`${singer}__${singerIndex}`">
+                <span v-if="singerIndex" :class="$style.entitySeparator">、</span>
+                <button type="button" :class="$style.entityLink" @click.stop="openEntityDetail(item, 'singer', singer)">{{ singer }}</button>
+              </template>
+            </span>
+            <span v-else class="select" :aria-label="item.singer">{{ item.singer }}</span>
+          </div>
+          <div class="list-item-cell" style="flex: 0 0 28%;">
+            <button
+              v-if="canOpenEntity(item) && item.meta.albumName" type="button" class="select" :class="$style.entityLink"
+              :aria-label="item.meta.albumName" @click.stop="openEntityDetail(item, 'album', item.meta.albumName)"
+            >
+              {{ item.meta.albumName }}
+            </button>
+            <span v-else class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span>
+          </div>
           <div class="list-item-cell" style="flex: 0 0 10%;"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
         </div>
       </base-virtualized-list>
@@ -133,6 +165,7 @@ import useSearch from './useSearch'
 import useListScroll from './useListScroll'
 import useMusicToggle from './useMusicToggle'
 import { appSetting } from '@renderer/store/setting'
+import useEntityDetailNavigation from '@renderer/utils/compositions/useEntityDetailNavigation'
 export default {
   name: 'MusicList',
   components: {
@@ -149,6 +182,7 @@ export default {
   emits: ['show-menu'],
   setup(props, { emit }) {
     const actionButtonsVisible = appSetting['list.actionButtonsVisible']
+    const { canOpenEntity, getSingerNames, openEntityDetail } = useEntityDetailNavigation()
 
     let scrollIndex = null
     let isAnimation = false
@@ -383,6 +417,9 @@ export default {
       getCover,
       getCoverKey,
       coverErrorSet,
+      canOpenEntity,
+      getSingerNames,
+      openEntityDetail,
     }
   },
 }
@@ -474,6 +511,43 @@ export default {
   display: flex;
   flex-flow: column nowrap;
   flex: auto;
+}
+
+.entityLinks {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.entitySeparator {
+  flex: none;
+}
+
+.entityLink {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    color: var(--color-accent);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+    outline: none;
+  }
 }
 
 .noItem {

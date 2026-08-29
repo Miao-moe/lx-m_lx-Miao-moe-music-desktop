@@ -27,7 +27,7 @@
       </div>
       <div :class="$style.content">
         <div v-show="!noItem" ref="dom_listContent" :class="$style.content">
-          <base-virtualized-list v-if="actionButtonsVisible" ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
+          <base-virtualized-list v-if="actionButtonsVisible" ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
             <template #default="{ item, index }">
               <div
                 class="list-item" :class="[{ selected: rightClickSelectedIndex == index }, { active: selectedList.includes(item) }]"
@@ -45,8 +45,24 @@
                   <span v-if="qualityBadgeLabel(item)" class="no-select badge badge-theme-primary">{{ $t(qualityBadgeLabel(item)) }}</span>
                   <span v-if="sourceTag" class="no-select badge badge-theme-tertiary">{{ item.source }}</span>
                 </div>
-                <div class="list-item-cell" style="flex: 0 0 22%;"><span class="select" :aria-label="item.singer" @click.stop="$emit('singer-click', item)">{{ item.singer }}</span></div>
-                <div class="list-item-cell" style="flex: 0 0 22%;"><span class="select" :aria-label="item.meta.albumName" @click.stop="$emit('album-click', item)">{{ item.meta.albumName }}</span></div>
+                <div class="list-item-cell" style="flex: 0 0 22%;">
+                  <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
+                    <template v-for="(singer, singerIndex) in getSingerNames(item)" :key="`${singer}__${singerIndex}`">
+                      <span v-if="singerIndex" :class="$style.entitySeparator">、</span>
+                      <button type="button" :class="$style.entityLink" @click.stop="openEntityDetail(item, 'singer', singer)">{{ singer }}</button>
+                    </template>
+                  </span>
+                  <span v-else class="select" :aria-label="item.singer">{{ item.singer }}</span>
+                </div>
+                <div class="list-item-cell" style="flex: 0 0 22%;">
+                  <button
+                    v-if="canOpenEntity(item) && item.meta.albumName" type="button" class="select" :class="$style.entityLink"
+                    :aria-label="item.meta.albumName" @click.stop="openEntityDetail(item, 'album', item.meta.albumName)"
+                  >
+                    {{ item.meta.albumName }}
+                  </button>
+                  <span v-else class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span>
+                </div>
                 <div class="list-item-cell" style="flex: 0 0 9%;"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
                 <div class="list-item-cell" style="flex: 0 0 16%; padding-left: 0; padding-right: 0;">
                   <material-list-buttons :index="index" :remove-btn="false" :download-btn="assertApiSupport(item.source)" :play-btn="checkApiSource ? assertApiSupport(item.source) : true" @btn-click="handleListBtnClick" />
@@ -59,7 +75,7 @@
               </div>
             </template>
           </base-virtualized-list>
-          <base-virtualized-list v-else ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
+          <base-virtualized-list v-else ref="listRef" :list="list" key-name="id" :item-height="listItemHeight" :overscan="10" container-class="scroll" content-class="list" @contextmenu.capture="handleListRightClick">
             <template #default="{ item, index }">
               <div
                 class="list-item" :class="[{ selected: rightClickSelectedIndex == index }, { active: selectedList.includes(item) }]"
@@ -77,8 +93,24 @@
                   <span v-if="qualityBadgeLabel(item)" class="no-select badge badge-theme-primary">{{ $t(qualityBadgeLabel(item)) }}</span>
                   <span v-if="sourceTag" class="no-select badge badge-theme-tertiary">{{ item.source }}</span>
                 </div>
-                <div class="list-item-cell" style="flex: 0 0 24%;"><span class="select clickable-text" :aria-label="item.singer" @click.stop="$emit('singer-click', item)">{{ item.singer }}</span></div>
-                <div class="list-item-cell" style="flex: 0 0 27%;"><span class="select clickable-text" :aria-label="item.meta.albumName" @click.stop="$emit('album-click', item)">{{ item.meta.albumName }}</span></div>
+                <div class="list-item-cell" style="flex: 0 0 24%;">
+                  <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
+                    <template v-for="(singer, singerIndex) in getSingerNames(item)" :key="`${singer}__${singerIndex}`">
+                      <span v-if="singerIndex" :class="$style.entitySeparator">、</span>
+                      <button type="button" :class="$style.entityLink" @click.stop="openEntityDetail(item, 'singer', singer)">{{ singer }}</button>
+                    </template>
+                  </span>
+                  <span v-else class="select" :aria-label="item.singer">{{ item.singer }}</span>
+                </div>
+                <div class="list-item-cell" style="flex: 0 0 27%;">
+                  <button
+                    v-if="canOpenEntity(item) && item.meta.albumName" type="button" class="select" :class="$style.entityLink"
+                    :aria-label="item.meta.albumName" @click.stop="openEntityDetail(item, 'album', item.meta.albumName)"
+                  >
+                    {{ item.meta.albumName }}
+                  </button>
+                  <span v-else class="select" :aria-label="item.meta.albumName">{{ item.meta.albumName }}</span>
+                </div>
                 <div class="list-item-cell" style="flex: 0 0 10%;"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
               </div>
             </template>
@@ -91,11 +123,12 @@
         </div>
         <transition enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
           <div
-            v-show="noItem" :class="[$style.noitem, 'ui-state', { 'ui-state-error': noItem === $t('list__load_failed') }]"
-            role="status" :aria-busy="noItem === $t('list__loading')"
+            v-show="noItem" :class="[$style.noitem, 'ui-state', { 'ui-state-error': isMessage(noItem, 'list__load_failed') }]"
+            role="status" :aria-busy="isMessage(noItem, 'list__loading')"
           >
-            <span v-if="noItem === $t('list__loading')" class="ui-spinner" />
+            <span v-if="isMessage(noItem, 'list__loading')" class="ui-spinner" />
             <p v-text="noItem" />
+            <base-btn v-if="isMessage(noItem, 'list__load_failed')" class="ui-state-retry" min @click="$emit('retry')">{{ $t('reload') }}</base-btn>
           </div>
         </transition>
       </div>
@@ -126,6 +159,7 @@ import useMusicDownload from './useMusicDownload'
 import useMusicAdd from './useMusicAdd'
 import useMusicActions from './useMusicActions'
 import { appSetting } from '@renderer/store/setting'
+import useEntityDetailNavigation from '@renderer/utils/compositions/useEntityDetailNavigation'
 export default {
   name: 'MaterialOnlineList',
   props: {
@@ -160,12 +194,14 @@ export default {
       default: false,
     },
   },
-  emits: ['show-menu', 'play-list', 'togglePage', 'singer-click', 'album-click'],
+  emits: ['show-menu', 'play-list', 'togglePage', 'retry'],
   setup(props, { emit }) {
     const actionButtonsVisible = appSetting['list.actionButtonsVisible']
+    const { canOpenEntity, getSingerNames, openEntityDetail } = useEntityDetailNavigation()
     const rightClickSelectedIndex = ref(-1)
     const dom_listContent = ref(null)
     const listRef = ref(null)
+    const isMessage = (text, key) => Object.values(window.i18n.messages).some(messages => messages[key] == text)
 
     const {
       selectedList,
@@ -302,6 +338,7 @@ export default {
 
     return {
       listItemHeight,
+      isMessage,
       handleListItemClick,
       selectedList,
       handleListItemRightClick,
@@ -336,6 +373,9 @@ export default {
       getCoverKey,
       coverErrorSet,
       handleCoverError,
+      canOpenEntity,
+      getSingerNames,
+      openEntityDetail,
     }
   },
 }
@@ -429,13 +469,41 @@ export default {
   }
 }
 
-</style>
+.entityLinks {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
 
-<style lang="less">
-.clickable-text {
+.entitySeparator {
+  flex: none;
+}
+
+.entityLink {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+
   &:hover {
-    color: var(--color-primary);
+    color: var(--color-accent);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+    outline: none;
   }
 }
+
 </style>

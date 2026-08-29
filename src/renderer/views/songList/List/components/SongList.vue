@@ -33,11 +33,12 @@
     </div>
     <transition enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
       <div
-        v-show="props.listInfo.noItemLabel" :class="[$style.noitem, 'ui-state', { 'ui-state-error': props.listInfo.noItemLabel === $t('list__load_failed') }]"
-        role="status" :aria-busy="props.listInfo.noItemLabel === $t('list__loading')"
+        v-show="props.listInfo.noItemLabel" :class="[$style.noitem, 'ui-state', { 'ui-state-error': isMessage(props.listInfo.noItemLabel, 'list__load_failed') }]"
+        role="status" :aria-busy="isMessage(props.listInfo.noItemLabel, 'list__loading')"
       >
-        <span v-if="props.listInfo.noItemLabel === $t('list__loading')" class="ui-spinner" />
+        <span v-if="isMessage(props.listInfo.noItemLabel, 'list__loading')" class="ui-spinner" />
         <p v-text="props.listInfo.noItemLabel" />
+        <base-btn v-if="isMessage(props.listInfo.noItemLabel, 'list__load_failed')" class="ui-state-retry" min @click="emit('retry')">{{ $t('reload') }}</base-btn>
       </div>
     </transition>
   </div>
@@ -66,8 +67,9 @@ const route = useRoute()
 const dom_list_ref = ref<HTMLElement | null>(null)
 const imageErrorSet = reactive(new Set<string>())
 const getItemKey = (item: ListInfoItem) => `${item.source}__${item.id}`
+const isMessage = (text: string, key: 'list__loading' | 'list__load_failed') => Object.values(window.i18n.messages).some(messages => messages[key] == text)
 
-const emit = defineEmits(['toggle-page'])
+const emit = defineEmits(['toggle-page', 'retry'])
 
 
 const togglePage = (page: number) => {
