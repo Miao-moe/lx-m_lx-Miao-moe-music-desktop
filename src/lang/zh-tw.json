@@ -531,6 +531,7 @@
   "setting__open_api_port": "服務埠",
   "setting__open_api_port_tip": "請輸入開放 API 服務埠",
   "setting__open_api_tip": "該功能用於為第三方軟體提供串接 LX Music 的能力，目前可用的功能可以看：",
+  "setting__open_api_token": "存取權杖（區域網路模式下請求需攜帶 token 參數）：",
   "setting__open_api_tip_link": "串接教學文件",
   "setting__other": "其他",
   "setting__other_dislike_list": "「不喜歡的歌曲」規則",

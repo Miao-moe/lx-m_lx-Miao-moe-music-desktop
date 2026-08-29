@@ -551,6 +551,7 @@
   "setting__open_api_port": "Service Port",
   "setting__open_api_port_tip": "Please enter the Open API service port",
   "setting__open_api_tip": "This feature is used to provide third-party programs with the ability to call Lx-m Music. You can see the currently available features: ",
+  "setting__open_api_token": "Access token (requests must carry the token parameter in LAN mode): ",
   "setting__open_api_tip_link": "Visit Documents",
   "setting__other": "Extras",
   "setting__other_dislike_list": "Dislike Song Rule",

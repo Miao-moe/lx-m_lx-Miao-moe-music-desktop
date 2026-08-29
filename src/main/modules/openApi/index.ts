@@ -1,5 +1,6 @@
 import http from 'node:http'
 import querystring from 'node:querystring'
+import { randomBytes } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { getAddress } from '@common/utils/nodejs'
 import { sendTaskbarButtonClick } from '@main/modules/winMain'
@@ -20,6 +21,7 @@ let status: LX.OpenAPI.Status = {
   status: false,
   message: '',
   address: '',
+  token: '',
 }
 
 type SubscribeKeys = keyof LX.Player.Status
@@ -84,8 +86,14 @@ const handleSubscribePlayerStatus = (req: http.IncomingMessage, res: http.Server
 
 const handleStartServer = async(port: number, ip: string) => new Promise<void>((resolve, reject) => {
   playerStatusKeys = Object.keys(global.lx.player_status) as SubscribeKeys[]
+  // 局域网模式下面向不可信网络，生成随机访问令牌；仅本机回环监听时无需令牌
+  accessToken = ip == '127.0.0.1' ? '' : randomBytes(16).toString('base64url')
   httpServer = http.createServer((req, res): void => {
     const [endUrl, query] = `/${req.url?.split('/').at(-1) ?? ''}`.split('?')
+    if (accessToken && querystring.parse(query ?? '').token !== accessToken) {
+      sendResponse(res, 401, 'Invalid token')
+      return
+    }
     let code = 200
     let msg = 'OK'
     switch (endUrl) {
@@ -245,6 +253,7 @@ const handleStopServer = async() => new Promise<void>((resolve, reject) => {
   for (const socket of sockets) socket.destroy()
   sockets.clear()
   responses.clear()
+  accessToken = ''
 })
 
 
@@ -264,12 +273,14 @@ export const stopServer = async() => {
     status.status = false
     status.message = ''
     status.address = ''
+    status.token = ''
     return status
   }
   await handleStopServer().then(() => {
     status.status = false
     status.message = ''
     status.address = ''
+    status.token = ''
   }).catch(err => {
     console.log(err)
     status.message = err.message
@@ -281,6 +292,7 @@ export const startServer = async(port: number, bindLan: boolean) => {
   await handleStartServer(port, bindLan ? '0.0.0.0' : '127.0.0.1').then(() => {
     status.status = true
     status.message = ''
+    status.token = accessToken
     let address = ['127.0.0.1']
     if (bindLan) address = [...address, ...getAddress()]
     status.address = address.join(', ')
@@ -289,6 +301,7 @@ export const startServer = async(port: number, bindLan: boolean) => {
     status.status = false
     status.message = err.message
     status.address = ''
+    status.token = ''
   })
   global.lx.event_app.on('player_status', sendStatus)
   return status

@@ -34,6 +34,7 @@ import { httpFetch } from '../../request'
 import cryptojs from 'crypto-js'
 
 const REMOTE_TIMEOUT = 10000
+const REMOTE_MAX_SIZE = 512 * 1024
 
 /**
  * 注入给插件的运行环境。
@@ -74,11 +75,14 @@ const evalRemotePlugin = (code) => {
 }
 
 const fetchRemotePlugin = async(url) => {
+  // 远程脚本将在应用内执行，只允许 HTTPS 来源，防止明文传输被篡改
+  if (!/^https:\/\//i.test(url)) throw new Error('remote plugin url must be https')
   const req = httpFetch(url, { method: 'get', format: 'text', timeout: REMOTE_TIMEOUT })
   const { body, statusCode } = await req.promise
   if (statusCode !== 200) throw new Error(`plugin fetch failed (${statusCode})`)
   const code = typeof body === 'string' ? body : String(body ?? '')
   if (!code.trim()) throw new Error('empty plugin script')
+  if (code.length > REMOTE_MAX_SIZE) throw new Error('plugin script too large')
   return evalRemotePlugin(code)
 }
 

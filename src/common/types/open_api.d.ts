@@ -4,6 +4,8 @@ declare namespace LX {
       status: boolean
       message: string
       address: string
+      /** 局域网模式下的访问令牌（仅本机模式为空） */
+      token: string
     }
     interface EnableServer {
       enable: boolean

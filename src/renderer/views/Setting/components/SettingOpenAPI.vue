@@ -9,6 +9,9 @@ dd.gap-top
     .p.gap-top.small
       | {{ $t('setting__open_api_address') }}
       span.select {{ openAPI.address }}
+    .p.gap-top.small(v-if="openAPI.token")
+      | {{ $t('setting__open_api_token') }}
+      span.select {{ openAPI.token }}
     .p.small(v-if="openAPI.message") {{ openAPI.message }}
     .p
       .p.small {{ $t('setting__open_api_port') }}

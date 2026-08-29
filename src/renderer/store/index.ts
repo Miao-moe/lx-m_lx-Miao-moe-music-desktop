@@ -75,6 +75,7 @@ export const sync: {
 export const openAPI = reactive({
   address: '',
   message: '',
+  token: '',
 })
 
 

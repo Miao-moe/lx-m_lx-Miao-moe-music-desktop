@@ -33,7 +33,6 @@ const options = {
     'node_modules/electron-font-manager/index.js',
     'node_modules/electron-font-manager/package.json',
     'node_modules/electron-font-manager/build/Release/font_manager.node',
-    'node_modules/node-gyp-build',
     'node_modules/playwright-core',
     'build/Release/qrc_decode.node',
     'dist/**/*',
@@ -45,7 +44,6 @@ const options = {
     'node_modules/playwright-core/**/*',
     'node_modules/better-sqlite3/**/*',
     'node_modules/electron-font-manager/**/*',
-    'node_modules/node-gyp-build/**/*',
     '**/*.node',
   ],
   extraResources: [
