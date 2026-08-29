@@ -3,7 +3,7 @@ import { formatSingerName } from '../utils'
 import { createSignature } from './musicSearch'
 
 const getImage = item => {
-  let image = item.imgItems?.[0]?.img || item.img || ''
+  let image = item.singerPicUrl?.[0]?.img || item.imgItems?.[0]?.img || item.img || ''
   if (image && !/^https?:/.test(image)) image = `http://d.musicapp.migu.cn${image}`
   return image
 }

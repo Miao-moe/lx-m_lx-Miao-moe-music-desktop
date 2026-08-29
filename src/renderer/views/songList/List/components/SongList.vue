@@ -76,39 +76,20 @@ const togglePage = (page: number) => {
 
 const toDetail = (info: ListInfoItem) => {
   if (props.searchOnClick) {
-    if (props.searchResultType == 'singer') {
-      void router.push({
-        path: '/singer/detail',
-        query: {
-          source: info.source,
-          id: info.id,
-          name: info.name,
-          img: info.img,
-        },
-      })
-      return
-    }
-    if (props.searchResultType == 'album') {
-      void router.push({
-        path: '/album/detail',
-        query: {
-          source: info.source,
-          id: info.id,
-          name: info.name,
-          img: info.img,
-          author: info.author,
-        },
-      })
-      return
-    }
+    const entityId = props.searchResultType == 'singer' ? `search__singer__${info.name}` : info.id
     void router.push({
-      path: '/search',
+      path: '/search/entity/detail',
       query: {
-        ...route.query,
         source: info.source,
-        type: 'music',
+        type: props.searchResultType,
+        id: entityId,
+        name: info.name,
+        author: info.author || undefined,
+        picUrl: info.img || undefined,
+        desc: info.desc ? info.desc : undefined,
+        total: info.total ? info.total : undefined,
         page: 1,
-        text: info.name,
+        from: route.fullPath,
       },
     })
     return

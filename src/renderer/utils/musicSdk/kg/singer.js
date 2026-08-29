@@ -3,7 +3,7 @@ import { createHttpFetch } from './util'
 
 const getImage = value => value ? value.replace('{size}', '480') : null
 
-const filterSongList = (rawList) => {
+export const filterSongList = (rawList) => {
   const hashs = new Set()
   const list = []
   for (const item of rawList) {
