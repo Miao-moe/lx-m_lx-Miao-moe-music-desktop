@@ -1,9 +1,9 @@
 <template>
   <div :class="$style.view">
     <router-view v-slot="{ Component, route }">
-      <transition name="smooth-page">
-        <component :is="Component" :key="route.name" class="view-container" />
-      </transition>
+      <!-- Vue 3.3.13 的 transition 包裹动态路由组件会反复触发渲染器崩溃
+           （insertBefore / parentNode null / 导航卡死），保持禁用，勿重新启用 -->
+      <component :is="Component" :key="route.name" class="view-container" />
     </router-view>
   </div>
 </template>
