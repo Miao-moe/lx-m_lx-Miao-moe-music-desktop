@@ -1,11 +1,11 @@
 <template>
   <div :class="$style.view">
     <router-view v-slot="{ Component, route }">
-      <keep-alive>
-        <transition name="smooth-page">
+      <transition name="smooth-page">
+        <keep-alive>
           <component :is="Component" :key="route.name" class="view-container" />
-        </transition>
-      </keep-alive>
+        </keep-alive>
+      </transition>
     </router-view>
   </div>
 </template>
