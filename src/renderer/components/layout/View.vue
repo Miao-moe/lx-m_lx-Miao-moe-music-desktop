@@ -2,9 +2,7 @@
   <div :class="$style.view">
     <router-view v-slot="{ Component, route }">
       <transition name="smooth-page">
-        <keep-alive>
-          <component :is="Component" :key="route.name" class="view-container" />
-        </keep-alive>
+        <component :is="Component" :key="route.name" class="view-container" />
       </transition>
     </router-view>
   </div>
