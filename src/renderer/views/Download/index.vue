@@ -1,5 +1,5 @@
 <template>
-  <div :class="$style.download">
+  <div :class="$style.download" :style="{ '--list-cover-size': `${appSetting['list.coverSize']}px` }">
     <div :class="$style.header">
       <base-tab v-model="activeTab" :class="$style.tab" :list="tabs" />
     </div>
@@ -9,7 +9,7 @@
           <thead>
             <tr>
               <th class="num" style="width: 5%;">#</th>
-              <th class="nobreak" style="width: 5%;">{{ $t('music_cover') }}</th>
+              <th class="no-select" :class="$style.coverHeader">{{ $t('music_cover') }}</th>
               <th class="nobreak">{{ $t('music_name') }}</th>
               <th class="nobreak" style="width: 17%;">{{ $t('download__progress') }}</th>
               <th class="nobreak" style="width: 18%;">{{ $t('download__status') }}</th>
@@ -37,7 +37,7 @@
                 <div v-else class="num">{{ index + 1 }}</div>
               </transition>
             </div>
-            <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 42px; padding: 0 4px;">
+            <div class="list-item-cell no-select" :class="$style.cover" style="flex: 0 0 calc(var(--list-cover-size) + 12px); padding: 0 6px;">
               <img v-if="getCover(item) && !coverErrorSet.has(getCoverKey(item))" :src="getCover(item)" loading="lazy" decoding="async" @error="handleCoverError(item)">
               <svg v-else version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                 <use xlink:href="#icon-music" />
@@ -271,6 +271,7 @@ export default {
       getName,
       getTypeName,
       isPlay,
+      appSetting,
       getCover,
       getCoverKey,
       coverErrorSet,
@@ -317,6 +318,12 @@ export default {
   opacity: .7;
 }
 
+.coverHeader {
+  width: calc(var(--list-cover-size) + 12px);
+  box-sizing: border-box;
+  text-align: center;
+}
+
 .cover {
   height: 100%;
   display: flex;
@@ -325,8 +332,8 @@ export default {
   box-sizing: border-box;
 
   img {
-    width: 32px;
-    height: 32px;
+    width: var(--list-cover-size);
+    height: var(--list-cover-size);
     border-radius: var(--radius-sm);
     object-fit: cover;
   }
