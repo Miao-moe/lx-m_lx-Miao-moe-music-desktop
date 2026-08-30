@@ -69,7 +69,7 @@ export default {
         info: {
           name: body.singername,
           desc: body.intro,
-          avatar: body.imgurl.replace('{size}', 480),
+          avatar: body.imgurl ? body.imgurl.replace('{size}', 480) : '',
           gender: body.grade === 1 ? 'man' : 'woman',
         },
         count: {

@@ -1,5 +1,5 @@
 import { httpFetch } from '../../../request'
-import { eapi } from './crypto'
+import { eapi, weapi } from './crypto'
 
 export const eapiRequest = (url, data) => {
   return httpFetch('http://interface.music.163.com/eapi/batch', {
@@ -19,4 +19,17 @@ export const eapiRequest = (url, data) => {
   //   return body
   // })
   // return requestObj
+}
+
+export const weapiRequest = (url, data) => {
+  return httpFetch(`https://music.163.com/weapi${url}`, {
+    method: 'post',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+      Referer: 'https://music.163.com/',
+      Origin: 'https://music.163.com',
+      Cookie: 'os=pc; appver=2.9.7',
+    },
+    form: weapi(data),
+  })
 }

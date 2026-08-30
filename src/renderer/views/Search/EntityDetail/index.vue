@@ -73,8 +73,12 @@ const summary = computed<EntitySummary>(() => ({
 const entityLabel = computed(() => window.i18n.t(type.value == 'singer' ? 'search__type_singer' : 'search__type_album'))
 const sourceLabel = computed(() => sourceNames.value[source.value] ?? source.value)
 const pickText = (...values: Array<string | null | undefined>) => values.find(value => value) ?? ''
-const coverUrl = computed(() => pickText(entityDetailInfo.info.img, summary.value.img, entityProfileInfo.img))
-const displayDesc = computed(() => pickText(entityDetailInfo.info.desc, entityProfileInfo.desc, summary.value.desc))
+const coverUrl = computed(() => type.value == 'singer'
+  ? pickText(entityProfileInfo.img, entityDetailInfo.info.img, summary.value.img)
+  : pickText(entityDetailInfo.info.img, summary.value.img, entityProfileInfo.img))
+const displayDesc = computed(() => type.value == 'singer'
+  ? pickText(entityProfileInfo.desc, entityDetailInfo.info.desc, summary.value.desc)
+  : pickText(entityDetailInfo.info.desc, entityProfileInfo.desc, summary.value.desc))
 const metaParts = computed(() => {
   const parts: string[] = []
   if (type.value == 'singer') {
@@ -294,7 +298,7 @@ useKeyBack(handleBack)
   }
 
   .description {
-    display: none;
+    -webkit-line-clamp: 1;
   }
 }
 </style>

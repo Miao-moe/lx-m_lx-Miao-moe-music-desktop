@@ -27,7 +27,7 @@ interface EntitySdk {
     search: (type: EntityType, text: string, page: number, limit: number) => Promise<{ list: ListInfoItem[] }>
   }
   singer?: {
-    getSongList: (id: string, page: number, limit: number) => Promise<RawDetailResult>
+    getSongList?: (id: string, page: number, limit: number) => Promise<RawDetailResult>
     getInfo?: (id: string) => Promise<{
       info?: {
         name?: string
@@ -80,7 +80,7 @@ const getSdk = (source: LX.OnlineSource) => musicSdk[source] as unknown as Entit
 // eslint-disable-next-line @typescript-eslint/promise-function-async
 const getExactDetail = (type: EntityType, id: string, source: LX.OnlineSource, page: number) => {
   const sdk = getSdk(source)
-  if (type == 'singer') return sdk.singer?.getSongList(id, page, 100) ?? null
+  if (type == 'singer') return sdk.singer?.getSongList?.(id, page, 100) ?? null
   if (sdk.album?.getAlbumDetail) return sdk.album.getAlbumDetail(id, page, 100)
   if (sdk.album?.getAlbumListDetail) return sdk.album.getAlbumListDetail(id, page)
   return null
@@ -281,28 +281,41 @@ const toText = (value: string | null | undefined) => {
 
 export const getEntityProfile = async(type: EntityType, id: string, source: LX.OnlineSource, summary: EntitySummary): Promise<EntityProfile | null> => {
   const sdk = getSdk(source)
-  if (type == 'singer' ? !sdk.singer?.getInfo : !sdk.album?.getAlbumInfo) return null
-
   const key = `entity_profile__${type}__${source}__${id}`
   if (profileCache.has(key)) return profileCache.get(key)!
 
-  let profile: EntityProfile | null = null
+  let exactId = id
+  let profileSummary = summary
   try {
-    let exactId = id
     if (exactId.startsWith('search__')) {
-      exactId = (await resolveEntity(type, source, summary))?.id ?? id
+      const resolvedEntity = await resolveEntity(type, source, summary)
+      exactId = resolvedEntity?.id ?? id
+      profileSummary = resolvedEntity?.summary ?? summary
     }
+  } catch (error) {
+    console.log(error)
+  }
+
+  let profile: EntityProfile | null = type == 'singer'
+    ? {
+        desc: toText(profileSummary.desc),
+        img: toText(profileSummary.img),
+        musicCount: toCount(profileSummary.total),
+      }
+    : null
+
+  try {
     if (!exactId.startsWith('search__')) {
-      if (type == 'singer') {
-        const result = await sdk.singer!.getInfo!(exactId)
+      if (type == 'singer' && sdk.singer?.getInfo) {
+        const result = await sdk.singer.getInfo(exactId)
         profile = {
-          desc: toText(result.info?.desc),
-          img: toText(result.info?.avatar),
-          musicCount: toCount(result.count?.music),
-          albumCount: toCount(result.count?.album),
+          desc: toText(result.info?.desc) ?? profile?.desc,
+          img: toText(result.info?.avatar) ?? profile?.img,
+          musicCount: toCount(result.count?.music) ?? profile?.musicCount,
+          albumCount: toCount(result.count?.album) ?? profile?.albumCount,
         }
-      } else {
-        const info: RawAlbumInfo = await sdk.album!.getAlbumInfo!(exactId)
+      } else if (type == 'album' && sdk.album?.getAlbumInfo) {
+        const info: RawAlbumInfo = await sdk.album.getAlbumInfo(exactId)
         profile = {
           desc: toText(info.desc),
           img: toText(info.img) ?? toText(info.image),

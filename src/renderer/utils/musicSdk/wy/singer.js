@@ -1,4 +1,4 @@
-import { eapiRequest } from './utils/index'
+import { eapiRequest, weapiRequest } from './utils/index'
 import { formatPlayTime, sizeFormate } from '../../index'
 import { formatSingerName } from '../utils'
 
@@ -7,24 +7,41 @@ export default {
    * 获取歌手信息
    * @param {*} id
    */
-  getInfo(id) {
-    return eapiRequest('/api/artist/head/info/get', { id }).promise.then(({ body }) => {
-      if (!body || body.code != 200 || !body.artist) throw new Error('get singer info faild.')
-      return {
-        source: 'wy',
-        id: body.artist.id,
-        info: {
-          name: body.artist.name,
-          desc: body.artist.briefDesc,
-          avatar: body.user?.avatarUrl ?? body.artist.cover ?? '',
-          gender: body.user?.gender === 1 ? 'man' : 'woman',
-        },
-        count: {
-          music: body.artist.musicSize,
-          album: body.artist.albumSize,
-        },
+  async getInfo(id) {
+    let body
+    try {
+      body = (await eapiRequest('/api/artist/head/info/get', { id }).promise).body
+    } catch (error) {
+      console.log(error)
+    }
+
+    let desc = body?.artist?.briefDesc ?? ''
+    if (!desc) {
+      try {
+        const introduction = await weapiRequest('/artist/introduction', { id: Number(id) || id }).promise
+        if (introduction.body?.code == 200) {
+          desc = (introduction.body.introduction ?? []).map(item => item.txt || '').filter(Boolean).join('\n\n')
+        }
+      } catch (error) {
+        console.log(error)
       }
-    })
+    }
+    if (!body?.artist && !desc) throw new Error('get singer info faild.')
+
+    return {
+      source: 'wy',
+      id: body?.artist?.id ?? id,
+      info: {
+        name: body?.artist?.name ?? '',
+        desc,
+        avatar: body?.user?.avatarUrl ?? body?.artist?.cover ?? body?.artist?.picUrl ?? '',
+        gender: body?.user?.gender === 1 ? 'man' : 'woman',
+      },
+      count: {
+        music: body?.artist?.musicSize,
+        album: body?.artist?.albumSize,
+      },
+    }
   },
   /**
    * 获取歌手歌曲列表
