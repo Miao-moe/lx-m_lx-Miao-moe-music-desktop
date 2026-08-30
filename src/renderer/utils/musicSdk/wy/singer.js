@@ -95,6 +95,8 @@ export default {
     raw.forEach(item => {
       if (!item.id) return
 
+      const duration = item.dt ?? item.duration
+
       const types = []
       const _types = {}
       let size
@@ -134,7 +136,7 @@ export default {
         albumId: item.album.id,
         songmid: item.id,
         source: 'wy',
-        interval: formatPlayTime(item.duration),
+        interval: duration ? formatPlayTime(duration / 1000) : null,
         img: null,
         lrc: null,
         otherSource: null,
