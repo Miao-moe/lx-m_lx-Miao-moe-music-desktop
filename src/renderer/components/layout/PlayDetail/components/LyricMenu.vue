@@ -9,6 +9,25 @@
       </div>
     </div> -->
       <div :class="$style.group">
+        <div :class="$style.title">{{ $t('lyric_menu__extended') }}</div>
+        <div :class="$style.subGroup">
+          <button
+            :class="[$style.btn, { [$style.selected]: appSetting['player.isShowLyricTranslation'] }]"
+            :disabled="!lyricInfo.tlyric" :aria-pressed="appSetting['player.isShowLyricTranslation']"
+            @click="toggleExtendedLyric('player.isShowLyricTranslation')"
+          >
+            {{ $t('lyric_menu__translation') }}
+          </button>
+          <button
+            :class="[$style.btn, { [$style.selected]: appSetting['player.isShowLyricRoma'] }]"
+            :disabled="!lyricInfo.rlyric" :aria-pressed="appSetting['player.isShowLyricRoma']"
+            @click="toggleExtendedLyric('player.isShowLyricRoma')"
+          >
+            {{ $t('lyric_menu__romanization') }}
+          </button>
+        </div>
+      </div>
+      <div :class="$style.group">
         <div :class="$style.subGroup">
           <div :class="$style.title">{{ $t('lyric_menu__lrc_size', { size: appSetting['playDetail.style.fontSize'] }) }}</div>
           <button :class="[$style.btn, $style.titleBtn]" :disabled="appSetting['playDetail.style.fontSize'] == 100" ignore-tip :aria-label="$t('lyric_menu__size_reset')" @click="fontSizeReset">{{ $t('lyric_menu__size_reset') }}</button>
@@ -49,7 +68,7 @@ import { computed, ref, watch } from '@common/utils/vueTools'
 import useMenuLocation from '@renderer/utils/compositions/useMenuLocation'
 import { debounce } from '@common/utils/common'
 import { saveLyricEdited, removeLyricEdited } from '@renderer/utils/ipc'
-import { appSetting, setPlayDetailLyricFont, setPlayDetailLyricAlign } from '@renderer/store/setting'
+import { appSetting, setPlayDetailLyricFont, setPlayDetailLyricAlign, updateSetting } from '@renderer/store/setting'
 
 const offsetTagRxp = /(?:^|\n)\s*\[offset:\s*(\S+(?:\d+)*)\s*\]/
 const offsetTagAllRxp = /(^|\n)\s*\[offset:\s*(\S+(?:\d+)*)\s*\]/g
@@ -116,6 +135,9 @@ export default {
     }
     const fontSizeReset = () => {
       setPlayDetailLyricFont(100)
+    }
+    const toggleExtendedLyric = key => {
+      updateSetting({ [key]: !appSetting[key] })
     }
 
     const updateLyric = offset => {
@@ -197,6 +219,7 @@ export default {
       fontSizeUp,
       fontSizeDown,
       fontSizeReset,
+      toggleExtendedLyric,
       setOffset,
       offsetReset,
       setFontAlign,
@@ -272,6 +295,10 @@ export default {
     cursor: default;
     opacity: 1;
   }
+  &.selected {
+    color: var(--color-button-font-selected);
+    background-color: var(--color-primary-background-hover);
+  }
 
   &[disabled] {
     cursor: default;
@@ -293,4 +320,3 @@ export default {
 }
 
 </style>
-

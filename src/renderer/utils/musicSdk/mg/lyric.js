@@ -74,9 +74,8 @@ const mrcTools = {
     return this.getText(url)
   },
   async getMusicInfo(songInfo) {
-    return songInfo.mrcUrl == null
-      ? getMusicInfo(songInfo.copyrightId)
-      : songInfo
+    if (songInfo.mrcUrl) return songInfo
+    return (await getMusicInfo(songInfo.songmid)) ?? songInfo
   },
   getLyric(songInfo) {
     return {

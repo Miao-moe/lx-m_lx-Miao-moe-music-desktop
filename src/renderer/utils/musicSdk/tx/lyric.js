@@ -202,11 +202,10 @@ export default {
     if (songId) return songId
     if (songIdMap.has(songmid)) return songIdMap.get(songmid)
     if (promises.has(songmid)) return (await promises.get(songmid)).songId
-    const promise = getMusicInfo(songmid)
-    promises.set(promise)
+    const promise = getMusicInfo(songmid).finally(() => promises.delete(songmid))
+    promises.set(songmid, promise)
     const info = await promise
     songIdMap.set(songmid, info.songId)
-    promises.delete(songmid)
     return info.songId
   },
   async parseLyric(lrc, tlrc, rlrc) {
@@ -263,7 +262,7 @@ export default {
         })
         return requestObj.promise.then(({ body }) => {
           // console.log(body)
-          if (body.code != this.successCode || body.req.code != this.successCode) return this.getLyric(songId, ++retryNum)
+          if (body.code != this.successCode || body.req?.code != this.successCode) return this.getLyric(mInfo, ++retryNum).promise
           const data = body.req.data
           return this.parseLyric(data.lyric, data.trans, data.roma)
         })
