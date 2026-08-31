@@ -2,7 +2,7 @@ import { onBeforeUnmount } from '@common/utils/vueTools'
 import { useI18n } from '@renderer/plugins/i18n'
 import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
 import { setStop, isEmpty } from '@renderer/plugins/player'
-import { playNext, setMusicUrl } from '@renderer/core/player'
+import { loadPendingTrackMetadata, playNext, setMusicUrl } from '@renderer/core/player'
 import { setAllStatus } from '@renderer/store/player/action'
 import { appSetting } from '@renderer/store/setting'
 
@@ -70,6 +70,7 @@ export default () => {
   const handlePlaying = () => {
     setAllStatus('')
     clearLoadingTimeout()
+    loadPendingTrackMetadata()
   }
 
   const handleEmpied = () => {

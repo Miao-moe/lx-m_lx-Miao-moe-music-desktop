@@ -57,6 +57,56 @@ const createDelayNextTimeout = (delay: number) => {
 const { addDelayNextTimeout, clearDelayNextTimeout } = createDelayNextTimeout(5000)
 const { addDelayNextTimeout: addLoadTimeout, clearDelayNextTimeout: clearLoadTimeout } = createDelayNextTimeout(100000)
 
+interface PendingTrackMetadata {
+  requestId: number
+  musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
+  listId: string | null
+}
+
+let trackMetadataRequestId = 0
+let pendingTrackMetadata: PendingTrackMetadata | null = null
+
+const queueTrackMetadata = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, listId: string | null) => {
+  pendingTrackMetadata = {
+    requestId: ++trackMetadataRequestId,
+    musicInfo,
+    listId,
+  }
+}
+
+const isCurrentTrackMetadata = ({ requestId, musicInfo }: PendingTrackMetadata) => {
+  return requestId == trackMetadataRequestId && musicInfo.id == playMusicInfo.musicInfo?.id
+}
+
+export const loadPendingTrackMetadata = () => {
+  const request = pendingTrackMetadata
+  if (!request) return
+  pendingTrackMetadata = null
+
+  const { musicInfo, listId } = request
+  void getPicPath({ musicInfo, listId }).then((url: string) => {
+    if (!isCurrentTrackMetadata(request) || url == _musicInfo.pic) return
+    setMusicInfo({ pic: url })
+    window.app_event.picUpdated()
+  }).catch(_ => _)
+
+  void getLyricInfo({ musicInfo }).then((lyricInfo) => {
+    if (!isCurrentTrackMetadata(request)) return
+    setMusicInfo({
+      lrc: lyricInfo.lyric,
+      tlrc: lyricInfo.tlyric,
+      lxlrc: lyricInfo.lxlyric,
+      rlrc: lyricInfo.rlyric,
+      rawlrc: lyricInfo.rawlrcInfo.lyric,
+    })
+    window.app_event.lyricUpdated()
+  }).catch((err) => {
+    console.log(err)
+    if (!isCurrentTrackMetadata(request)) return
+    setAllStatus(window.i18n.t('lyric__load_error'))
+  })
+}
+
 /**
  * 检查音乐信息是否已更改
  */
@@ -159,28 +209,8 @@ const handleRestorePlay = async(restorePlayInfo: LX.Player.SavedPlayInfo) => {
     window.app_event.pause()
   })
 
-
-  void getPicPath({ musicInfo, listId: playMusicInfo.listId }).then((url: string) => {
-    if (musicInfo.id != playMusicInfo.musicInfo?.id || url == _musicInfo.pic) return
-    setMusicInfo({ pic: url })
-    window.app_event.picUpdated()
-  }).catch(_ => _)
-
-  void getLyricInfo({ musicInfo }).then((lyricInfo) => {
-    if (musicInfo.id != playMusicInfo.musicInfo?.id) return
-    setMusicInfo({
-      lrc: lyricInfo.lyric,
-      tlrc: lyricInfo.tlyric,
-      lxlrc: lyricInfo.lxlyric,
-      rlrc: lyricInfo.rlyric,
-      rawlrc: lyricInfo.rawlrcInfo.lyric,
-    })
-    window.app_event.lyricUpdated()
-  }).catch((err) => {
-    console.log(err)
-    if (musicInfo.id != playMusicInfo.musicInfo?.id) return
-    setAllStatus(window.i18n.t('lyric__load_error'))
-  })
+  queueTrackMetadata(musicInfo, playMusicInfo.listId)
+  if (!appSetting['player.startupAutoPlay']) loadPendingTrackMetadata()
 
   if (appSetting['player.togglePlayMethod'] == 'random' && !playMusicInfo.isTempPlay) addPlayedList({ ...playMusicInfo as LX.Player.PlayMusicInfo, listId: playInfo.playerListId ?? playMusicInfo.listId })
 }
@@ -200,6 +230,8 @@ const handlePlay = (preloadedUrl?: string) => {
 
   if (!musicInfo) return
 
+  queueTrackMetadata(musicInfo, playMusicInfo.listId)
+
   setStop()
   window.app_event.pause()
 
@@ -216,28 +248,6 @@ const handlePlay = (preloadedUrl?: string) => {
   } else {
     setMusicUrl(musicInfo)
   }
-
-  void getPicPath({ musicInfo, listId: playMusicInfo.listId }).then((url: string) => {
-    if (musicInfo.id != playMusicInfo.musicInfo?.id || url == _musicInfo.pic) return
-    setMusicInfo({ pic: url })
-    window.app_event.picUpdated()
-  }).catch(_ => _)
-
-  void getLyricInfo({ musicInfo }).then((lyricInfo) => {
-    if (musicInfo.id != playMusicInfo.musicInfo?.id) return
-    setMusicInfo({
-      lrc: lyricInfo.lyric,
-      tlrc: lyricInfo.tlyric,
-      lxlrc: lyricInfo.lxlyric,
-      rlrc: lyricInfo.rlyric,
-      rawlrc: lyricInfo.rawlrcInfo.lyric,
-    })
-    window.app_event.lyricUpdated()
-  }).catch((err) => {
-    console.log(err)
-    if (musicInfo.id != playMusicInfo.musicInfo?.id) return
-    setAllStatus(window.i18n.t('lyric__load_error'))
-  })
 }
 
 /**

@@ -13,6 +13,27 @@ const getCurrentTime = () => {
 
 let lrc: Lyric
 let desktopLyricPort: Electron.IpcRendererEvent['ports'][0] | null = null
+let lyricResyncTimer: NodeJS.Timeout | null = null
+
+const clearLyricResyncTimer = () => {
+  if (!lyricResyncTimer) return
+  clearTimeout(lyricResyncTimer)
+  lyricResyncTimer = null
+}
+
+const scheduleLyricResync = (syncDesktop = true) => {
+  clearLyricResyncTimer()
+  if (!isPlay.value) return
+  const musicId = musicInfo.id
+  lyricResyncTimer = setTimeout(() => {
+    lyricResyncTimer = null
+    if (!isPlay.value || musicInfo.id != musicId) return
+    const time = getCurrentTime()
+    if (syncDesktop) sendDesktopLyricInfo({ action: 'set_play', data: time })
+    lrc.play(time)
+  })
+}
+
 const analyserTools: {
   dataArray: Uint8Array
   bufferLength: number
@@ -133,27 +154,13 @@ export const setLyricOffset = (offset: number) => {
     data: tempOffset,
   })
 
-  if (isPlay.value) {
-    setTimeout(() => {
-      const time = getCurrentTime()
-      sendDesktopLyricInfo({
-        action: 'set_play',
-        data: time,
-      })
-      lrc.play(time)
-    })
-  }
+  scheduleLyricResync()
 }
 
 export const setPlaybackRate = (rate: number) => {
   lrc.setPlaybackRate(rate)
 
-  if (isPlay.value) {
-    setTimeout(() => {
-      const time = getCurrentTime()
-      lrc.play(time)
-    })
-  }
+  scheduleLyricResync(false)
 }
 
 export const setLyric = () => {
@@ -179,13 +186,7 @@ export const setLyric = () => {
     })
   }
 
-  if (isPlay.value) {
-    setTimeout(() => {
-      const time = getCurrentTime()
-      sendDesktopLyricInfo({ action: 'set_play', data: time })
-      lrc.play(time)
-    })
-  }
+  scheduleLyricResync()
 }
 
 export const setDisabledAutoPause = (disabledAutoPause: boolean) => {
@@ -205,17 +206,20 @@ export const setDisableAutoPauseBySource = (disabled: boolean, source: string) =
 
 export const play = () => {
   // if (!musicInfo.lrc) return
+  clearLyricResyncTimer()
   const currentTime = getCurrentTime()
   lrc.play(currentTime)
   sendDesktopLyricInfo({ action: 'set_play', data: currentTime })
 }
 
 export const pause = () => {
+  clearLyricResyncTimer()
   lrc.pause()
   sendDesktopLyricInfo({ action: 'set_pause' })
 }
 
 export const stop = () => {
+  clearLyricResyncTimer()
   lrc.setLyric('')
   sendDesktopLyricInfo({ action: 'set_stop' })
   // setLines([])
