@@ -155,6 +155,15 @@ export default (isComputeHeight) => {
   }
 
   const setLyric = (lines) => {
+    const currentLine = lyric.line
+    const previousLine = dom_lines?.[currentLine]
+    const lineOffset = previousLine && dom_lyric.value && previousLine.time == lines[currentLine]?.time
+      ? previousLine.offsetTop - dom_lyric.value.scrollTop
+      : null
+    if (cancelScrollFn) {
+      cancelScrollFn()
+      cancelScrollFn = null
+    }
     const dom_line_content = document.createDocumentFragment()
     for (const line of lines) {
       dom_line_content.appendChild(line.dom_line)
@@ -164,7 +173,13 @@ export default (isComputeHeight) => {
     nextTick(() => {
       dom_lines = dom_lyric.value.querySelectorAll('.line-content')
       line_heights = Array.from(dom_lines).map(l => l.clientHeight)
-      handleScrollLrc()
+      const currentLineDom = dom_lines[currentLine]
+      if (lineOffset != null && currentLineDom) {
+        dom_lyric.value.scrollTop = currentLineDom.offsetTop - lineOffset
+      } else {
+        handleScrollLrc()
+      }
+      isSetedLines = false
     })
   }
 
@@ -191,8 +206,7 @@ export default (isComputeHeight) => {
       prevActiveLine = line
     })
     if (line < 0 || !lyric.lines.length) return
-    if (line == 0 && isSetedLines) return isSetedLines = false
-    isSetedLines &&= false
+    if (isSetedLines) return
     if (oldLine == null || line - oldLine != 1) return handleScrollLrc()
 
     if (setting['desktopLyric.isDelayScroll']) {

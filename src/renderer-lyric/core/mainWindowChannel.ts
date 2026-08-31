@@ -42,7 +42,10 @@ const handleDesktopLyricMessage = (event: LX.DesktopLyric.LyricActions) => {
     case 'set_status':
       setIsPlay(event.data.isPlay)
       if (event.data.isPlay) play(event.data.played_time)
-      else pause()
+      else {
+        play(event.data.played_time)
+        pause()
+      }
       break
     case 'set_offset':
       setLyricOffset(event.data)

@@ -158,6 +158,15 @@ export default ({ isPlay, lyric, playProgress, isShowLyricProgressSetting, offse
   }
 
   const setLyric = (lines) => {
+    const currentLine = lyric.line
+    const previousLine = dom_lines?.[currentLine]
+    const lineOffset = previousLine && dom_lyric.value && previousLine.time == lines[currentLine]?.time
+      ? previousLine.offsetTop - dom_lyric.value.scrollTop
+      : null
+    if (cancelScrollFn) {
+      cancelScrollFn()
+      cancelScrollFn = null
+    }
     const dom_line_content = document.createDocumentFragment()
     for (const line of lines) {
       dom_line_content.appendChild(line.dom_line)
@@ -166,7 +175,13 @@ export default ({ isPlay, lyric, playProgress, isShowLyricProgressSetting, offse
     dom_lyric_text.value.appendChild(dom_line_content)
     nextTick(() => {
       dom_lines = dom_lyric.value.querySelectorAll('.line-content')
-      handleScrollLrc()
+      const currentLineDom = dom_lines[currentLine]
+      if (lineOffset != null && currentLineDom) {
+        dom_lyric.value.scrollTop = currentLineDom.offsetTop - lineOffset
+      } else {
+        handleScrollLrc()
+      }
+      isSetedLines = false
     })
   }
 
@@ -189,8 +204,7 @@ export default ({ isPlay, lyric, playProgress, isShowLyricProgressSetting, offse
   let delayScrollTimeout
   const scrollLine = (line, oldLine) => {
     if (line < 0) return
-    if (line == 0 && isSetedLines) return isSetedLines = false
-    isSetedLines &&= false
+    if (isSetedLines) return
     if (oldLine == null || line - oldLine != 1) return handleScrollLrc()
 
     if (appSetting['playDetail.isDelayScroll']) {
