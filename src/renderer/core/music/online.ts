@@ -7,7 +7,8 @@ import {
 } from '@renderer/utils/ipc'
 import {
   buildLyricInfo,
-  getPlayQuality,
+  getTryQualityList,
+  setLastTryQuality,
   handleGetOnlineLyricInfo,
   handleGetOnlineMusicUrl,
   handleGetOnlinePicUrl,
@@ -51,11 +52,19 @@ export const getMusicUrl = async({ musicInfo, quality, isRefresh, allowToggleSou
 
   //   // return Promise.reject(new Error('该歌曲没有可播放的音频'))
   // }
-  const targetQuality = quality ?? getPlayQuality(appSetting['player.playQuality'], musicInfo)
-  const cachedUrl = await getStoreMusicUrl(musicInfo, targetQuality)
-  if (cachedUrl && !isRefresh) return cachedUrl
+  // 先按候选音质顺序探测缓存，命中即可直接播放（无需等待音源初始化）
+  if (!isRefresh) {
+    for (const itemQuality of getTryQualityList(quality ?? appSetting['player.playQuality'], musicInfo)) {
+      const cachedUrl = await getStoreMusicUrl(musicInfo, itemQuality)
+      if (cachedUrl) {
+        setLastTryQuality(musicInfo.id, itemQuality)
+        return cachedUrl
+      }
+    }
+  }
 
   return handleGetOnlineMusicUrl({ musicInfo, quality, onToggleSource, isRefresh, allowToggleSource }).then(({ url, quality: targetQuality, musicInfo: targetMusicInfo, isFromCache }) => {
+    setLastTryQuality(musicInfo.id, targetQuality)
     if (targetMusicInfo.id != musicInfo.id && !isFromCache) void saveMusicUrl(targetMusicInfo, targetQuality, url)
     void saveMusicUrl(musicInfo, targetQuality, url)
     return url

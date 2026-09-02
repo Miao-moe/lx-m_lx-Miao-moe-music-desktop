@@ -659,6 +659,14 @@ export const saveMusicUrl = async(musicInfo: LX.Music.MusicInfo, type: LX.Qualit
   })
 }
 /**
+ * 删除缓存的歌曲URL
+ * @param musicInfo 歌曲信息
+ * @param type URL音质
+ */
+export const removeMusicUrl = async(musicInfo: LX.Music.MusicInfo, type: LX.Quality) => {
+  await rendererInvoke<string>(WIN_MAIN_RENDERER_EVENT_NAME.remove_music_url, `${musicInfo.id}_${type}`)
+}
+/**
  * 清理所有缓存的歌曲URL
  */
 export const clearMusicUrl = async() => {

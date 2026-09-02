@@ -3,6 +3,8 @@ import { useI18n } from '@renderer/plugins/i18n'
 import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
 import { setStop, isEmpty } from '@renderer/plugins/player'
 import { loadPendingTrackMetadata, playNext, setMusicUrl } from '@renderer/core/player'
+import { getLastTryQuality, getNextTryQuality } from '@renderer/core/music/utils'
+import { removeMusicUrl } from '@renderer/utils/ipc'
 import { setAllStatus } from '@renderer/store/player/action'
 import { appSetting } from '@renderer/store/setting'
 
@@ -87,12 +89,30 @@ export default () => {
     clearLoadingTimeout()
     if (window.lx.isPlayedStop) return
     if (!isEmpty()) setStop()
-    if (playMusicInfo.musicInfo && errCode !== 1 && retryNum < 2) { // 若音频URL无效则尝试刷新2次URL
-      // console.log(this.retryNum)
-      retryNum++
-      setMusicUrl(playMusicInfo.musicInfo, true)
-      setAllStatus(t('player__refresh_url'))
-      return
+    if (playMusicInfo.musicInfo && errCode !== 1) {
+      const currentMusicInfo = playMusicInfo.musicInfo
+      // 高音质 URL 可能返回无法解码的加密内容，逐级降低音质重试
+      if (!('progress' in currentMusicInfo) && currentMusicInfo.source != 'local') {
+        const urlSourceInfo = currentMusicInfo.meta.toggleMusicInfo ?? currentMusicInfo
+        const lastQuality = getLastTryQuality(urlSourceInfo.id) ?? getLastTryQuality(currentMusicInfo.id)
+        const nextQuality = getNextTryQuality(appSetting['player.playQuality'], urlSourceInfo, lastQuality)
+        if (nextQuality) {
+          if (lastQuality) {
+            void removeMusicUrl(urlSourceInfo, lastQuality)
+            if (urlSourceInfo != currentMusicInfo) void removeMusicUrl(currentMusicInfo, lastQuality)
+          }
+          setMusicUrl(currentMusicInfo, true, nextQuality)
+          setAllStatus(t('player__refresh_url'))
+          return
+        }
+      }
+      if (retryNum < 2) { // 若音频URL无效则尝试刷新2次URL
+        // console.log(this.retryNum)
+        retryNum++
+        setMusicUrl(currentMusicInfo, true)
+        setAllStatus(t('player__refresh_url'))
+        return
+      }
     }
 
     if (appSetting['player.autoSkipOnError']) {

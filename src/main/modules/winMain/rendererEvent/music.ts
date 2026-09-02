@@ -57,6 +57,9 @@ export default () => {
       expire_time: expireTime,
     }])
   })
+  mainHandle<string>(WIN_MAIN_RENDERER_EVENT_NAME.remove_music_url, async({ params: id }) => {
+    await global.lx.worker.dbService.musicUrlRemove([id])
+  })
   mainHandle(WIN_MAIN_RENDERER_EVENT_NAME.clear_music_url, async() => {
     await global.lx.worker.dbService.musicUrlClear()
   })

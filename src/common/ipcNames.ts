@@ -131,6 +131,7 @@ const modules = {
     get_lyric_edited_count: 'get_lyric_edited_count',
     get_music_url: 'get_music_url',
     save_music_url: 'save_music_url',
+    remove_music_url: 'remove_music_url',
     clear_music_url: 'clear_music_url',
     get_music_url_count: 'get_music_url_count',
 
