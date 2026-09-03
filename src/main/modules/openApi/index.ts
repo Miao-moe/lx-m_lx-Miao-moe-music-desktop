@@ -24,6 +24,9 @@ let status: LX.OpenAPI.Status = {
   token: '',
 }
 
+// 局域网监听时使用的随机访问令牌，仅本机回环监听时为空
+let accessToken = ''
+
 type SubscribeKeys = keyof LX.Player.Status
 
 let httpServer: http.Server
