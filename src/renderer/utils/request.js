@@ -1,11 +1,11 @@
 import needle from 'needle'
 // import progress from 'request-progress'
-import { debugRequest } from './env'
-import { requestMsg } from './message'
-import { bHh } from './musicSdk/options'
-import { deflateRaw } from 'zlib'
-import { proxy } from '@renderer/store'
-import { httpOverHttp, httpsOverHttp } from 'tunnel'
+import {debugRequest} from './env'
+import {requestMsg} from './message'
+import {bHh} from './musicSdk/options'
+import {deflateRaw} from 'zlib'
+import {proxy} from '@renderer/store'
+import {httpOverHttp, httpsOverHttp} from 'tunnel'
 // import fs from 'fs'
 
 const httpsRxp = /^https:/
@@ -50,7 +50,8 @@ const request = (url, options, callback) => {
       body = resp.body = resp.raw.toString()
       try {
         resp.body = JSON.parse(resp.body)
-      } catch (_) {}
+      } catch (_) {
+      }
       body = resp.body
     }
     callback(err, resp, body)
@@ -86,8 +87,10 @@ const buildHttpPromose = (url, options) => {
     debugRequest && console.log(`\n---send request------${url}------------`)
     fetchData(url, options.method, options, (err, resp, body) => {
       // options.isShowProgress && window.api.hideProgress()
-      debugRequest && console.log(`\n---response------${url}------------`)
-      debugRequest && console.log(body)
+      if (debugRequest) {
+        console.log(`\n---response------${url}------------`)
+        debugRequest && console.log(body)
+      }
       obj.requestObj = null
       obj.cancelFn = null
       if (err) return reject(err)
@@ -105,7 +108,7 @@ const buildHttpPromose = (url, options) => {
  * @param {*} url
  * @param {*} options
  */
-export const httpFetch = (url, options = { method: 'get' }) => {
+export const httpFetch = (url, options = {method: 'get'}) => {
   const requestObj = buildHttpPromose(url, options)
   requestObj.promise = requestObj.promise.catch(err => {
     // console.log('出错', err)
@@ -185,7 +188,7 @@ export const httpGet = (url, options, callback) => {
   // })
 
   debugRequest && console.log(`\n---send request-------${url}------------`)
-  return fetchData(url, 'get', options, function(err, resp, body) {
+  return fetchData(url, 'get', options, function (err, resp, body) {
     // options.isShowProgress && window.api.hideProgress()
     debugRequest && console.log(`\n---response------${url}------------`)
     debugRequest && console.log(body)
@@ -216,7 +219,7 @@ export const httpPost = (url, data, options, callback) => {
   options.data = data
 
   debugRequest && console.log(`\n---send request-------${url}------------`)
-  return fetchData(url, 'post', options, function(err, resp, body) {
+  return fetchData(url, 'post', options, function (err, resp, body) {
     // options.isShowProgress && window.api.hideProgress()
     debugRequest && console.log(`\n---response------${url}------------`)
     debugRequest && console.log(body)
@@ -253,7 +256,7 @@ export const http_jsonp = (url, options, callback) => {
   // })
 
   debugRequest && console.log(`\n---send request-------${url}------------`)
-  return fetchData(url, 'get', options, function(err, resp, body) {
+  return fetchData(url, 'get', options, function (err, resp, body) {
     // options.isShowProgress && window.api.hideProgress()
     debugRequest && console.log(`\n---response------${url}------------`)
     debugRequest && console.log(body)
@@ -276,7 +279,7 @@ const handleDeflateRaw = data => new Promise((resolve, reject) => {
 
 const regx = /(?:\d\w)+/g
 
-const fetchData = async(url, method, {
+const fetchData = async (url, method, {
   headers = {},
   format = 'json',
   timeout = 15000,
