@@ -31,16 +31,14 @@
         <material-pagination :count="props.listInfo.total" :limit="props.listInfo.limit" :page="props.listInfo.page" @btn-click="togglePage" />
       </div>
     </div>
-    <transition enter-active-class="animated fadeIn" leave-active-class="animated fadeOut">
-      <div
-        v-show="props.listInfo.noItemLabel" :class="[$style.noitem, 'ui-state', { 'ui-state-error': isMessage(props.listInfo.noItemLabel, 'list__load_failed') }]"
-        role="status" :aria-busy="isMessage(props.listInfo.noItemLabel, 'list__loading')"
-      >
-        <span v-if="isMessage(props.listInfo.noItemLabel, 'list__loading')" class="ui-spinner" />
-        <p v-text="props.listInfo.noItemLabel" />
-        <base-btn v-if="isMessage(props.listInfo.noItemLabel, 'list__load_failed')" class="ui-state-retry" min @click="emit('retry')">{{ $t('reload') }}</base-btn>
-      </div>
-    </transition>
+    <div
+      v-show="props.listInfo.noItemLabel" :class="[$style.noitem, 'ui-state', { 'ui-state-error': isMessage(props.listInfo.noItemLabel, 'list__load_failed') }]"
+      role="status" :aria-busy="isMessage(props.listInfo.noItemLabel, 'list__loading')"
+    >
+      <span v-if="isMessage(props.listInfo.noItemLabel, 'list__loading')" class="ui-spinner" />
+      <p v-text="props.listInfo.noItemLabel" />
+      <base-btn v-if="isMessage(props.listInfo.noItemLabel, 'list__load_failed')" class="ui-state-retry" min @click="emit('retry')">{{ $t('reload') }}</base-btn>
+    </div>
   </div>
 </template>
 

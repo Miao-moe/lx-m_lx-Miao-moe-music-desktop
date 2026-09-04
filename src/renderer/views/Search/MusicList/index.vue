@@ -38,15 +38,9 @@ const {
   handlePlayList,
 } = useList()
 
-watch(() => [props.sourceId, props.page], ([sourceId, page]) => {
-  setTimeout(() => {
-    search(searchText.value, sourceId as SearchSource, page as number || 1)
-  })
-})
-watch(searchText, (searchText) => {
-  setTimeout(() => {
-    search(searchText, props.sourceId, props.page)
-  })
+watch(() => [searchText.value, props.sourceId, props.page] as const, ([text, sourceId, page]) => {
+  if (!text) return
+  search(text, sourceId, page || 1)
 }, {
   immediate: true,
 })

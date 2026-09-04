@@ -24,15 +24,9 @@ const route = useRoute()
 const router = useRouter()
 const { listRef, listInfo, search } = useList()
 
-watch(() => [props.type, props.sourceId, props.page], ([type, sourceId, page]) => {
-  setTimeout(() => {
-    search(type as EntityType, searchText.value, sourceId as SearchSource, page as number || 1)
-  })
-})
-watch(searchText, text => {
-  setTimeout(() => {
-    search(props.type, text, props.sourceId, props.page)
-  })
+watch(() => [props.type, searchText.value, props.sourceId, props.page] as const, ([type, text, sourceId, page]) => {
+  if (!text) return
+  search(type, text, sourceId, page || 1)
 }, { immediate: true })
 
 const togglePage = (page: number) => {

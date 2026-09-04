@@ -1,8 +1,8 @@
 <template>
   <div :class="$style.container">
     <div :class="$style.header">
-      <base-tab v-model="source" :list="sources" @change="handleSourceChange" />
-      <base-tab v-model="searchType" :list="searchTypes" @change="handleTypeChange" />
+      <base-tab :model-value="source" :list="sources" @change="handleSourceChange" />
+      <base-tab :model-value="searchType" :list="searchTypes" @change="handleTypeChange" />
     </div>
     <div :class="$style.main">
       <song-list-list v-if="searchType == 'songlist'" v-show="searchText" :page="page" :source-id="source" />
@@ -50,9 +50,15 @@ const verifyQueryParams = async(to, from, next) => {
   const _text = getQueryValue(to.query.text)
 
   if (_source == null || _type == null) {
-    const setting = await getSearchSetting()
-    _type ??= setting.type
-    _source ??= setting.source
+    try {
+      const setting = await getSearchSetting()
+      _type ??= setting.type
+      _source ??= setting.source
+    } catch (error) {
+      console.log(error)
+      _type ??= searchType.value
+      _source ??= source.value
+    }
   }
 
   const normalizedType = normalizeType(_type)

@@ -37,6 +37,7 @@ import musicSdk from '@renderer/utils/musicSdk'
 
 const sources = ['wy', 'tx', 'kg', 'kw', 'mg']
 const qualities = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'master']
+const extendedQualities = new Set(['hires', 'atmos', 'master'])
 const createResults = () => Object.fromEntries(sources.map(source => [source, Object.fromEntries(qualities.map(quality => [quality, 'unavailable']))]))
 
 export default {
@@ -80,31 +81,42 @@ export default {
       if (currentRunId != runId) return
       results[source][quality] = status
     }
-    const findSample = (list, quality) => {
-      return list.find(info => info._types?.[quality] || info.types?.some(item => item.type == quality)) ?? list[0]
+    const hasQuality = (info, quality) => {
+      const sampleQuality = extendedQualities.has(quality) ? 'flac24bit' : quality
+      return !!info._types?.[sampleQuality] || info.types?.some(item => item.type == sampleQuality)
+    }
+    const findSamples = (list, quality) => {
+      return list.filter(info => hasQuality(info, quality)).slice(0, 2)
     }
     const checkQuality = async(source, quality, list, currentRunId) => {
       const getMusicUrl = userApi.apis[source]?.getMusicUrl
-      const musicInfo = findSample(list, quality)
-      if (typeof getMusicUrl != 'function' || !musicInfo) {
-        updateResult(source, quality, 'unsupported', currentRunId)
+      const musicInfos = findSamples(list, quality)
+      if (typeof getMusicUrl != 'function' || !musicInfos.length) {
+        updateResult(source, quality, 'unavailable', currentRunId)
         return
       }
 
-      let cancel
-      try {
-        // Search results already use the legacy song shape expected by custom-source scripts.
-        const request = getMusicUrl(musicInfo, quality)
-        cancel = request?.canceleFn
-        if (typeof cancel == 'function') cancelFns.add(cancel)
-        const response = await (request?.promise ?? request)
-        const url = typeof response == 'string' ? response : response?.url
-        updateResult(source, quality, typeof url == 'string' && /^https?:\/\//.test(url) ? 'supported' : 'unsupported', currentRunId)
-      } catch (_) {
-        updateResult(source, quality, 'unsupported', currentRunId)
-      } finally {
-        if (cancel) cancelFns.delete(cancel)
+      for (const musicInfo of musicInfos) {
+        if (currentRunId != runId) return
+        let cancel
+        try {
+          // Search results already use the legacy song shape expected by custom-source scripts.
+          const request = getMusicUrl(musicInfo, quality)
+          cancel = request?.canceleFn
+          if (typeof cancel == 'function') cancelFns.add(cancel)
+          const response = await (request?.promise ?? request)
+          const url = typeof response == 'string' ? response : response?.url
+          if (typeof url == 'string' && /^https?:\/\//.test(url)) {
+            updateResult(source, quality, 'supported', currentRunId)
+            return
+          }
+        } catch (error) {
+          console.warn('[quality check] request failed:', source, quality, musicInfo.name, error)
+        } finally {
+          if (cancel) cancelFns.delete(cancel)
+        }
       }
+      updateResult(source, quality, 'unsupported', currentRunId)
     }
     const checkSource = async(source, currentRunId) => {
       const sourceQualities = qualities.filter(quality => results[source][quality] == 'pending')
@@ -113,12 +125,15 @@ export default {
       let list = []
       try {
         const search = musicSdk[source]?.musicSearch
+        if (typeof search?.search != 'function') throw new Error('Search is not supported')
         const response = await search.search('爱', 1, 10)
         list = Array.isArray(response?.list) ? response.list : []
-      } catch (_) {}
+      } catch (error) {
+        console.warn('[quality check] sample search failed:', source, error)
+      }
       if (currentRunId != runId) return
       if (!list.length) {
-        for (const quality of sourceQualities) updateResult(source, quality, 'unsupported', currentRunId)
+        for (const quality of sourceQualities) updateResult(source, quality, 'unavailable', currentRunId)
         return
       }
 
@@ -141,9 +156,11 @@ export default {
       if (!hasAvailableSource.value) return
 
       isChecking.value = true
-      const tasks = []
-      for (const source of sources) tasks.push(checkSource(source, currentRunId))
-      await Promise.all(tasks)
+      // 所有平台共用同一个自定义源，按平台串行检测，避免并发请求触发限流导致整表误判失败
+      for (const source of sources) {
+        if (currentRunId != runId) return
+        await checkSource(source, currentRunId)
+      }
       if (currentRunId == runId) isChecking.value = false
     }
     const handleClose = () => {

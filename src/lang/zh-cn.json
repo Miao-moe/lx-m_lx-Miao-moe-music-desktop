@@ -363,7 +363,7 @@
   "setting__basic_source_check_quality": "检测音源支持的音质",
   "setting__basic_source_check_quality_again": "重新检测",
   "setting__basic_source_check_quality_empty": "请先选择并成功初始化一个自定义源",
-  "setting__basic_source_check_quality_legend": "✓ 支持    ✗ 不支持    — 音源未声明",
+  "setting__basic_source_check_quality_legend": "✓ 支持    ✗ 请求失败    — 音源未声明或无可用样本",
   "setting__basic_source_check_quality_running": "正在检测，请稍候...",
   "setting__basic_source_check_quality_tip": "将搜索样本歌曲并请求每档音质的播放链接，结果仅代表本次样本检测。",
   "setting__basic_source_status_failed": "初始化失败",
