@@ -82,19 +82,19 @@ const buildHttpPromose = (url, options) => {
     },
   }
   obj.promise = new Promise((resolve, reject) => {
-    obj.cancelFn = reject
-    debugRequest && console.log(`\n---send request------${url}------------`)
+    obj.cancelFn = reject;
+    debugRequest && console.log(`\n---send request------${url}------------`);
     fetchData(url, options.method, options, (err, resp, body) => {
       // options.isShowProgress && window.api.hideProgress()
-      debugRequest && console.log(`\n---response------${url}------------`)
-      debugRequest && console.log(body)
-      obj.requestObj = null
-      obj.cancelFn = null
-      if (err) return reject(err)
-      resolve(resp)
+      debugRequest && console.log(`\n---response------${url}------------`);
+      debugRequest && console.log(body);
+      obj.requestObj = null;
+      obj.cancelFn = null;
+      if (err) return reject(err);
+      resolve(resp);
     }).then(ro => {
-      obj.requestObj = ro
-      if (obj.isCancelled) obj.cancelHttp()
+      obj.requestObj = ro;
+      if (obj.isCancelled) obj.cancelHttp();
     })
   })
   return obj
