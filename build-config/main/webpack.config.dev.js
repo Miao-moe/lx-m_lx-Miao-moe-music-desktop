@@ -14,9 +14,7 @@ module.exports = merge(baseConfig, {
   devtool: 'eval-source-map',
   plugins: [
     new webpack.DefinePlugin({
-      'process.env': {
-        NODE_ENV: '"development"',
-      },
+      'process.env.NODE_ENV': '"development"',
       webpackStaticPath: `"${path.join(__dirname, '../../src/static').replace(/\\/g, '\\\\')}"`,
       webpackUserApiPath: `"${path.join(__dirname, '../../src/main/modules/userApi').replace(/\\/g, '\\\\')}"`,
     }),

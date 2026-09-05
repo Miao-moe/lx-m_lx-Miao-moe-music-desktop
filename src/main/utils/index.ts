@@ -118,7 +118,7 @@ export const updateSetting = (setting?: Partial<LX.AppSetting>, isInit: boolean 
 
   let originSetting: LX.AppSetting
   if (isInit) {
-    setting &&= migrateSetting(setting)
+    setting = setting ? migrateSetting(setting) : {}
     applyInitSetting(setting as LX.AppSetting)
     originSetting = { ...defaultSetting }
   } else originSetting = global.lx.appSetting

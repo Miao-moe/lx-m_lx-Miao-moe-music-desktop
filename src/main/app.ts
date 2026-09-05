@@ -182,7 +182,11 @@ const copyRegularDirectory = (sourcePath: string, targetPath: string) => {
 }
 
 const backupDatabase = async(sourcePath: string, targetPath: string) => {
-  const database = new Database(sourcePath, { readonly: true, fileMustExist: true })
+  const database = new Database(sourcePath, {
+    readonly: true,
+    fileMustExist: true,
+    nativeBinding: path.join(__dirname, '../node_modules/better-sqlite3/build/Release/better_sqlite3.node'),
+  })
   try {
     await database.backup(targetPath)
   } finally {
