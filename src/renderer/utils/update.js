@@ -11,7 +11,7 @@ const request = async(url, retryNum = 0) => {
       follow: true,
       follow_max: 5,
       headers: {
-        'User-Agent': 'lx-music-desktop',
+        'User-Agent': 'lx-m-music-desktop',
         Accept: 'application/vnd.github+json',
       },
     }, (err, resp, body) => {

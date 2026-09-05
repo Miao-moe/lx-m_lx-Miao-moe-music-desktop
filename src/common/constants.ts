@@ -1,4 +1,9 @@
-export const URL_SCHEME_RXP = /^lxmusic:\/\//
+export const APP_ID = 'com.lx-m.music.desktop'
+export const APP_NAME = 'LX-M Music'
+export const APP_PROTOCOL_SCHEME = 'lxmmusic'
+export const LEGACY_APP_PROTOCOL_SCHEME = 'lxmusic'
+export const URL_SCHEME = 'lxmmusic://'
+export const URL_SCHEME_RXP = /^lxmmusic:\/\//
 
 export const SPLIT_CHAR = {
   DISLIKE_NAME: '@',

@@ -5,7 +5,7 @@ import fs from 'node:fs/promises'
 import { checkPath } from '@common/utils/nodejs'
 
 const getTempDir = async() => {
-  const tempDir = path.join(os.tmpdir(), 'lxmusic_temp')
+  const tempDir = path.join(os.tmpdir(), 'lx_m_music_temp')
   if (!await checkPath(tempDir)) {
     await fs.mkdir(tempDir, { recursive: true })
   }

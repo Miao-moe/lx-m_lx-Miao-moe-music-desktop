@@ -1,7 +1,8 @@
 import path from 'node:path'
-import { existsSync, mkdirSync, renameSync } from 'fs'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync } from 'fs'
 import { app, shell, screen, nativeTheme, dialog } from 'electron'
-import { URL_SCHEME_RXP } from '@common/constants'
+import { APP_ID, APP_NAME, APP_PROTOCOL_SCHEME, LEGACY_APP_PROTOCOL_SCHEME, URL_SCHEME_RXP } from '@common/constants'
+import Database from 'better-sqlite3'
 import { getProxy, getTheme, initHotKey, initSetting, parseEnvParams } from './utils'
 import { navigationUrlWhiteList } from '@common/config'
 import defaultSetting from '@common/defaultSetting'
@@ -88,8 +89,8 @@ export const initSingleInstanceHandle = () => {
   }
 
   app.on('second-instance', (event, argv, cwd) => {
+    const envParams = parseEnvParams(argv)
     if (isExistMainWindow()) {
-      const envParams = parseEnvParams(argv)
       if (envParams.deeplink) {
         global.envParams.deeplink = envParams.deeplink
         global.lx.event_app.deeplink(global.envParams.deeplink)
@@ -99,7 +100,8 @@ export const initSingleInstanceHandle = () => {
         showMainWindow()
       }
     } else {
-      app.quit()
+      Object.assign(global.envParams.cmdParams, envParams.cmdParams)
+      if (envParams.deeplink) global.envParams.deeplink = envParams.deeplink
     }
   })
 }
@@ -124,32 +126,171 @@ export const applyElectronEnvParams = () => {
   }
 }
 
+const legacyUserDataName = 'lx-music-desktop'
+const legacyRootFiles = ['config.json', 'data.json', 'hotKey.json', 'lyrics_edited.json', 'playList.json', 'userApi.json']
+const databaseFiles = new Set(['lx.data.db', 'lx.data.db-shm', 'lx.data.db-wal'])
+let legacyUserDataPath: string | null = null
+let prepareUserDataPromise: Promise<void> | null = null
+
+const assertNotLinked = (targetPath: string) => {
+  if (existsSync(targetPath) && lstatSync(targetPath).isSymbolicLink()) throw new Error(`Refuse to use linked data item: ${targetPath}`)
+}
+
+const assertNoLinkedItems = (targetPath: string) => {
+  if (!existsSync(targetPath)) return
+  const stat = lstatSync(targetPath)
+  if (stat.isSymbolicLink()) throw new Error(`Refuse to use linked data item: ${targetPath}`)
+  if (!stat.isDirectory()) return
+  for (const name of readdirSync(targetPath)) assertNoLinkedItems(path.join(targetPath, name))
+}
+
+const normalizeRealPath = (targetPath: string) => {
+  const realPath = path.normalize(realpathSync.native(targetPath))
+  return process.platform == 'win32' ? realPath.toLowerCase() : realPath
+}
+
+const assertSeparatedPaths = (sourcePath: string, targetPath: string) => {
+  const sourceRealPath = normalizeRealPath(sourcePath)
+  const targetRealPath = normalizeRealPath(targetPath)
+  if (sourceRealPath == targetRealPath || sourceRealPath.startsWith(`${targetRealPath}${path.sep}`) || targetRealPath.startsWith(`${sourceRealPath}${path.sep}`)) {
+    throw new Error(`Source and target user data paths overlap: ${sourcePath} -> ${targetPath}`)
+  }
+}
+
+const validateUserDataPath = (userDataPath: string, sourceUserDataPath?: string) => {
+  assertNotLinked(userDataPath)
+  assertNoLinkedItems(path.join(userDataPath, 'LxDatas'))
+  for (const name of legacyRootFiles) assertNotLinked(path.join(userDataPath, name))
+  if (!sourceUserDataPath || !existsSync(sourceUserDataPath)) return
+  assertNotLinked(sourceUserDataPath)
+  assertSeparatedPaths(sourceUserDataPath, userDataPath)
+}
+
+const copyRegularDirectory = (sourcePath: string, targetPath: string) => {
+  const sourceStat = lstatSync(sourcePath)
+  if (sourceStat.isSymbolicLink()) throw new Error(`Refuse to migrate linked directory: ${sourcePath}`)
+  mkdirSync(targetPath, { recursive: true })
+  for (const name of readdirSync(sourcePath)) {
+    if (databaseFiles.has(name)) continue
+    const sourceItemPath = path.join(sourcePath, name)
+    const targetItemPath = path.join(targetPath, name)
+    const stat = lstatSync(sourceItemPath)
+    if (stat.isSymbolicLink()) throw new Error(`Refuse to migrate linked item: ${sourceItemPath}`)
+    if (stat.isDirectory()) copyRegularDirectory(sourceItemPath, targetItemPath)
+    else if (stat.isFile()) copyFileSync(sourceItemPath, targetItemPath)
+  }
+}
+
+const backupDatabase = async(sourcePath: string, targetPath: string) => {
+  const database = new Database(sourcePath, { readonly: true, fileMustExist: true })
+  try {
+    await database.backup(targetPath)
+  } finally {
+    database.close()
+  }
+}
+
+const migrateSharedUserData = async() => {
+  const userDataPath = app.getPath('userData')
+  assertNotLinked(userDataPath)
+  for (const name of legacyRootFiles) assertNotLinked(path.join(userDataPath, name))
+  if (existsSync(global.lxDataPath)) {
+    assertNoLinkedItems(global.lxDataPath)
+    return
+  }
+  const sourceUserDataPath = legacyUserDataPath
+  if (!sourceUserDataPath || !existsSync(sourceUserDataPath)) return
+  assertNotLinked(sourceUserDataPath)
+  assertSeparatedPaths(sourceUserDataPath, userDataPath)
+
+  const legacyDataPath = path.join(sourceUserDataPath, 'LxDatas')
+  const hasLegacyFile = legacyRootFiles.some(name => existsSync(path.join(sourceUserDataPath, name)))
+  if (!existsSync(legacyDataPath) && !hasLegacyFile) return
+
+  const tempPath = `${global.lxDataPath}.migrating-${process.pid}`
+  try {
+    rmSync(tempPath, { recursive: true, force: true })
+    mkdirSync(tempPath, { recursive: true })
+    if (existsSync(legacyDataPath)) {
+      copyRegularDirectory(legacyDataPath, tempPath)
+      const legacyDatabasePath = path.join(legacyDataPath, 'lx.data.db')
+      if (existsSync(legacyDatabasePath)) {
+        if (lstatSync(legacyDatabasePath).isSymbolicLink()) throw new Error(`Refuse to migrate linked database: ${legacyDatabasePath}`)
+        await backupDatabase(legacyDatabasePath, path.join(tempPath, 'lx.data.db'))
+      }
+    }
+    for (const name of legacyRootFiles) {
+      const sourcePath = path.join(sourceUserDataPath, name)
+      const targetPath = path.join(app.getPath('userData'), name)
+      if (!existsSync(sourcePath) || existsSync(targetPath)) continue
+      if (lstatSync(sourcePath).isSymbolicLink()) throw new Error(`Refuse to migrate linked item: ${sourcePath}`)
+      copyFileSync(sourcePath, targetPath)
+    }
+    renameSync(tempPath, global.lxDataPath)
+    console.log(`migrated shared user data: ${sourceUserDataPath} -> ${app.getPath('userData')}`)
+  } catch (error) {
+    rmSync(tempPath, { recursive: true, force: true })
+    throw error
+  }
+}
+
+export const prepareUserData = async() => {
+  await (prepareUserDataPromise ??= migrateSharedUserData().then(() => {
+    if (!existsSync(global.lxDataPath)) mkdirSync(global.lxDataPath, { recursive: true })
+  }))
+}
+
 export const setUserDataPath = () => {
+  app.setName(APP_NAME)
+  if (process.platform == 'win32') app.setAppUserModelId(APP_ID)
+  let userDataPath: string
+
   // windows平台下如果应用目录下存在 portable 文件夹则将数据存在此文件下
   if (process.platform == 'win32') {
-    const portablePath = path.join(path.dirname(app.getPath('exe')), '/portable')
+    const executableDir = process.env.PORTABLE_EXECUTABLE_DIR ?? path.dirname(app.getPath('exe'))
+    const portablePath = path.join(executableDir, 'portable')
     if (existsSync(portablePath)) {
+      assertNotLinked(portablePath)
       app.setPath('appData', portablePath)
-      const appDataPath = path.join(portablePath, '/userData')
-      if (!existsSync(appDataPath)) mkdirSync(appDataPath)
-      app.setPath('userData', appDataPath)
+      userDataPath = path.join(portablePath, 'userData')
+      mkdirSync(userDataPath, { recursive: true })
+      validateUserDataPath(userDataPath)
+      app.setPath('userData', userDataPath)
+    } else {
+      const appDataPath = app.getPath('appData')
+      userDataPath = path.join(appDataPath, APP_NAME)
+      legacyUserDataPath = path.join(appDataPath, legacyUserDataName)
+      mkdirSync(userDataPath, { recursive: true })
+      validateUserDataPath(userDataPath, legacyUserDataPath)
+      app.setPath('userData', userDataPath)
     }
+  } else {
+    const appDataPath = app.getPath('appData')
+    userDataPath = path.join(appDataPath, APP_NAME)
+    legacyUserDataPath = path.join(appDataPath, legacyUserDataName)
+    mkdirSync(userDataPath, { recursive: true })
+    validateUserDataPath(userDataPath, legacyUserDataPath)
+    app.setPath('userData', userDataPath)
   }
 
-  const userDataPath = app.getPath('userData')
+  log.transports.file.resolvePathFn = () => path.join(app.getPath('userData'), 'logs', 'main.log')
   global.lxOldDataPath = userDataPath
   global.lxDataPath = path.join(userDataPath, 'LxDatas')
-  if (!existsSync(global.lxDataPath)) mkdirSync(global.lxDataPath)
 }
 
 export const registerDeeplink = (startApp: () => void) => {
-  if (process.env.NODE_ENV !== 'production' && process.platform === 'win32') {
+  if (process.platform === 'win32') {
+    const protocolArgs = process.env.NODE_ENV !== 'production' && process.argv[1]
+      ? [path.resolve(process.argv[1])]
+      : []
+    if (app.isDefaultProtocolClient(LEGACY_APP_PROTOCOL_SCHEME, process.execPath, protocolArgs)) {
+      app.removeAsDefaultProtocolClient(LEGACY_APP_PROTOCOL_SCHEME, process.execPath, protocolArgs)
+    }
     // Set the path of electron.exe and your app.
     // These two additional parameters are only available on windows.
-    // console.log(process.execPath, process.argv)
-    app.setAsDefaultProtocolClient('lxmusic', process.execPath, process.argv.slice(1))
+    app.setAsDefaultProtocolClient(APP_PROTOCOL_SCHEME, process.execPath, protocolArgs)
   } else {
-    app.setAsDefaultProtocolClient('lxmusic')
+    app.setAsDefaultProtocolClient(APP_PROTOCOL_SCHEME)
   }
 
   // deep link

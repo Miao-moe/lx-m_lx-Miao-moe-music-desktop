@@ -1,6 +1,7 @@
 {
-  "name": "lx-music-desktop",
+  "name": "lx-m-music-desktop",
   "version": "1.3.1",
+  "productName": "LX-M Music",
   "description": "一个免费的音乐查找助手",
   "main": "./dist/main.js",
   "scripts": {
@@ -76,16 +77,16 @@
   },
   "macLanguagesInfoPlistStrings": {
     "en": {
-      "CFBundleDisplayName": "LX Music",
-      "CFBundleName": "LX Music"
+      "CFBundleDisplayName": "LX-M Music",
+      "CFBundleName": "LX-M Music"
     },
     "zh_CN": {
-      "CFBundleDisplayName": "LX Music",
-      "CFBundleName": "LX Music"
+      "CFBundleDisplayName": "LX-M Music",
+      "CFBundleName": "LX-M Music"
     },
     "zh_TW": {
-      "CFBundleDisplayName": "LX Music",
-      "CFBundleName": "LX Music"
+      "CFBundleDisplayName": "LX-M Music",
+      "CFBundleName": "LX-M Music"
     }
   },
   "repository": {

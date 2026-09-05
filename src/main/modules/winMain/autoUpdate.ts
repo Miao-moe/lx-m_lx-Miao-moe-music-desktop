@@ -32,7 +32,7 @@ const downloadUpdate = async({ downloadUrl: url, fileName, digest }: LX.UpdateDo
     return
   }
   isDownloading = true
-  const tempName = fileName || `lx-music-desktop-update-${Date.now()}`
+  const tempName = fileName || `lx-m-music-desktop-update-${Date.now()}`
   const tempPath = path.join(os.tmpdir(), tempName)
   log.info(`update download start: ${url} -> ${tempPath}`)
 
@@ -43,7 +43,7 @@ const downloadUpdate = async({ downloadUrl: url, fileName, digest }: LX.UpdateDo
       dispatcher,
       headersTimeout: 30000,
       bodyTimeout: 0,
-      headers: { 'User-Agent': 'lx-music-desktop' },
+      headers: { 'User-Agent': 'lx-m-music-desktop' },
     })
 
     if (response.statusCode !== 200) {

@@ -10,13 +10,13 @@ const afterPack = require('./build-after-pack')
 */
 const options = {
   appId: 'com.lx-m.music.desktop',
-  productName: 'Lx-m Music',
+  productName: 'LX-M Music',
   beforePack,
   afterPack,
   protocols: {
     name: 'lx-m-music-protocol',
     schemes: [
-      'lxmusic',
+      'lxmmusic',
     ],
   },
   directories: {
@@ -73,7 +73,7 @@ const winOptions = {
     allowToChangeInstallationDirectory: true,
     // differentialPackage: true,
     license: './licenses/license.rtf',
-    shortcutName: 'Lx-m Music',
+    shortcutName: 'LX-M Music',
   },
 }
 /**
@@ -92,11 +92,11 @@ const linuxOptions = {
       // https://specifications.freedesktop.org/desktop-entry-spec/latest/example.html
       // https://developer.gnome.org/documentation/guidelines/maintainer/integrating.html#desktop-files
       entry: {
-        Name: 'Lx-m Music',
-        'Name[zh_CN]': 'Lx-m Music',
-        'Name[zh_TW]': 'Lx-m Music',
+        Name: 'LX-M Music',
+        'Name[zh_CN]': 'LX-M Music',
+        'Name[zh_TW]': 'LX-M Music',
         Encoding: 'UTF-8',
-        MimeType: 'x-scheme-handler/lxmusic',
+        MimeType: 'x-scheme-handler/lxmmusic',
         StartupNotify: 'false',
       },
     },
@@ -133,7 +133,7 @@ const macOptions = {
         path: '/Applications',
       },
     ],
-    title: 'Lx-m Music v${version}',
+    title: 'LX-M Music v${version}',
   },
 }
 

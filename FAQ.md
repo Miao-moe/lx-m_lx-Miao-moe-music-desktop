@@ -368,18 +368,18 @@ Windows 7 未开启 Aero 效果时桌面歌词会有问题，详情看上面的 
 脚本安装地址：<https://greasyfork.org/zh-CN/scripts/438148><br>
 以下是目前可用的Scheme URL调用方式：
 
-- URL统一以`lxmusic://`开头
+- URL统一以`lxmmusic://`开头
 - 若无特别说明，源的可用值为：`kw/kg/tx/wy/mg`
 - 若无特别说明，音质的可用值为：`128k/320k/flac/flac24bit`
 
 目前支持两种传参方式：
 
-- 通过`data`传参，以经过URL编码的JSON数据传参，例：`lxmusic://music/play?data=xxxx`，其中`xxxx`为经过URL编码后的JSON数据，支持复杂的参数调用
-- 通过`URL`传参，适用于简单传参的调用，不需要转成JSON格式，例：`lxmusic://music/search/xxxx`，但仍然需要对数据进行URL编码，只适应于简单参数调用（v1.18.0新增）
+- 通过`data`传参，以经过URL编码的JSON数据传参，例：`lxmmusic://music/play?data=xxxx`，其中`xxxx`为经过URL编码后的JSON数据，支持复杂的参数调用
+- 通过`URL`传参，适用于简单传参的调用，不需要转成JSON格式，例：`lxmmusic://music/search/xxxx`，但仍然需要对数据进行URL编码，只适应于简单参数调用（v1.18.0新增）
 
 ### `data`方式传参
 
-以经过URL编码的JSON数据传参，例：`lxmusic://music/play?data=xxxx`，其中`xxxx`为经过URL编码后的JSON数据，JSON数据内容取决于下表的参数部分
+以经过URL编码的JSON数据传参，例：`lxmmusic://music/play?data=xxxx`，其中`xxxx`为经过URL编码后的JSON数据，JSON数据内容取决于下表的参数部分
 
 | 描述 | URL | 参数
 | --- | --- | ---

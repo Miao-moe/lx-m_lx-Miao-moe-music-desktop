@@ -1,5 +1,6 @@
 import { onBeforeUnmount } from '@common/utils/vueTools'
 import { clearEnvParamsDeeplink, focusWindow, onDeeplink } from '@renderer/utils/ipc'
+import { APP_PROTOCOL_SCHEME } from '@common/constants'
 
 import { useDialog } from './utils'
 import useMusicAction from './useMusicAction'
@@ -18,8 +19,10 @@ export default () => {
 
   const handleLinkAction = async(link: string) => {
     // console.log(link)
-    const [url, search] = link.split('?')
-    const [type, action, ...paths] = url.replace('lxmusic://', '').split('/')
+    const url = new URL(link)
+    if (url.protocol.toLowerCase() != `${APP_PROTOCOL_SCHEME}:`) throw new Error('Invalid URL scheme')
+    const [action, ...paths] = url.pathname.split('/').filter(Boolean)
+    const type = url.hostname
     const params: {
       paths: string[]
       data?: any
@@ -27,13 +30,8 @@ export default () => {
     } = {
       paths: [],
     }
-    if (search) {
-      for (const param of search.split('&')) {
-        const [key, value] = param.split('=')
-        params[key] = value
-      }
-      if (params.data) params.data = JSON.parse(decodeURIComponent(params.data))
-    }
+    for (const [key, value] of url.searchParams) params[key] = value
+    if (params.data) params.data = JSON.parse(params.data)
     params.paths = paths.map(p => decodeURIComponent(p))
     console.log(params)
     switch (type) {

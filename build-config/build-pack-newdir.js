@@ -1,3 +1,5 @@
+/* eslint-disable no-template-curly-in-string */
+
 const builder = require('electron-builder')
 const beforePack = require('./build-before-pack')
 const afterPack = require('./build-after-pack')
@@ -8,7 +10,7 @@ builder.build({
   x64: true,
   config: {
     appId: 'com.lx-m.music.desktop',
-    productName: 'Lx-m Music',
+    productName: 'LX-M Music',
     beforePack,
     afterPack,
     directories: {
@@ -46,12 +48,12 @@ builder.build({
       language: '2052',
       allowToChangeInstallationDirectory: true,
       license: './licenses/license.rtf',
-      shortcutName: 'Lx-m Music',
+      shortcutName: 'LX-M Music',
       artifactName: '${productName}-v${version}-x64-Setup.${ext}',
     },
     protocols: {
       name: 'lx-m-music-protocol',
-      schemes: ['lxmusic'],
+      schemes: ['lxmmusic'],
     },
   },
 }).then(() => {
