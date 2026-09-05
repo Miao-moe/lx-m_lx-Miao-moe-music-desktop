@@ -1,6 +1,6 @@
 {
   "name": "lx-m-music-desktop",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "productName": "LX-M Music",
   "description": "一个免费的音乐查找助手",
   "main": "./dist/main.js",
