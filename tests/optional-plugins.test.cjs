@@ -53,7 +53,7 @@ async function fixture(t) {
 test('the distributable official plugins pass all package checks', async() => {
   const root = path.join(project, 'plugins/official')
   const catalog = parseCatalog(await fs.readFile(path.join(root, 'catalog-v2.json')))
-  assert.equal(catalog.plugins.length, 3)
+  assert.deepEqual(catalog.plugins.map(entry => entry.id).sort(), ['audio-tag-editor', 'audio-visualizer', 'folia-lyrics', 'sound-effects'])
   const legacy = parseCatalog(await fs.readFile(path.join(root, 'catalog.json')))
   assert.deepEqual(legacy.plugins.map(entry => entry.id), ['sound-effects', 'audio-visualizer'])
   for (const entry of catalog.plugins) {
@@ -66,12 +66,17 @@ test('the distributable official plugins pass all package checks', async() => {
       assert.ok(result.files.some(file => file.path === 'lyric.js'))
       assert.ok(result.files.some(file => file.path === 'NOTICE.md'))
       assert.ok(result.files.some(file => file.path === 'licenses/audioMotion-AGPL-3.0.txt'))
-    } else {
+    } else if (entry.id === 'folia-lyrics') {
       assert.equal(result.manifest.apiVersion, 2)
       for (const name of ['engine/index.html', 'engine/engine.js', 'engine/engine.css', 'source.tar.gz', 'LICENSE', 'NOTICE.md', 'licenses/THIRD-PARTY.txt']) {
         assert.ok(result.files.some(file => file.path === name), name)
       }
       assert.throws(() => unpackPlugin(bytes, { ...entry, apiVersion: 1 }))
+    } else if (entry.id === 'audio-tag-editor') {
+      assert.equal(result.manifest.apiVersion, 2)
+      for (const name of ['renderer.css', 'NOTICE.md', 'licenses/node-id3-MIT.txt', 'licenses/iconv-lite-MIT.txt']) {
+        assert.ok(result.files.some(file => file.path === name), name)
+      }
     }
   }
 })

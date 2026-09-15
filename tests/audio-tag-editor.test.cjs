@@ -1,0 +1,170 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs/promises')
+const path = require('node:path')
+const os = require('node:os')
+const { test } = require('node:test')
+const NodeID3 = require('node-id3')
+const { readTags, saveTags } = require('../src/optional-plugins/audio-tag-editor/metadata')
+const { mp3, flac } = require('./helpers/tag-fixtures.cjs')
+
+async function fixture(t, extension, bytes) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'lx-tag-editor-'))
+  t.after(async() => {
+    assert.ok(path.resolve(directory).startsWith(path.join(os.tmpdir(), 'lx-tag-editor-')))
+    await fs.rm(directory, { recursive: true, force: true })
+  })
+  const filename = path.join(directory, '测试 日本語 song.' + extension)
+  await fs.writeFile(filename, bytes)
+  return { filename, directory }
+}
+
+for (const version of [3, 4]) {
+  test(`MP3 ID3v2.${version}: Unicode edits preserve audio, artwork, lyrics and unknown frames`, async t => {
+    const imageBuffer = Buffer.from('artwork payload')
+    const original = mp3({ title: 'Before', artist: 'Original artist', album: 'Keep album',
+      image: { mime: 'image/png', type: { id: 3 }, description: 'Cover', imageBuffer },
+      unsynchronisedLyrics: { language: 'eng', text: '[00:00.00]Keep lyrics' },
+      userDefinedText: [{ description: 'REPLAYGAIN_TRACK_GAIN', value: '-5.5 dB' }],
+    }, version)
+    const { filename } = await fixture(t, 'MP3', original.bytes)
+    const snapshot = await readTags(filename)
+    assert.equal(snapshot.tags.album, 'Keep album')
+    const saved = await saveTags(snapshot, { title: '咖啡 — コーヒーカップ', artist: '鎖那', albumArtist: 'Various Artists', track: '2/12', comment: '第一行\nSecond line' })
+    assert.equal(saved.tags.title, '咖啡 — コーヒーカップ')
+    const bytes = await fs.readFile(filename)
+    const tags = NodeID3.read(bytes)
+    assert.equal(tags.title, '咖啡 — コーヒーカップ')
+    assert.equal(tags.performerInfo, 'Various Artists')
+    assert.equal(tags.trackNumber, '2/12')
+    assert.equal(tags.album, 'Keep album')
+    assert.equal(tags.comment.text, '第一行\nSecond line')
+    assert.deepEqual(tags.image.imageBuffer, imageBuffer)
+    assert.equal(tags.unsynchronisedLyrics.text, '[00:00.00]Keep lyrics')
+    assert.equal(tags.userDefinedText[0].value, '-5.5 dB')
+    assert.deepEqual(bytes.subarray(-original.audio.length), original.audio)
+    assert.ok(bytes.includes(original.extra))
+    assert.equal(bytes[3], version)
+  })
+}
+
+test('FLAC: edits and clearing preserve vendor, repeated artists, custom tags, blocks and audio', async t => {
+  const original = flac(['TITLE=Before', 'ARTIST=One', 'ARTIST=Two', 'ALBUM=Keep album', 'LYRICS=[00:00.00]Keep lyrics', 'REPLAYGAIN_TRACK_GAIN=-6 dB', 'COMMENT=Remove me'])
+  const { filename } = await fixture(t, 'flac', original.bytes)
+  let snapshot = await readTags(filename)
+  assert.equal(snapshot.tags.artist, 'One; Two')
+  snapshot = await saveTags(snapshot, { title: '更新した曲名', albumArtist: '鎖那', comment: '', genre: 'J-Pop' })
+  assert.equal(snapshot.tags.title, '更新した曲名')
+  assert.equal(snapshot.tags.comment, '')
+  const bytes = await fs.readFile(filename)
+  for (const value of [original.application, original.picture, Buffer.from('Original vendor'), Buffer.from('ARTIST=One'), Buffer.from('ARTIST=Two'), Buffer.from('LYRICS=[00:00.00]Keep lyrics'), Buffer.from('REPLAYGAIN_TRACK_GAIN=-6 dB')]) assert.ok(bytes.includes(value))
+  assert.deepEqual(bytes.subarray(-original.audio.length), original.audio)
+  assert.equal(bytes.includes(Buffer.from('Remove me')), false)
+  const { parseFile } = await import('music-metadata')
+  const metadata = await parseFile(filename)
+  assert.equal(metadata.common.title, '更新した曲名')
+  assert.equal(metadata.common.albumartist, '鎖那')
+  assert.deepEqual(metadata.common.artists, ['One', 'Two'])
+})
+
+test('MP3: clearing a field also clears its ID3v1 fallback and keeps other legacy values', async t => {
+  const original = mp3({ title: 'Before', album: 'Keep' })
+  const legacy = Buffer.alloc(128)
+  legacy.write('TAG'); legacy.write('Legacy title', 3); legacy.write('Legacy artist', 33)
+  const { filename } = await fixture(t, 'mp3', Buffer.concat([original.bytes, legacy]))
+  const snapshot = await readTags(filename)
+  assert.equal(snapshot.tags.artist, 'Legacy artist')
+  const saved = await saveTags(snapshot, { title: '' })
+  assert.equal(saved.tags.title, '')
+  assert.equal(saved.tags.artist, 'Legacy artist')
+  assert.equal(saved.tags.album, 'Keep')
+  const bytes = await fs.readFile(filename)
+  assert.ok(bytes.subarray(-125, -95).every(value => value === 0))
+})
+
+test('MP3: editing a normal comment keeps described application comments', async t => {
+  const original = mp3({ title: 'Song', comment: { language: 'eng', shortText: 'iTunNORM', text: 'Keep volume data' } })
+  const { filename } = await fixture(t, 'mp3', original.bytes)
+  let snapshot = await readTags(filename)
+  assert.equal(snapshot.tags.comment, '')
+  snapshot = await saveTags(snapshot, { comment: 'My comment' })
+  assert.equal(snapshot.tags.comment, 'My comment')
+  await saveTags(snapshot, { comment: '' })
+  const bytes = await fs.readFile(filename)
+  assert.ok(bytes.includes(NodeID3.create({ comment: { language: 'eng', shortText: 'iTunNORM', text: 'Keep volume data' } }).subarray(10)))
+})
+
+test('saving unchanged tags leaves the file byte-for-byte and timestamps unchanged', async t => {
+  const original = mp3({ title: 'Keep' })
+  const { filename } = await fixture(t, 'mp3', original.bytes)
+  const snapshot = await readTags(filename)
+  const result = await saveTags(snapshot, snapshot.tags)
+  assert.equal(result.revision, snapshot.revision)
+  assert.deepEqual(await fs.readFile(filename), original.bytes)
+})
+
+test('an untagged MP3 gains tags without losing any bytes across copy chunks', async t => {
+  const audio = Buffer.concat(Array.from({ length: 700 }, () => mp3().audio))
+  const { filename } = await fixture(t, 'mp3', audio)
+  const snapshot = await readTags(filename)
+  assert.equal(snapshot.tags.title, '')
+  const saved = await saveTags(snapshot, { title: 'New title' })
+  assert.equal(saved.tags.title, 'New title')
+  const bytes = await fs.readFile(filename)
+  assert.deepEqual(bytes.subarray(-audio.length), audio)
+})
+
+test('a failed temporary write keeps the original file and cleans up the partial replacement', async t => {
+  const original = mp3({ title: 'Before' })
+  const { filename, directory } = await fixture(t, 'mp3', original.bytes)
+  const snapshot = await readTags(filename)
+  const open = fs.open.bind(fs)
+  const mock = t.mock.method(fs, 'open', async(...args) => {
+    const file = await open(...args)
+    if (args[1] === 'wx') file.writeFile = async() => { throw Object.assign(new Error('Disk full'), { code: 'ENOSPC' }) }
+    return file
+  })
+  await assert.rejects(saveTags(snapshot, { title: 'After' }), { code: 'ENOSPC' })
+  mock.mock.restore()
+  assert.deepEqual(await fs.readFile(filename), original.bytes)
+  assert.deepEqual(await fs.readdir(directory), [path.basename(filename)])
+})
+
+test('external edits are detected before saving and are never overwritten', async t => {
+  const original = mp3({ title: 'Before' })
+  const { filename } = await fixture(t, 'mp3', original.bytes)
+  const snapshot = await readTags(filename)
+  const changed = mp3({ title: 'Changed in another editor' }).bytes
+  await fs.writeFile(filename, changed)
+  await assert.rejects(saveTags(snapshot, { title: 'Stale edit' }), { code: 'FILE_CHANGED' })
+  assert.deepEqual(await fs.readFile(filename), changed)
+})
+
+test('replacement failure keeps the original file and removes its temporary copy', async t => {
+  const original = flac(['TITLE=Before'])
+  const { filename, directory } = await fixture(t, 'flac', original.bytes)
+  const snapshot = await readTags(filename)
+  const mock = t.mock.method(fs, 'rename', async() => { throw Object.assign(new Error('In use'), { code: 'EBUSY' }) })
+  await assert.rejects(saveTags(snapshot, { title: 'After' }), { code: 'EBUSY' })
+  mock.mock.restore()
+  assert.deepEqual(await fs.readFile(filename), original.bytes)
+  assert.deepEqual(await fs.readdir(directory), [path.basename(filename)])
+})
+
+test('malformed files, unsupported tags, missing paths and invalid edits fail without writes', async t => {
+  const { filename } = await fixture(t, 'mp3', Buffer.from('not an audio file'))
+  await assert.rejects(readTags(filename), { code: 'INVALID_FILE' })
+  const original = mp3({ title: 'Before' }).bytes
+  original[5] = 0x40
+  await fs.writeFile(filename, original)
+  await assert.rejects(readTags(filename), { code: 'UNSUPPORTED_TAG' })
+  assert.deepEqual(await fs.readFile(filename), original)
+  original[5] = 0
+  await fs.writeFile(filename, original)
+  const snapshot = await readTags(filename)
+  await assert.rejects(saveTags(snapshot, { title: 'a\0b' }), { code: 'INVALID_TAGS' })
+  await assert.rejects(saveTags(snapshot, { filePath: 'elsewhere' }), { code: 'INVALID_TAGS' })
+  assert.deepEqual(await fs.readFile(filename), original)
+  await assert.rejects(readTags(filename + '.wav'), { code: 'UNSUPPORTED_FILE' })
+  await fs.unlink(filename)
+  await assert.rejects(readTags(filename), { code: 'ENOENT' })
+})

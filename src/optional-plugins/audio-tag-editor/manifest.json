@@ -1,0 +1,7 @@
+{
+  "id": "audio-tag-editor",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "entry": "renderer.js",
+  "styles": ["renderer.css"]
+}

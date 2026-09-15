@@ -1,0 +1,9 @@
+{
+  "name": { "zh-cn": "音频标签编辑", "zh-tw": "音訊標籤編輯", "en-us": "Audio Tag Editor" },
+  "description": {
+    "zh-cn": "修改已下载 MP3、FLAC 文件的标题、艺术家、专辑、年份、流派和备注，保留音频、封面与歌词。",
+    "zh-tw": "修改已下載 MP3、FLAC 檔案的標題、演出者、專輯、年份、類型和備註，保留音訊、封面與歌詞。",
+    "en-us": "Edit titles, artists, albums, years, genres and comments in downloaded MP3 and FLAC files, preserving audio, artwork and lyrics."
+  },
+  "icon": "#icon-music"
+}

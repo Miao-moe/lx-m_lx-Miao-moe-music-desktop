@@ -124,6 +124,14 @@ async function main() {
       await fs.copyFile(path.join(root, 'node_modules/audiomotion-analyzer/LICENSE'), path.join(licenses, 'audioMotion-AGPL-3.0.txt'))
       await fs.copyFile(path.join(source, 'NOTICE.md'), path.join(output, 'NOTICE.md'))
     }
+    if (id === 'audio-tag-editor') {
+      const licenses = path.join(output, 'licenses')
+      await fs.mkdir(licenses, { recursive: true })
+      for (const name of ['node-id3', 'iconv-lite', 'safer-buffer']) {
+        await fs.copyFile(path.join(root, 'node_modules', name, 'LICENSE'), path.join(licenses, `${name}-MIT.txt`))
+      }
+      await fs.copyFile(path.join(source, 'NOTICE.md'), path.join(output, 'NOTICE.md'))
+    }
     if (id === 'folia-lyrics') {
       execFileSync(process.execPath, [path.join(source, 'engine/build.mjs')], { cwd: root, stdio: 'inherit' })
       await fs.copyFile(path.join(source, 'NOTICE.md'), path.join(output, 'NOTICE.md'))
