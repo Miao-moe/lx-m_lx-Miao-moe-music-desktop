@@ -10,9 +10,7 @@ material-modal(:show="isShowChangeLog" max-width="60%" @close="isShowChangeLog =
           pre(:class="$style.desc" v-text="info.desc")
       div(v-if="info.history.length" :class="[$style.history, $style.desc]")
         h3 历史版本：
-        div(v-for="(ver, index) in info.history" :key="index" :class="$style.item")
-          h4 v{{ ver.version }}
-          pre(v-text="ver.desc")
+        pre(v-text="historyDesc")
 
     div(:class="$style.footer")
       div(:class="$style.desc")
@@ -29,6 +27,7 @@ import { openUrl, clipboardWriteText } from '@common/utils/electron'
 import { versionInfo, isShowChangeLog } from '@renderer/store'
 import { getLastStartInfo } from '@renderer/utils/ipc'
 import { computed, ref } from '@common/utils/vueTools'
+import { formatChangeLog } from '@renderer/utils/changeLog'
 
 export default {
   setup() {
@@ -56,7 +55,7 @@ export default {
           switch (compareVer(ver.version, currentVer)) {
             case 0:
               info.version = ver.version
-              info.desc = ver.desc
+              info.desc = formatChangeLog(ver.desc)
               break
             case -1:
               if (compareVer(lastStartVer, ver.version) < 0) info.history.push(ver)
@@ -66,7 +65,7 @@ export default {
         const verInfo = history.find(v => v.version == currentVer)
         if (verInfo) {
           info.version = verInfo.version
-          info.desc = verInfo.desc
+          info.desc = formatChangeLog(verInfo.desc)
         } else {
           info.desc = '未找到当前版本的更新日志'
           info.version = currentVer
@@ -75,11 +74,13 @@ export default {
 
       return info
     })
+    const historyDesc = computed(() => info.value.history.map(ver => formatChangeLog(ver.desc, ver.version)).join('\n\n'))
     return {
       openUrl,
       clipboardWriteText,
       versionInfo,
       info,
+      historyDesc,
       isShowChangeLog,
     }
   },
@@ -157,23 +158,6 @@ export default {
   h3 {
     padding-top: 15px;
   }
-
-  .item {
-    h3 {
-      padding: 5px 0 3px;
-    }
-    padding: 0 15px;
-    + .item {
-      padding-top: 15px;
-    }
-    h4 {
-      font-weight: 700;
-    }
-    > p {
-      padding-left: 15px;
-    }
-  }
-
 }
 .footer {
   flex: 0 0 none;

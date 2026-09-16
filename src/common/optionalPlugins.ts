@@ -1,7 +1,7 @@
-export const OFFICIAL_PLUGIN_ROOT = 'https://raw.githubusercontent.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/master/plugins/official/'
-export const PLUGIN_API_VERSION = 2
-export const PLUGIN_CATALOG_FILE = 'catalog-v2.json'
-export const isPluginApiSupported = (version: number) => version === 1 || version === PLUGIN_API_VERSION
+export const OFFICIAL_PLUGIN_ROOT = 'https://raw.githubusercontent.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/master/plugins/store/'
+export const PLUGIN_API_VERSION = 3
+export const PLUGIN_CATALOG_FILE = 'catalog.json'
+export const isPluginApiSupported = (version: number) => version === 1 || version === 2 || version === PLUGIN_API_VERSION
 export type PluginId = string
 export type PluginText = string | Record<string, string>
 
@@ -31,14 +31,28 @@ export interface PluginCatalogEntry extends PluginDisplayInfo {
   sha256: string
 }
 
+export interface PluginSourceManifest extends PluginDisplayInfo {
+  format: 'lx-m-plugin-source'
+  formatVersion: 1
+  id: PluginId
+  version: string
+  apiVersion: number
+  entry: string
+  lyricEntry?: string
+  files: PluginManifest['files']
+  assets?: Array<{ from: string, to: string }>
+  browser?: { entry: string, output: 'engine', tailwind?: boolean, aliases?: Record<string, string>, replacements?: Array<{ from: string, to: string }> }
+}
+
 export interface PluginCatalog {
-  schemaVersion: 1
+  schemaVersion: 2
   plugins: PluginCatalogEntry[]
 }
 
 export interface InstalledPlugin {
   manifest: PluginManifest
   directory: string
+  source?: 'official' | 'local'
 }
 
 export interface PluginStoreSnapshot {
@@ -46,7 +60,22 @@ export interface PluginStoreSnapshot {
   catalog: PluginCatalogEntry[]
   installed: Partial<Record<PluginId, InstalledPlugin>>
   errors: Partial<Record<PluginId, string>>
+  sources?: Partial<Record<PluginId, 'official' | 'local'>>
   catalogError: string | null
+}
+
+export type PluginTransferErrorCode = 'invalid_package' | 'incompatible' | 'read_failed' | 'write_failed' | 'changed' | 'not_installed' | 'corrupt_installation' | 'invalid_destination' | 'busy' | 'compile_failed'
+export type PluginTransferResult<T> = { status: 'success', value: T } | { status: 'cancelled' } | { status: 'error', code: PluginTransferErrorCode, detail?: string }
+export interface PluginTransferLabels {
+  title: string
+  filter: string
+  confirm: string
+  cancel: string
+  trust: string
+  install: string
+  replace: string
+  downgrade: string
+  unknownVersion: string
 }
 
 export const PLUGIN_IPC = {
@@ -54,10 +83,13 @@ export const PLUGIN_IPC = {
   refresh: 'optional_plugins:refresh',
   install: 'optional_plugins:install',
   uninstall: 'optional_plugins:uninstall',
+  import: 'optional_plugins:import',
+  export: 'optional_plugins:export',
+  progress: 'optional_plugins:progress',
   changed: 'optional_plugins:changed',
 } as const
 
-// Catalog membership grants installation; this validates names used as paths and object keys.
+// Validate names used as paths and object keys for both catalog and local plugins.
 export const isPluginId = (value: unknown): value is PluginId => typeof value == 'string' && value.length <= 64 &&
   /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value) &&
   !/^(constructor|prototype|con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(value)

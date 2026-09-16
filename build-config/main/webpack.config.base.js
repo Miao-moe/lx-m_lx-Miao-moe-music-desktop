@@ -45,5 +45,10 @@ module.exports = {
   },
   plugins: [
     new ESLintPlugin(),
+    {
+      apply(compiler) {
+        compiler.hooks.afterEmit.tapPromise('PluginCompilerResources', () => require('../plugins/stage-compiler.cjs').stageCompiler())
+      },
+    },
   ],
 }

@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
     padding: 1px;
     cursor: pointer;
     color: var(--color-font-label);
-    transition: background-color 0.2s ease-in-out;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
     &.hover {
       &.min, &.max {
         background-color: var(--color-button-background-hover);

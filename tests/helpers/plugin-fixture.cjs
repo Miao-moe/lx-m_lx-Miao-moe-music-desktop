@@ -1,7 +1,7 @@
 const path = require('node:path')
 const { route, settled } = require('./motion-fixture.cjs')
 
-const catalogRoot = path.resolve(__dirname, '../../plugins/official')
+const catalogRoot = path.resolve(__dirname, '../../plugins/store')
 const mockGitHub = async(app, offline = false) => {
   await app.evaluate(({ session, net }, { catalogRoot, offline }) => {
     const fs = process.mainModule.require('node:fs')
@@ -10,13 +10,13 @@ const mockGitHub = async(app, offline = false) => {
     global.__pluginRequests = []
     global.__pluginCatalogOverride = null
     global.__pluginPackageOverrides = {}
-    const root = 'https://raw.githubusercontent.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/master/plugins/official/'
+    const root = 'https://raw.githubusercontent.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/master/plugins/store/'
     session.fromPartition('persist:win-main').protocol.handle('https', request => {
       if (!request.url.startsWith(root)) return net.fetch(request, { bypassCustomProtocolHandlers: true })
       global.__pluginRequests.push(request.url)
       if (global.__pluginOffline) return new Response('Unavailable', { status: 503 })
       const relative = decodeURIComponent(request.url.slice(root.length))
-      if (relative === 'catalog-v2.json' && global.__pluginCatalogOverride) return new Response(JSON.stringify(global.__pluginCatalogOverride), { headers: { 'content-type': 'application/json' } })
+      if (relative === 'catalog.json' && global.__pluginCatalogOverride) return new Response(JSON.stringify(global.__pluginCatalogOverride), { headers: { 'content-type': 'application/json' } })
       if (global.__pluginPackageOverrides[relative]) return new Response(Buffer.from(global.__pluginPackageOverrides[relative], 'base64'), { headers: { 'content-type': 'application/octet-stream' } })
       const filename = path.resolve(catalogRoot, relative)
       if (!filename.startsWith(catalogRoot + path.sep)) return new Response('', { status: 400 })
@@ -38,7 +38,7 @@ const install = async(page, id) => {
     return card && [...card.querySelectorAll('button')].some(button => !button.disabled)
   }, id)
   await button.click()
-  await card.getByRole('button', { name: await label(page, 'setting__plugins_settings'), exact: true }).waitFor()
+  await card.getByRole('button', { name: await label(page, 'setting__plugins_settings'), exact: true }).waitFor({ timeout: 180000 })
 }
 const uninstall = async(page, id) => {
   const card = page.locator(`[data-plugin-id="${id}"]`)

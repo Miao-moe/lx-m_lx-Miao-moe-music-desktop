@@ -36,12 +36,13 @@ const options = {
     'node_modules/playwright-core',
     '!node_modules/playwright-core/lib/tools/skills/**',
     'build/Release/qrc_decode.node',
-    'dist/**/*',
+    'dist/plugin-compiler/**/*',
   ],
   asar: {
     smartUnpack: false,
   },
   asarUnpack: [
+    'dist/plugin-compiler/**/*',
     'node_modules/playwright-core/**/*',
     'node_modules/better-sqlite3/**/*',
     'node_modules/electron-font-manager/**/*',

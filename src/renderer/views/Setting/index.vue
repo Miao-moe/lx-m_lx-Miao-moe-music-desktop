@@ -1,6 +1,6 @@
 <template>
   <div :class="$style.main">
-    <div class="scroll" :class="$style.toc">
+    <div ref="dom_toc_ref" :class="$style.toc">
       <div :class="$style.searchBox">
         <svg :class="$style.searchIcon" viewBox="0 0 30.239 30.239" aria-hidden="true">
           <use xlink:href="#icon-search" />
@@ -8,42 +8,48 @@
         <base-input
           ref="dom_filter_input" v-model="settingFilter" :class="$style.searchInput"
           :trim="false" :placeholder="$t('setting__filter_placeholder')" :aria-label="$t('setting__filter_placeholder')"
-          @keydown.esc="clearSettingFilter"
+          autocomplete="off" :spellcheck="false"
+          @compositionstart="isComposing = true" @compositionend="finishFilterComposition"
+          @keydown="handleFilterKeydown"
         />
         <button
           v-if="settingFilter" type="button" :class="$style.clearSearchBtn"
-          :aria-label="$t('close')" @click="clearSettingFilter"
+          :aria-label="$t('setting__filter_clear')" @click="clearSettingFilter"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <use xlink:href="#icon-window-close" />
           </svg>
         </button>
       </div>
-      <ul v-if="visibleTocList.length" :class="$style.tocList" role="toolbar">
-        <li v-for="h2 in visibleTocList" :key="h2.id" :class="$style.tocListItem" role="presentation">
-          <h2
-            :class="[$style.tocH2, {[$style.active]: avtiveComponentName == h2.id }]"
-            role="tab" :aria-selected="avtiveComponentName == h2.id"
-            :aria-label="h2.title" ignore-tip @click="toggleTab(h2.id)"
-          >
-            <transition name="list-active">
-              <svg-icon v-if="avtiveComponentName == h2.id" name="angle-right-solid" :class="$style.activeIcon" />
-            </transition>
-            {{ h2.title }}
-          </h2>
-          <!-- <ul v-if="h2.children.length" :class="$style.tocList">
-            <li v-for="h3 in h2.children" :key="h3.id" :class="$style.tocSubListItem">
-              <h3 :class="[$style.tocH3, toc.activeId == h3.id ? $style.active : null]" :aria-label="h3.title">
-                <a :href="'#' + h3.id" @click.stop="toc.activeId = h3.id">{{ h3.title }}</a>
-              </h3>
-            </li>
-          </ul> -->
-        </li>
-      </ul>
-      <p v-else :class="$style.searchEmpty">{{ $t('setting__filter_empty') }}</p>
+      <div class="scroll" :class="$style.tocScroll">
+        <ul v-if="visibleTocList.length" :class="$style.tocList" role="tablist" aria-orientation="vertical">
+          <li v-for="h2 in visibleTocList" :key="h2.id" :class="$style.tocListItem" role="presentation">
+            <h2
+              :class="[$style.tocH2, {[$style.active]: avtiveComponentName == h2.id }]"
+              role="tab" :aria-selected="avtiveComponentName == h2.id"
+              :tabindex="avtiveComponentName == h2.id ? 0 : -1" :data-setting-tab="h2.id"
+              :aria-label="h2.title" ignore-tip @click="toggleTab(h2.id)"
+              @keydown="handleTabKeydown($event, h2.id)"
+            >
+              <transition name="list-active">
+                <svg-icon v-if="avtiveComponentName == h2.id" name="angle-right-solid" :class="$style.activeIcon" />
+              </transition>
+              {{ h2.title }}
+            </h2>
+            <!-- <ul v-if="h2.children.length" :class="$style.tocList">
+              <li v-for="h3 in h2.children" :key="h3.id" :class="$style.tocSubListItem">
+                <h3 :class="[$style.tocH3, toc.activeId == h3.id ? $style.active : null]" :aria-label="h3.title">
+                  <a :href="'#' + h3.id" @click.stop="toc.activeId = h3.id">{{ h3.title }}</a>
+                </h3>
+              </li>
+            </ul> -->
+          </li>
+        </ul>
+        <p v-else :class="$style.searchEmpty">{{ $t('setting__filter_empty') }}</p>
+      </div>
     </div>
     <common-motion-view :motion-key="avtiveComponentName" :distance="24">
-      <div ref="dom_content_ref" class="scroll" :class="[$style.setting, {[$style.searchFiltering]: isFiltering}]">
+      <div ref="dom_content_ref" class="scroll" :class="[$style.setting, {[$style.searchFiltering]: isFiltering}]" data-setting-content>
       <p v-if="isFiltering && !visibleTocList.length" :class="$style.contentEmpty">{{ $t('setting__filter_empty') }}</p>
       <dl v-show="visibleTocList.length">
         <template v-if="activePluginSetting">
@@ -52,7 +58,7 @@
             <common-plugin-slot :key="activePluginSetting.pluginId" :plugin="activePluginSetting.pluginId" name="Settings" />
           </dd>
         </template>
-        <component :is="avtiveComponentName" v-else />
+        <component :is="avtiveComponentName" v-else v-bind="avtiveComponentName == 'SettingBasic' ? { searchKeyword: filterQuery } : {}" />
         <!-- <SettingBasic />
         <SettingPlay />
         <SettingPlayDetail />
@@ -82,6 +88,12 @@ import { useRoute } from '@common/utils/vueRouter'
 import { pluginText } from '@common/optionalPlugins'
 import { pluginRuntime, pluginStore } from '@renderer/store/optionalPlugins'
 import { appSetting } from '@renderer/store/setting'
+import { isMac, isLinux } from '@common/utils'
+import { userApi, themeInfo } from '@renderer/store'
+import { langList } from '@root/lang'
+import apiSourceInfo from '@renderer/utils/musicSdk/api-source-info'
+import { SOURCE_NAME } from '@renderer/utils/cookieManager'
+import { createSearchIndex, matchSearchIndex, matchesSearchKey, matchesSearchText, normalizeSearchText, searchTerms } from './search'
 
 import SettingBasic from './components/SettingBasic.vue'
 import SettingPlay from './components/SettingPlay.vue'
@@ -130,7 +142,40 @@ export default {
 
     const dom_content_ref = ref(null)
     const dom_filter_input = ref(null)
+    const dom_toc_ref = ref(null)
     const settingFilter = ref('')
+    const filterQuery = ref('')
+    const isComposing = ref(false)
+    const customThemeEntries = ref([])
+    let customThemeNames = ''
+    watch(settingFilter, value => {
+      if (!isComposing.value) filterQuery.value = value
+      const names = JSON.stringify(themeInfo.userThemes.map(theme => theme.name))
+      if (names !== customThemeNames) {
+        customThemeNames = names
+        customThemeEntries.value = themeInfo.userThemes.map(theme => ({ key: 'theme_custom', text: theme.name }))
+      }
+    })
+    const finishFilterComposition = event => {
+      isComposing.value = false
+      settingFilter.value = filterQuery.value = event.target.value
+    }
+
+    const pluginSearchEntries = computed(() => {
+      const snapshot = pluginStore.value
+      const catalog = new Map(snapshot.catalog.map(plugin => [plugin.id, plugin]))
+      return [...new Set([...catalog.keys(), ...Object.keys(snapshot.installed), ...Object.keys(snapshot.errors)])].map(id => {
+        const installed = snapshot.installed[id]
+        const local = installed?.source === 'local' || snapshot.sources?.[id] === 'local'
+        const display = local ? installed?.manifest : catalog.get(id) ?? installed?.manifest
+        return {
+          key: `plugin-card:${id}`,
+          text: `${id} ${Object.keys(window.i18n.messages).map(language => {
+            return `${pluginText(display?.name, language, id)} ${pluginText(display?.description, language)}`
+          }).join(' ')}`,
+        }
+      })
+    })
 
     const pluginSettingGroups = computed(() => {
       const snapshot = pluginStore.value
@@ -144,27 +189,37 @@ export default {
             id: `SettingPlugin_${id}`,
             pluginId: id,
             title: pluginText(installed?.name ?? available?.name, language, id),
-            searchText: pluginText(installed?.description ?? available?.description, language),
+            searchText: pluginSearchEntries.value.find(entry => entry.key === `plugin-card:${id}`)?.text ?? pluginText(installed?.description ?? available?.description, language),
             prefixes: [],
           }
         })
     })
     const tocList = computed(() => {
       return [
-        { id: 'SettingBasic', title: t('setting__basic'), prefixes: ['setting__basic', 'theme'], keys: ['setting__play_timeout'] },
-        { id: 'SettingPlay', title: t('setting__play'), prefixes: ['setting__play', 'setting__player'], excludes: ['setting__play_detail', 'setting__play_timeout'] },
-        { id: 'SettingPluginStore', title: t('setting__plugins'), prefixes: ['setting__plugins', 'player__sound_effect'], keys: ['audio_visualization', 'setting__desktop_lyric_audio_visualization'] },
+        {
+          id: 'SettingBasic',
+          title: t('setting__basic'),
+          prefixes: ['setting__basic', 'theme'],
+          keys: ['setting__play_timeout'],
+          entries: [
+            ...customThemeEntries.value,
+            ...[...apiSourceInfo, ...userApi.list].map(source => ({ key: 'setting__basic_source', text: source.name })),
+            ...langList.map(language => ({ key: 'setting__basic_lang', text: language.name })),
+          ],
+        },
+        { id: 'SettingPlay', title: t('setting__play'), prefixes: ['setting__play', 'setting__player'], excludes: ['setting__play_detail', 'setting__play_timeout', ...(!isMac ? ['setting__play_statusbar_lyric'] : [])] },
+        { id: 'SettingPluginStore', title: t('setting__plugins'), prefixes: ['setting__plugins', 'player__sound_effect'], keys: ['audio_visualization', 'setting__desktop_lyric_audio_visualization'], entries: pluginSearchEntries.value },
         ...pluginSettingGroups.value,
         { id: 'SettingPlayDetail', title: t('setting__play_detail'), prefixes: ['setting__play_detail'] },
-        { id: 'SettingDesktopLyric', title: t('setting__desktop_lyric'), prefixes: ['setting__desktop_lyric'], excludes: ['setting__desktop_lyric_audio_visualization'] },
-        { id: 'SettingSearch', title: t('setting__search'), prefixes: ['setting__search'] },
+        { id: 'SettingDesktopLyric', title: t('setting__desktop_lyric'), prefixes: ['setting__desktop_lyric'], keys: ['desktop_lyric__lrc_active_zoom_on'], excludes: ['setting__desktop_lyric_audio_visualization', ...(isLinux ? ['setting__desktop_lyric_hover_hide'] : [])] },
+        { id: 'SettingSearch', title: t('setting__search'), prefixes: ['setting__search', 'setting__odc_clear_search'] },
         { id: 'SettingList', title: t('setting__list'), prefixes: ['setting__list'] },
-        { id: 'SettingDownload', title: t('setting__download'), prefixes: ['setting__download'] },
-        { id: 'SettingHotKey', title: t('setting__hot_key'), prefixes: ['setting__hot_key'] },
+        { id: 'SettingDownload', title: t('setting__download'), prefixes: ['setting__download'], keys: ['setting_download_save_group_list_name', 'setting__is_enable'] },
+        { id: 'SettingHotKey', title: t('setting__hot_key'), prefixes: ['setting__hot_key'], keys: ['setting__is_enable'] },
         { id: 'SettingSync', title: t('setting__sync'), prefixes: ['setting__sync'] },
         { id: 'SettingOpenAPI', title: t('setting__open_api'), prefixes: ['setting__open_api'] },
-        { id: 'SettingNetwork', title: t('setting__network'), prefixes: ['setting__network'] },
-        { id: 'SettingCookie', title: t('setting__cookie'), prefixes: ['setting__cookie'] },
+        { id: 'SettingNetwork', title: t('setting__network'), prefixes: ['setting__network'], keys: ['setting__is_enable'] },
+        { id: 'SettingCookie', title: t('setting__cookie'), prefixes: ['setting__cookie'], entries: Object.entries(SOURCE_NAME).map(([id, name]) => ({ key: `setting__cookie_source_${id}`, text: `${name} ${id}` })) },
         { id: 'SettingAdvanced', title: t('setting__advanced'), prefixes: ['setting__advanced'] },
         { id: 'SettingBackup', title: t('setting__backup'), prefixes: ['setting__backup'] },
         { id: 'SettingOther', title: t('setting__other'), prefixes: ['setting__other'] },
@@ -173,33 +228,33 @@ export default {
       ]
     })
 
-    const normalizeSearchText = text => String(text).replace(/\s+/g, ' ').trim().toLocaleLowerCase()
-    const isFiltering = computed(() => !!normalizeSearchText(settingFilter.value))
-    const matchedGroupIds = computed(() => {
-      const keyword = normalizeSearchText(settingFilter.value)
-      const ids = new Set()
-      if (!keyword) return ids
-
-      const messages = Object.entries(window.i18n.message)
-      for (const group of tocList.value) {
-        if (normalizeSearchText(`${group.title} ${group.searchText ?? ''}`).includes(keyword)) {
-          ids.add(group.id)
-          continue
-        }
-        for (const [key, value] of messages) {
-          const matchesPrefix = group.prefixes.some(prefix => key == prefix || key.startsWith(`${prefix}_`)) || group.keys?.includes(key)
-          const isExcluded = group.excludes?.some(prefix => key == prefix || key.startsWith(`${prefix}_`))
-          if (!matchesPrefix || isExcluded) continue
-          if (!normalizeSearchText(value).includes(keyword)) continue
-          ids.add(group.id)
-          break
-        }
+    const translatedMessages = computed(() => {
+      // Use the same fallback as rendering. Other installed UI languages are
+      // searchable too, so Chinese/English terms work after switching locale.
+      void appSetting['common.langId']
+      const result = {}
+      for (const messages of Object.values(window.i18n.messages)) {
+        for (const [key, value] of Object.entries(messages)) (result[key] ??= []).push(value)
       }
-      return ids
+      return result
     })
+    const searchIndex = computed(() => createSearchIndex(tocList.value, translatedMessages.value))
+    const headingKeys = computed(() => {
+      void appSetting['common.langId']
+      const result = new Map()
+      for (const key of Object.keys(translatedMessages.value)) {
+        const text = normalizeSearchText(t(key))
+        if (!text) continue
+        if (!result.has(text)) result.set(text, [])
+        result.get(text).push(key)
+      }
+      return result
+    })
+    const isFiltering = computed(() => !!normalizeSearchText(filterQuery.value))
+    const matchedGroups = computed(() => matchSearchIndex(searchIndex.value, filterQuery.value))
     const visibleTocList = computed(() => {
       if (!isFiltering.value) return tocList.value
-      return tocList.value.filter(group => matchedGroupIds.value.has(group.id))
+      return tocList.value.filter(group => matchedGroups.value.has(group.id))
     })
 
     const avtiveComponentName = ref(route.query.name && tocList.value.some(t => t.id == route.query.name)
@@ -207,38 +262,69 @@ export default {
       : tocList.value[0].id)
     const activePluginSetting = computed(() => pluginSettingGroups.value.find(group => group.id === avtiveComponentName.value))
 
+    const markedElements = new Set()
     const clearSettingFilterState = () => {
-      dom_content_ref.value?.querySelectorAll('.setting-search-visible').forEach(element => {
-        element.classList.remove('setting-search-visible')
-      })
+      for (const element of markedElements) element.classList.remove('setting-search-visible', 'setting-search-branch')
+      markedElements.clear()
     }
     const markSearchBranch = (element) => {
       if (!element) return
-      element.classList.add('setting-search-visible')
-      element.querySelectorAll('*').forEach(child => child.classList.add('setting-search-visible'))
-
-      let parent = element.parentElement
+      element.classList.add('setting-search-branch')
+      let parent = element
       while (parent && parent !== dom_content_ref.value) {
         parent.classList.add('setting-search-visible')
+        markedElements.add(parent)
         parent = parent.parentElement
       }
     }
     const applySettingFilter = () => {
       clearSettingFilterState()
-      const keyword = normalizeSearchText(settingFilter.value)
-      if (!keyword || !dom_content_ref.value) return
+      const terms = searchTerms(filterQuery.value)
+      if (!terms.length || !dom_content_ref.value) return
 
-      if (activePluginSetting.value) {
+      const match = matchedGroups.value.get(avtiveComponentName.value)
+      if (!match) return
+      if (match.full || activePluginSetting.value) {
         markSearchBranch(dom_content_ref.value.querySelector('dl'))
         return
       }
 
-      const getElementText = element => normalizeSearchText(`${element.textContent ?? ''} ${element.getAttribute('aria-label') ?? ''}`)
-      const elements = [...dom_content_ref.value.querySelectorAll('dt, h3, h4, label, p, button, span, dd > div, [aria-label]')]
-      const targets = elements.filter(element => {
-        if (!getElementText(element).includes(keyword)) return false
-        return ![...element.children].some(child => getElementText(child).includes(keyword))
+      // Use the same matched keys as the navigation, including help text and
+      // options inside dialogs. Prefer the most specific setting section.
+      const localTexts = match.keys.map(key => {
+        const text = window.i18n.getMessage(key)
+        return text === key ? '' : normalizeSearchText(text.replace(/\{[^}]+\}/g, ''))
+      }).filter(Boolean)
+      const sections = [...dom_content_ref.value.querySelectorAll('h3, h4, [data-setting-search]')].map(element => ({
+        element,
+        prefixes: [
+          ...(element.dataset.settingSearch ?? '').split(/\s+/).filter(Boolean),
+          ...(element.id ? [element.id.startsWith('setting__') ? element.id : `setting__${element.id}`] : []),
+          // A heading's translation is more reliable than legacy DOM IDs.
+          ...(headingKeys.value.get(normalizeSearchText(element.textContent)) ?? []),
+        ],
+      }))
+      for (const key of match.keys) {
+        const related = sections.map(section => ({
+          ...section,
+          length: Math.max(0, ...section.prefixes.filter(prefix => matchesSearchKey(key, prefix)).map(prefix => prefix.length)),
+        }))
+        const longest = Math.max(0, ...related.map(section => section.length))
+        if (longest) {
+          for (const { element, length } of related) {
+            if (length == longest) markSearchBranch(element.hasAttribute('data-setting-search') ? element : element.closest('dd') ?? element)
+          }
+        }
+      }
+
+      const groupTitle = searchIndex.value.find(group => group.id === avtiveComponentName.value)?.title ?? ''
+      const getElementText = element => normalizeSearchText(`${element.textContent ?? ''} ${element.getAttribute('aria-label') ?? ''} ${element.getAttribute('title') ?? ''} ${element.getAttribute('placeholder') ?? ''}`)
+      const elements = [...dom_content_ref.value.querySelectorAll('dt, h3, h4, label, p, button, span, li, a, td, th, dd > div, [aria-label], [title], [placeholder]')]
+      const matchingElements = elements.filter(element => {
+        const text = getElementText(element)
+        return matchesSearchText(`${groupTitle} ${text}`, terms) || localTexts.some(local => text.includes(local))
       })
+      const targets = matchingElements.filter(element => !matchingElements.some(child => child !== element && element.contains(child)))
 
       const pageTitle = dom_content_ref.value.querySelector('dl > dt')
       markSearchBranch(pageTitle)
@@ -250,8 +336,8 @@ export default {
       for (const target of targets) {
         const section = target.closest('dd')
         let itemRoot
-        if (target.closest('article[data-plugin-id]')) {
-          itemRoot = target.closest('article[data-plugin-id]')
+        if (target.closest('[data-setting-search]')) {
+          itemRoot = target.closest('[data-setting-search]')
         } else if (target.tagName == 'H3' || section?.querySelector(':scope > h3')) {
           // 命中组内选项时保留整组，便于查看和切换其他选项。
           itemRoot = section
@@ -259,11 +345,24 @@ export default {
           itemRoot = target.parentElement
         } else {
           const control = target.closest('label, button, p')
-          itemRoot = control?.tagName == 'LABEL' ? control.parentElement : control ?? target
+          itemRoot = target.closest('.gap-top, .p') ?? (control?.tagName == 'LABEL' ? control.parentElement : control ?? target)
         }
         markSearchBranch(itemRoot)
 
         markSearchBranch(section?.querySelector(':scope > h3'))
+      }
+      // Dependent controls keep the switch/mode that makes them available.
+      for (const element of dom_content_ref.value.querySelectorAll('[data-setting-search-depends]')) {
+        if (!element.classList.contains('setting-search-visible') && !element.closest('.setting-search-branch')) continue
+        for (const id of element.dataset.settingSearchDepends.split(/\s+/)) {
+          const control = document.getElementById(id)
+          if (control && dom_content_ref.value.contains(control)) markSearchBranch(control.closest('.gap-top, dd') ?? control)
+        }
+      }
+      // A conditional control may not exist yet. Keep the page's controls
+      // available so a matching category never opens to just an empty title.
+      if (!dom_content_ref.value.querySelector('dd.setting-search-visible')) {
+        markSearchBranch(pageTitle?.parentElement)
       }
     }
     const toggleTab = (id) => {
@@ -272,24 +371,35 @@ export default {
         applySettingFilter()
         dom_content_ref.value?.scrollTo({
           top: 0,
-          behavior: 'smooth',
+          behavior: 'auto',
         })
       })
     }
     const clearSettingFilter = () => {
-      settingFilter.value = ''
+      isComposing.value = false
+      settingFilter.value = filterQuery.value = ''
       clearSettingFilterState()
       void nextTick(() => dom_filter_input.value?.focus())
     }
 
+    let searchOrigin = null
+    let lastQuery = ''
     watch(() => route.query.name, (name) => {
       if (tocList.value.some(item => item.id === name)) {
-        settingFilter.value = ''
+        searchOrigin = null
+        settingFilter.value = filterQuery.value = ''
         toggleTab(name)
       }
     })
 
-    watch(visibleTocList, (list) => {
+    watch([visibleTocList, filterQuery], ([list, query]) => {
+      const normalized = normalizeSearchText(query)
+      const queryChanged = normalized !== lastQuery
+      if (normalized && !lastQuery) searchOrigin = { id: avtiveComponentName.value, top: dom_content_ref.value?.scrollTop ?? 0 }
+      const restore = !normalized && lastQuery ? searchOrigin : null
+      if (restore && tocList.value.some(group => group.id === restore.id)) avtiveComponentName.value = restore.id
+      if (!normalized) searchOrigin = null
+      lastQuery = normalized
       if (!tocList.value.some(group => group.id === avtiveComponentName.value)) {
         avtiveComponentName.value = 'SettingPluginStore'
       }
@@ -298,7 +408,7 @@ export default {
       }
       void nextTick(() => {
         applySettingFilter()
-        dom_content_ref.value?.scrollTo({ top: 0, behavior: 'smooth' })
+        if (queryChanged) dom_content_ref.value?.scrollTo({ top: restore?.top ?? 0, behavior: 'auto' })
       })
     })
 
@@ -314,28 +424,84 @@ export default {
       if (idx < ids.length - 1) toggleTab(ids[idx + 1])
     }
     const handleKeydown = (e) => {
+      if (e.isComposing || isComposing.value || e.keyCode === 229 || window.lx.isEditingHotKey) return
       if ((e.ctrlKey || e.metaKey) && e.key.toLocaleLowerCase() === 'f') {
         const target = e.target
         const isEditingControl = target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable)
-        if (window.lx.isEditingHotKey || (isEditingControl && target !== dom_filter_input.value)) return
+        if (isEditingControl && target !== dom_filter_input.value?.$el) return
         e.preventDefault()
+        e.stopPropagation()
         dom_filter_input.value?.focus()
+        dom_filter_input.value?.$el.select()
         return
       }
-      if (!e.altKey) return
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      if (e.target instanceof HTMLElement && (e.target.matches('input, textarea, select') || e.target.isContentEditable) && e.target !== dom_filter_input.value?.$el) return
       if (e.key === 'ArrowLeft') {
         e.preventDefault()
+        e.stopPropagation()
         goPrevPanel()
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
+        e.stopPropagation()
         goNextPanel()
       }
     }
+    const focusTab = id => dom_toc_ref.value?.querySelector(`[data-setting-tab="${id}"]`)?.focus()
+    const handleTabKeydown = (event, id) => {
+      if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
+      const ids = visibleTocList.value.map(group => group.id)
+      let index = ids.indexOf(id)
+      if (event.key === 'ArrowUp') index = Math.max(0, index - 1)
+      else if (event.key === 'ArrowDown') index = Math.min(ids.length - 1, index + 1)
+      else if (event.key === 'Home') index = 0
+      else if (event.key === 'End') index = ids.length - 1
+      else if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      event.stopPropagation()
+      toggleTab(ids[index])
+      void nextTick(() => focusTab(ids[index]))
+    }
+    const handleFilterKeydown = event => {
+      if (event.isComposing || isComposing.value || event.keyCode === 229 || event.altKey || event.ctrlKey || event.metaKey) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        clearSettingFilter()
+      } else if (event.key === 'ArrowDown' && visibleTocList.value.length) {
+        event.preventDefault()
+        focusTab(avtiveComponentName.value)
+      } else if (event.key === 'Enter' && visibleTocList.value.length) {
+        event.preventDefault()
+        const controls = dom_content_ref.value?.querySelectorAll('button, input, select, textarea, [tabindex="0"]') ?? []
+        const first = [...controls].find(element => element.getBoundingClientRect().height && !element.disabled && element.getAttribute('aria-disabled') !== 'true')
+        first?.focus()
+      }
+    }
+    let filterPending = false
+    let disposed = false
+    const searchObserver = new MutationObserver(() => {
+      if (!isFiltering.value || filterPending) return
+      filterPending = true
+      void nextTick(() => {
+        filterPending = false
+        if (!disposed) applySettingFilter()
+      })
+    })
     onMounted(() => {
-      window.addEventListener('keydown', handleKeydown)
+      window.addEventListener('keydown', handleKeydown, true)
+      searchObserver.observe(dom_content_ref.value, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['aria-label', 'title', 'placeholder', 'data-setting-search'],
+      })
     })
     onBeforeUnmount(() => {
-      window.removeEventListener('keydown', handleKeydown)
+      disposed = true
+      window.removeEventListener('keydown', handleKeydown, true)
+      searchObserver.disconnect()
       clearSettingFilterState()
     })
 
@@ -346,7 +512,13 @@ export default {
       activePluginSetting,
       dom_content_ref,
       dom_filter_input,
+      dom_toc_ref,
       settingFilter,
+      filterQuery,
+      isComposing,
+      finishFilterComposition,
+      handleFilterKeydown,
+      handleTabKeydown,
       toggleTab,
       clearSettingFilter,
     }
@@ -401,14 +573,22 @@ export default {
 
 .toc {
   flex: 0 0 180px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tocScroll {
+  flex: auto;
+  min-height: 0;
   overflow-y: scroll;
 }
 .searchBox {
-  position: sticky;
+  position: relative;
+  flex: none;
   z-index: 2;
-  top: 0;
   padding: 10px 8px 8px;
-  background-color: var(--color-main-background);
+  background-color: var(--setting-search-background, var(--color-main-background));
 }
 .searchIcon {
   position: absolute;
@@ -485,6 +665,10 @@ export default {
   }
   &.active {
     color: var(--color-primary);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset var(--focus-ring);
   }
 }
 .activeIcon {
@@ -569,7 +753,7 @@ export default {
 
 .searchFiltering {
   :global {
-    dl *:not(.setting-search-visible) {
+    dl *:not(.setting-search-visible):not(.setting-search-branch *) {
       display: none !important;
     }
   }

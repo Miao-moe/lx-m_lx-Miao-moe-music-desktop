@@ -17,8 +17,12 @@ electron.app.setAsDefaultProtocolClient = () => false;
 electron.app.removeAsDefaultProtocolClient = () => false;
 ${rendererPath ? `electron.app.on('web-contents-created', (_event, contents) => {
   const loadURL = contents.loadURL.bind(contents);
-  contents.loadURL = (url, options) => loadURL(new URL(url).origin === 'http://localhost:9080'
-    ? ${JSON.stringify(pathToFileURL(rendererPath).href)} + new URL(url).search : url, options);
+  contents.loadURL = (url, options) => {
+    const parsed = new URL(url);
+    const renderer = parsed.origin === 'http://localhost:9080' ? ${JSON.stringify(pathToFileURL(rendererPath).href)}
+      : parsed.origin === 'http://localhost:9081' && parsed.pathname === '/lyric.html' ? ${JSON.stringify(pathToFileURL(path.join(path.dirname(rendererPath), 'lyric.html')).href)} : null;
+    return loadURL(renderer ? renderer + parsed.search : url, options);
+  };
 });` : ''}
 require(${JSON.stringify(path.join(project, 'dist/main.js'))});`)
   const env = { ...process.env, PORTABLE_EXECUTABLE_DIR: output }
@@ -70,7 +74,6 @@ require(${JSON.stringify(path.join(project, 'dist/main.js'))});`)
       ...(initializeMotion ? {
         'common.isShowAnimation': true,
         'ui.smoothAnimation': true,
-        'ui.followSystemMotion': true,
         'ui.animationSpeed': 1,
       } : {}),
       'playDetail.isDelayScroll': false,
@@ -102,8 +105,7 @@ require(${JSON.stringify(path.join(project, 'dist/main.js'))});`)
   await page.emulateMedia({ reducedMotion })
   await page.waitForFunction(() => {
     const setting = window.lxData.appSetting
-    const enabled = setting['common.isShowAnimation'] && setting['ui.smoothAnimation'] &&
-      !(setting['ui.followSystemMotion'] === true && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    const enabled = setting['common.isShowAnimation'] && setting['ui.smoothAnimation']
     return document.documentElement.dataset.motionEnabled === String(enabled)
   })
   return { app, page, errors, output }
@@ -118,8 +120,9 @@ async function seedTrack(page) {
     Object.assign(window.lxData.playMusicInfo, { musicInfo: info, listId: 'default' })
     window.lxData.playQueueList.splice(0, Infinity, ...['晚风与海', '蓝色时刻', '沿途的光', '日落以后', '慢慢靠近'].map((name, i) => ({ listId: 'default', musicInfo: { ...info, id: 'motion-demo-' + (i + 1), name } })))
   })
-  await page.locator('#player [data-player-cover] img').waitFor()
-  await page.waitForFunction(() => document.querySelector('#player [data-player-cover] img').complete)
+  // A repeated seed can arrive during the previous cover's leave transition.
+  await page.locator('#player [data-player-cover] img').last().waitFor()
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('#player [data-player-cover] img')).some(image => image.getAttribute('src') === window.lxData.musicInfo.pic && image.complete))
 }
 
 async function seedLyrics(page) {

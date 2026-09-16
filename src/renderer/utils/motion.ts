@@ -19,9 +19,7 @@ const finishTasks = new Set<() => void>()
 export const isMotionEnabled = () => {
   const root = document.documentElement
   if (root.classList.contains('disableAnimation')) return false
-  // The app resolves the user's choice and the system preference in one place.
-  if (root.dataset.motionEnabled != null) return root.dataset.motionEnabled === 'true'
-  return !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return root.dataset.motionEnabled !== 'false'
 }
 
 export const getMotionDuration = (kind: MotionKind) => {

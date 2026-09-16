@@ -1,0 +1,10 @@
+{
+  "format": "lx-m-plugin-source",
+  "formatVersion": 1,
+  "id": "example-plugin",
+  "version": "1.0.0",
+  "apiVersion": 3,
+  "name": { "zh-cn": "示例插件", "en-us": "Example Plugin" },
+  "description": "可直接打包并导入的 Vue 源码插件示例。",
+  "entry": "src/index.ts"
+}

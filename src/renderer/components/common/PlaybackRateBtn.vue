@@ -80,12 +80,12 @@ const updatePreservesPitch = (enabled) => {
 
   svg {
     transition: opacity @transition-fast;
-    opacity: .5;
+    opacity: 1;
     // filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
     svg {
-      opacity: .9;
+      opacity: 1;
     }
   }
   &:active {
@@ -97,7 +97,7 @@ const updatePreservesPitch = (enabled) => {
   &.active {
     svg {
       color: var(--color-primary);
-      opacity: .8;
+      opacity: 1;
     }
   }
 }

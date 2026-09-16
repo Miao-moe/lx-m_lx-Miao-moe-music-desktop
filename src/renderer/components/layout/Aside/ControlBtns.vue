@@ -73,10 +73,10 @@ onBeforeUnmount(() => {
   width: 100%;
   height: @control-btn-height;
   -webkit-app-region: no-drag;
-  opacity: .5;
+  opacity: 1;
   transition: opacity @transition-normal;
   &.hover {
-    opacity: .8;
+    opacity: 1;
     .controlBtniIcon {
       opacity: 1;
     }

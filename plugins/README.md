@@ -1,11 +1,11 @@
 # 官方插件
 
-在软件的 **设置 → 插件商店** 中安装、更新或卸载插件。当前提供四个可独立安装的插件：
+在软件的 **设置 → 插件商店** 中安装、更新、卸载或导入导出插件。当前提供四个可独立安装的插件：
 
 - **音效增强**：十段均衡器、环境混响、环绕音效、变调，以及原有的个人音效预设。
 - **音频可视化 1.2.0**：提供经典频谱、柔波曲线、audioMotion 环形频谱三种样式，播放详情页和桌面歌词可分别选择、开关。
 - **Folia 歌词动效 1.2.0**：将 Folia 的 13 种原版歌词渲染器接入播放详情页，动效铺满页面，控制栏随鼠标靠近显示，支持逐字动效、样式预览和独立开关。
-- **音频标签编辑 1.0.0**：选择已完成的下载或本地 MP3、FLAC 文件，修改标题、艺术家、专辑、年份、流派、备注等标签，保留音频、封面与歌词。
+- **音频标签编辑 1.1.0**：在下载列表右键选择「修改音频标签」，或选择本地 MP3、FLAC 文件，修改标题、艺术家、专辑、年份、流派、备注等标签，保留音频、封面与歌词。
 
 插件安装后立即生效，卸载后对应按钮、设置和功能退出运行，并删除插件文件。歌曲继续播放，其他插件可继续使用。原有音效参数、个人预设和插件开关保留，重新安装后恢复使用。升级到插件商店版本时，需要在商店中安装所需插件。
 
@@ -35,37 +35,50 @@
 
 动效沿用当前歌曲、封面及软件解析后的歌词。歌曲有逐字时间轴时使用逐字动效，普通 LRC 按整行时间显示；暂停、跳转、倍速和歌词偏移跟随播放器。Folia 接管播放详情页的歌词区域，评论、播放控制和标准歌词仍可使用；桌面歌词保持原有显示。镜台、商籁、凝彩需要 WebGL，无可用上下文时会提示切换样式。插件也会遵循软件的减少动态效果设置。
 
-来源为 [Folia 0.7.4](https://github.com/chthollyphile/folia-major)。原始渲染器、素材和注释保存在 `src/optional-plugins/folia-lyrics/engine/vendor`，`upstream.json` 记录来源文件的 SHA-256。插件只适配外围布局、播放时钟和数据接口，未接入 Folia 的账号、AI 服务或自定义背景图库。React、Motion、PixiJS、Three.js 等依赖随插件打包。插件包内包含 AGPL-3.0 许可、依赖许可、来源说明和完整插件源码压缩包，见 [NOTICE.md](../src/optional-plugins/folia-lyrics/NOTICE.md)。
+来源为 [Folia 0.7.4](https://github.com/chthollyphile/folia-major)。原始渲染器、素材和注释保存在 `src/optional-plugins/folia-lyrics/engine/vendor`，`upstream.json` 记录来源文件的 SHA-256。插件只适配外围布局、播放时钟和数据接口，未接入 Folia 的账号、AI 服务或自定义背景图库。React、Motion、PixiJS、Three.js 等依赖随插件打包。源码 ZIP 内包含完整插件源码、AGPL-3.0 许可、依赖许可和来源说明，见 [NOTICE.md](../src/optional-plugins/folia-lyrics/NOTICE.md)。
 
 构建时还通过 `engine/adapters/pausedCamera.mjs` 为浮名补上暂停时的镜头定位，避免在暂停状态切换样式或跳转时，当前歌词留在画面之外。该适配保留原始文件和注释，匹配位置变化时会中止构建以便检查。
 
 ## 音频标签编辑
 
-在商店安装后，打开「音频标签编辑」设置页，或点击插件卡片上的「插件设置」。左侧可搜索并选择已完成的 MP3、FLAC 下载，也可通过「选择音频文件」打开本地文件。编辑完成后点击「保存标签」，或按 `Ctrl / Command + S`；修改会写入音频文件，可在系统文件属性及其他播放器中查看。
+在商店安装后，在下载列表右键点击歌曲，选择「修改音频标签」，即可打开该文件的编辑页面；也可打开同名设置页或插件卡片上的「插件设置」。左侧可搜索并选择已完成的 MP3、FLAC 下载，也可通过「选择音频文件」打开本地文件。编辑完成后点击「保存标签」，或按 `Ctrl / Command + S`；修改会写入音频文件，可在系统文件属性及其他播放器中查看。
+
+未完成、已重新开始下载及不支持的格式会禁用右键入口。点击时按下载记录 ID 重新核对任务，优先使用记录中的原文件路径；原路径缺失时检查当前按歌单分组的下载目录和下载根目录。仅接受存在、非空且可读取的普通文件，权限错误、文件夹或符号链接会报错；发现多个同名文件时要求手动选择。缺失文件、已删除记录及文件在确认期间移动时保留已有草稿，并显示具体原因。
 
 支持标题、副标题、艺术家、专辑艺术家、专辑、年份／日期、曲目序号、光盘序号、流派、作曲者、发行者、编码人员、版权和备注。清空输入框并保存即可移除对应文本。文件名保持原样；「还原修改」恢复本次打开或上次保存时的标签。切换文件时会提示处理未保存的修改，切换设置页面会保留当前编辑草稿。
 
-保存只替换修改过的标签，保留 MP3 的其他原始帧、FLAC 的其他元数据块以及音频数据。先写入同目录临时文件并校验，再替换原文件；文件被其他程序修改、缺失或无法替换时显示错误。支持软件生成的普通 ID3v2.3、ID3v2.4 MP3 和原生 FLAC；旧版、带扩展头或整体非同步编码的 ID3 标签暂不支持编辑，读取时会明确提示。
+保存只替换修改过的标签，保留 MP3 的其他原始帧、FLAC 的其他元数据块以及音频数据。先写入同目录临时文件并校验，再替换原文件；写入前和替换前再次核对下载状态及路径，文件被其他程序修改、缺失或无法替换时显示错误。支持软件生成的普通 ID3v2.3、ID3v2.4 MP3 和原生 FLAC；旧版、带扩展头或整体非同步编码的 ID3 标签暂不支持编辑，读取时会明确提示。
 
-此插件使用现有宿主接口 2 和下载列表、文件选择接口，无需升级主程序。依赖随插件打包，安装后可离线编辑。构建命令为 `npm run build:plugins -- audio-tag-editor`，文件读写测试为 `node --test tests/audio-tag-editor.test.cjs`，界面测试为 `node --test tests/audio-tag-editor.electron.test.cjs`。
+1.1.0 使用宿主接口 3 的下载右键菜单和实时下载状态接口，需要先升级到支持该接口的主程序。旧主程序保留已安装的 1.0.0，不会被不兼容的新包替换。依赖随插件打包，安装后可离线编辑。构建命令为 `npm run build:plugins -- audio-tag-editor`；文件读写及路径测试为 `node --test tests/audio-tag-editor.test.cjs tests/audio-tag-editor-downloads.test.cjs`，界面测试为 `node --test tests/audio-tag-editor.electron.test.cjs tests/audio-tag-editor-downloads.electron.test.cjs`。
 
 ## 下载来源和存储
 
-商店从本仓库 `master` 分支的 [官方目录](https://raw.githubusercontent.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/master/plugins/official/catalog-v2.json) 获取版本和包地址。首次安装及更新需要连接 GitHub；启动时只校验并加载本地已安装插件，离线时可继续使用。刷新目录失败会显示提示，下载或校验失败保留原有安装。
+商店从本仓库 `master` 分支的 [官方目录](https://raw.githubusercontent.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/master/plugins/store/catalog.json) 获取版本和源码 ZIP 地址。从商店下载及更新需要连接 GitHub，本地导入导出无需联网；启动时只校验并加载本地已安装插件，离线时可继续使用。刷新目录失败会显示提示，下载或校验失败保留原有安装。
 
-安装文件位于用户数据目录的 `LxDatas/plugins` 下，`installed.json` 记录已安装版本，`catalog-cache.json` 保存最近一次有效目录。离线重启后仍显示缓存的插件名称与介绍；从目录移除的已安装插件仍可使用和卸载。音效和可视化的实现、样式、混响资源及变调处理器均由插件包提供，应用安装包只保留商店、加载接口和基础播放功能。
+安装文件位于用户数据目录的 `LxDatas/plugins` 下，`installed.json` 记录已安装版本，`catalog-cache.json` 保存最近一次有效目录。下载的 ZIP 只在内存中读取，不在磁盘保留压缩包；安装成功或失败后均清理编译临时目录。安装目录的 `.source/` 保存已校验的源码及依赖，导出时重新生成 ZIP；后续启动直接加载已编译文件。用户手动选择导入的原始 ZIP 不会被删除。离线重启后仍显示缓存的插件名称与介绍；从目录移除的已安装插件仍可使用和卸载。音效和可视化的实现、样式、混响资源及变调处理器均由插件包提供，应用安装包提供商店、加载接口、源码编译器和基础播放功能。
 
-本体根据官方目录动态发现插件，无需在本体代码中登记新 ID、名称或介绍。安装仅接受当前官方目录中的插件，继续校验下载来源、路径和文件哈希。插件代码在应用渲染进程中运行，使用应用提供的 Vue、播放器和设置接口；此接口供仓库内的官方插件使用，不是第三方插件沙箱。Folia 的 React 渲染器运行在独立 iframe 内，关闭 Node 集成，通过消息接收歌词、播放时钟和频谱。
+本体根据官方目录动态发现插件，无需在本体代码中登记新 ID、名称或介绍。在线安装校验官方目录、下载来源、路径和文件哈希，本地导入也检查接口兼容性、路径和全部文件哈希。插件代码在应用渲染进程中运行，可访问本机文件，使用应用提供的 Vue、播放器和设置接口；此接口不是第三方插件沙箱，请仅导入可信来源的插件。Folia 的 React 渲染器运行在独立 iframe 内，关闭 Node 集成，通过消息接收歌词、播放时钟和频谱。
 
 使用固定插件名单的旧主程序需要升级一次，才能获得动态商店。此后使用现有接口的新插件和插件更新，都可通过「刷新商店」直接发现、安装和即时加载。只有插件需要本体尚未提供的接口时，才会提示升级主程序；不兼容的新包不会替换仍可运行的本地版本，较旧的目录版本也不会显示为更新。
 
-Folia 使用宿主接口 2，新宿主同时兼容接口 1 的音效和可视化插件。旧版主程序继续读取 `catalog.json`，该目录仅保留原有两个插件，避免未知 ID 导致旧商店无法加载；动态宿主固定读取 `catalog-v2.json`。
+Folia 使用宿主接口 2，音频标签编辑 1.1.0 使用接口 3，宿主支持接口 1、2、3。当前商店只读取 `catalog.json`，目录格式为 `schemaVersion: 2`，包地址直接指向源码 ZIP。旧版继续读取 `plugins/official/` 下的目录和 `.lxplugin`；这些旧文件保留，新版目录与 ZIP 独立发布在 `plugins/store/`。
+
+## 导入和导出
+
+- 点击商店顶部的「导入插件」，选择规范的纯源码 `.zip` 文件，核对插件名称、ID 和版本后确认。源码 ZIP 会由内置编译器在独立进程中自动构建，完成后加载；依赖代码已随包提供，可离线导入，无需安装 Node.js。
+- 相同 ID 会提示替换已安装版本，同版本可重新导入修复，较旧版本会明确提示降级。确认期间原安装发生变化会中止操作，校验或写入失败保留原安装。
+- 已安装插件卡片上的「导出」把保留的原始源码重新打包为 ZIP，包含 Vue/TypeScript 源码、依赖、素材和许可证，可备份、修改或在另一台电脑重新编译导入。不包含构建缓存、个人设置或预设。
+- 本地导入显示「本地导入」，通过再次导入更新或修复；如需切换回商店版本，可卸载后从商店安装。导入、替换和卸载均保留本机的个人设置。
+- 源码 ZIP 限制为压缩后 64 MiB、解压后 256 MiB、16,000 项；编译产物限制为 40 MiB、100 个文件。损坏、不兼容、路径越界、链接或文件冲突会被拒绝。编译错误、超时及写入失败保留原安装。导出前重新校验安装文件、源码清单和全部源码，取消选择不会更改安装或目标文件。
+- 不再支持 `.lxplugin` 的导入、安装或导出，将旧包改名为 `.zip` 也不会通过校验。没有有效源码 ZIP 的旧安装需要从商店重新安装或导入源码 ZIP；旧安装文件不会被自动删除，个人设置继续保留。
+
+完整目录、清单、入口和打包规则见 [源码 ZIP 规范](SOURCE-FORMAT.md)，可从 [最小模板](template) 开始开发。四个官方插件在 `src/optional-plugins/<id>/plugin.json` 中声明源码构建信息，商店安装与本地导入共用编译流程。
 
 ## 新增插件
 
-在 `src/optional-plugins/<id>` 中添加 `manifest.json`、`index.ts` 和 `store.json` 即可。构建脚本会自动发现含有清单的目录。ID 使用小写字母开头的小写字母、数字和连字符组合，最多 64 个字符，不能使用系统保留名称。
+在 `src/optional-plugins/<id>` 中添加 `plugin.json`、`index.ts` 和 `store.json`。构建脚本会自动发现含有清单的目录。ID 使用小写字母开头的小写字母、数字和连字符组合，最多 64 个字符，不能使用系统保留名称。独立开发的插件也可直接使用 [最小模板](template) 的目录结构，通过 `pack-source.cjs` 打包。
 
-`manifest.json` 声明 `id`、`version`、`apiVersion`、`entry: "renderer.js"` 和 `styles`；有桌面歌词代码时增加 `lyricEntry: "lyric.js"` 及对应的 `lyric.ts`。版本使用三段数字，例如 `1.2.0`。
+`plugin.json` 声明 `format: "lx-m-plugin-source"`、`formatVersion: 1`、`id`、`version`、`apiVersion` 和 `entry: "src/index.ts"`；有桌面歌词代码时增加 `lyricEntry: "src/lyric.ts"` 及对应的 `lyric.ts`。版本使用三段数字，例如 `1.2.0`。仓库内的源码在打包时放入 ZIP 的 `src/` 目录，样式从源码导入。构建只读取 `plugin.json`。
 
 `store.json` 的显示信息同时写入目录和新插件包，示例：
 
@@ -86,12 +99,15 @@ Folia 使用宿主接口 2，新宿主同时兼容接口 1 的音效和可视化
 | `components.Settings` | 商店中的插件设置面板 |
 | `slots.playDetailControls` | 播放详情页控制栏的按钮或控件 |
 | `playDetail: { component, enabled }` | 可由 Vue ref 开关的完整歌词显示区域 |
+| `downloadActions: [{ id, name, isAvailable, run }]` | 下载列表右键菜单；`run(taskId, { openSettings })` 接收所点击任务的稳定 ID，可在校验并载入文件后打开插件设置（接口 3） |
 | `slots.desktopLyricOverlay` | 在 `lyric.ts` 导出模块中注册桌面歌词叠加内容 |
 | `activate(context)` | 初始化功能，返回停止监听、释放资源的清理函数 |
 
 初始化上下文提供 `id`、插件 `version`、宿主 `apiVersion`、`assetUrl(name)` 和 `readAsset(name)`。主窗口仍通过 `window.__lxPluginHost` 提供共享 Vue、播放器、歌曲信息、歌词时钟和设置接口；桌面歌词窗口提供共享 Vue、歌词状态与主窗口频谱通道。使用上述动态界面入口的插件声明 `apiVersion: 2`。
 
-运行 `npm run build:plugins -- <id>` 后，将源码、`catalog-v2.json` 和新的 `.lxplugin` 包发布到官方仓库。兼容插件的发布过程不需要重新构建主程序。
+下载菜单入口需要声明 `apiVersion: 3`。`@renderer/utils/downloadFiles` 提供 `getDownloads()` 读取实时任务列表，`getDownloadSavePaths(task)` 提供当前分组目录和下载根目录。`isAvailable(task)` 只做同步状态判断；执行时须重新按 ID 查找任务、验证文件，异步确认后也要重新检查，避免列表变动或文件移动导致选错歌曲。卸载插件时会立即移除菜单入口。
+
+运行 `npm run build:plugins -- <id>` 后，将源码、`catalog.json` 和新的 `.zip` 发布到官方仓库。支持源码 ZIP 的主程序可直接安装、编译及更新；首次引入内置编译器需要发布新版主程序，此后使用现有接口的插件更新不需要重新构建主程序。
 
 ## 构建和发布
 
@@ -110,19 +126,22 @@ npm run build:plugins -- audio-visualizer
 
 只构建 Folia 时使用 `npm run build:plugins -- folia-lyrics`。仓库已包含所需 Folia 源码，无需额外下载原项目；更新来源时可运行 `node build-config/plugins/import-folia.cjs /path/to/folia-major`，并检查生成的文件及哈希清单。
 
-源代码在 `src/optional-plugins/<id>`。每个插件的 `manifest.json` 声明版本、接口版本和入口，`store.json` 提供可随插件发布的多语言显示信息。构建产物先写入 `build/optional-plugins`，随后生成：
+源代码在 `src/optional-plugins/<id>`。每个插件的 `plugin.json` 声明版本、接口版本、源码入口、依赖版本与资源，`store.json` 提供可随插件发布的多语言显示信息。依赖从本机已安装、版本匹配的包中收集，包含所需的嵌套依赖和许可证。构建分析插件引用的 SDK 源文件，并在 `build/optional-plugins` 暂存许可文件，不生成预编译插件包。最终生成：
 
 ```text
-plugins/official/catalog.json
-plugins/official/catalog-v2.json
-plugins/official/<id>/<version>/<sha256>.lxplugin
+plugins/store/catalog.json
+plugins/store/<id>/<version>/<sha256>.zip
 ```
 
-`.lxplugin` 是 gzip 压缩的 JSON，包含清单和 Base64 编码的文件。目录声明整包大小及 SHA-256，清单声明每个文件的大小及 SHA-256。安装时先验证完整下载和全部文件，再切换安装记录；启动时重新检查本地文件。损坏的安装可在商店中重新安装修复。
+`.zip` 是纯源码包，商店通过目录的 `path`、`bytes` 和 `sha256` 字段下载并自动编译。清单声明每个源文件的大小及 SHA-256。安装时先验证完整下载和全部文件，再切换安装记录；启动时重新检查本地文件。损坏或缺少源码的安装可在商店中点击「重新安装」修复。
 
 修改插件后递增其版本并重新构建，将源码、目录和生成的插件包一起提交到 `dev` 并同步 `master`，商店即可发现新版本。发布后保留旧的哈希文件，避免正在使用旧目录的客户端下载失败。修改宿主接口时，同时维护 `src/common/optionalPlugins.ts` 的 `PLUGIN_API_VERSION` 和插件清单的 `apiVersion`；不兼容的包会阻止安装并提示更新软件。
 
 应用本身仍按原有流程构建。`build:plugins` 不构建 Windows 安装包，也不会清理已有版本的安装包。
+
+`build:main` 同时将内置编译器及依赖放入 `dist/plugin-compiler`，应用打包配置会将其放在 `app.asar.unpacked` 中；发布应用时需要包含该目录。
+
+编译器的 Tailwind 依赖含有平台组件。跨系统或架构构建时需要目标平台对应的依赖，重新生成并验证 `dist/plugin-compiler`，不能直接复用其他平台生成的目录。当前集成验证环境为 Windows x64。
 
 ## 验证
 
@@ -131,6 +150,7 @@ plugins/official/<id>/<version>/<sha256>.lxplugin
 ```sh
 node --test tests/optional-plugins.test.cjs
 node --test tests/folia-lyrics.test.cjs
+node --test tests/plugin-source.test.cjs
 ```
 
 构建主进程、主界面和桌面歌词后，可执行真实 Electron 集成测试：
@@ -143,9 +163,13 @@ node --test tests/plugin-store.electron.test.cjs
 node --test tests/audio-visualizer.electron.test.cjs
 node --test tests/folia-lyrics.electron.test.cjs
 node --test tests/dynamic-plugin-store.electron.test.cjs
+node --test tests/plugin-transfer.electron.test.cjs
+node --test tests/plugin-source.electron.test.cjs
 ```
 
 集成测试使用隔离的临时用户目录，拦截 GitHub 请求并提供实际构建的插件包，验证独立安装、播放中的卸载、重复安装、频谱绘制、离线重启和不同窗口尺寸下的布局。测试音频在输出前静音。
+
+源码测试检查 ZIP 路径、完整性和依赖结构，使用随主程序提供的编译器重新构建四个官方插件；界面测试验证离线导入、编译过程提示、重新打包导出源码、编译失败保留旧版本、即时更新及离线重启。运行这些测试前需完成 `build:main`。
 
 可视化测试还验证从 1.1.1 更新到当前版本、旧样式迁移、三种样式预览与绘制、主界面和桌面歌词分别保存及同步、键盘操作和关闭预览后释放分析器。
 

@@ -267,13 +267,13 @@ onBeforeUnmount(() => {
 
   svg {
     transition: opacity @transition-fast;
-    opacity: .6;
+    opacity: 1;
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
     background-color: var(--color-hover);
     svg {
-      opacity: .9;
+      opacity: 1;
     }
   }
   &:active {
@@ -401,7 +401,7 @@ onBeforeUnmount(() => {
     background-color: var(--color-primary-background-hover);
 
     .removeBtn {
-      opacity: .65;
+      opacity: 1;
     }
   }
 
@@ -510,7 +510,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--color-font-label);
-  opacity: .35;
+  opacity: 1;
   padding: 6px;
   transition: var(--duration-fast) var(--ease-standard);
   transition-property: color, opacity, background-color;

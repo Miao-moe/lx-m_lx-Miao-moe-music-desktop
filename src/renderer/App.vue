@@ -1,7 +1,8 @@
 <template>
-  <div id="container" class="view-container">
-    <layout-aside id="left" />
-    <div id="right">
+  <div id="container" class="view-container" :data-ambient-enabled="appSetting['ui.ambientBackground'] ? '' : null" :data-player-detail-open="isShowPlayerDetail ? '' : null">
+    <KawarpBackground v-if="appSetting['ui.ambientBackground']" :cover="musicInfo.pic" />
+    <layout-aside id="left" :inert="isShowPlayerDetail ? '' : null" />
+    <div id="right" :inert="isShowPlayerDetail ? '' : null">
       <layout-toolbar id="toolbar" />
       <layout-view id="view" />
       <layout-play-bar id="player" />
@@ -22,6 +23,9 @@ import { onMounted } from '@common/utils/vueTools'
 // import '@common/utils/effects/snow.min'
 import useApp from '@renderer/core/useApp'
 import { useSmoothAnimation } from '@renderer/utils/smoothAnimation'
+import KawarpBackground from '@renderer/components/layout/PlayDetail/KawarpBackground.vue'
+import { appSetting } from '@renderer/store/setting'
+import { musicInfo, isShowPlayerDetail } from '@renderer/store/player/state'
 
 useApp()
 
@@ -142,6 +146,7 @@ body {
   -webkit-app-region: no-drag;
 }
 #right {
+  position: relative;
   flex: auto;
   display: flex;
   flex-flow: column nowrap;
@@ -162,6 +167,61 @@ body {
   flex: auto;
   // display: flex;
   min-height: 0;
+}
+#container[data-ambient-enabled] {
+  isolation: isolate;
+  background-color: var(--color-surface);
+  --setting-search-background: transparent;
+
+  // The same canvas stays behind both screens throughout player expansion.
+  > [data-ambient-background] { z-index: -1; }
+  #right, #view [data-motion-outlet] { background-color: transparent; }
+  #player::before { background-color: transparent; }
+  > #left, > #right {
+    transition: opacity var(--duration-detail) var(--ease-standard), background-color var(--duration-normal) var(--ease-standard);
+  }
+  &[data-player-detail-open] {
+    > #left, > #right { opacity: 0; pointer-events: none; }
+  }
+}
+
+#root[data-ambient-controls] {
+  color-scheme: var(--adaptive-color-scheme);
+  // Controls inherit the live color at their own position. Shared background
+  // samples drive these tokens; modal/input surfaces keep their readable base.
+  [data-ambient-zone] {
+    --color-primary: var(--ambient-local-accent);
+    --color-accent: var(--ambient-local-accent);
+    --color-nav-font: var(--ambient-local-accent);
+    --color-primary-font: var(--ambient-local-accent);
+    --color-primary-font-hover: var(--ambient-local-accent);
+    --color-primary-font-active: var(--ambient-local-accent);
+    --color-button-font: var(--ambient-local-accent);
+    --color-button-font-selected: var(--ambient-local-accent);
+    --color-primary-dark-100: var(--ambient-local-accent);
+    --color-primary-dark-200: var(--ambient-local-accent);
+    --color-primary-dark-100-alpha-100: var(--ambient-local-accent);
+    --color-primary-dark-100-alpha-200: var(--ambient-local-accent);
+    --color-primary-dark-100-alpha-300: var(--ambient-local-accent);
+    --color-primary-light-100-alpha-300: var(--ambient-local-accent);
+    --color-primary-dark-500-alpha-500: var(--ambient-local-accent);
+    --color-primary-alpha-100: var(--ambient-local-accent);
+    --color-primary-alpha-200: var(--ambient-local-accent);
+    --color-primary-alpha-300: var(--ambient-local-accent);
+    --color-primary-alpha-400: var(--ambient-local-accent);
+    --color-primary-alpha-500: var(--ambient-local-accent);
+    --color-000: var(--ambient-local-on-accent);
+    --adaptive-selection-text: var(--ambient-local-on-accent);
+    --adaptive-selection-background: var(--ambient-local-accent);
+  }
+  button[data-ambient-zone] { --color-font-label: var(--ambient-local-accent); }
+  ::selection {
+    color: var(--adaptive-selection-text);
+    -webkit-text-fill-color: var(--adaptive-selection-text);
+    background-color: var(--adaptive-selection-background);
+    text-shadow: none;
+  }
+  input, textarea { caret-color: var(--color-accent); }
 }
 
 .view-container {

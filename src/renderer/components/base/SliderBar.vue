@@ -147,6 +147,10 @@ export default {
   }
 }
 
+:global(#root[data-ambient-controls]) .sliderContent:not(.disabled) {
+  opacity: 1;
+}
+
 .slider {
   // cursor: pointer;
   width: 100%;

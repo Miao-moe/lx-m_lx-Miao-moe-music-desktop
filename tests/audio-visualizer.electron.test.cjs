@@ -4,8 +4,9 @@ const path = require('node:path')
 const { createHash } = require('node:crypto')
 const { test } = require('node:test')
 const { launch, route, settled, seedTrack, showDetail } = require('./helpers/motion-fixture.cjs')
-const { catalogRoot, mockGitHub, openStore, label, install, startSilentAudio } = require('./helpers/plugin-fixture.cjs')
-const { version: visualizerVersion } = require('../src/optional-plugins/audio-visualizer/manifest.json')
+const { mockGitHub, openStore, label, install, startSilentAudio } = require('./helpers/plugin-fixture.cjs')
+const { packSource } = require('../src/common/pluginSource')
+const { version: visualizerVersion } = require('../src/optional-plugins/audio-visualizer/plugin.json')
 
 const styles = ['spectrum', 'wave', 'radial']
 const showPlayer = async page => {
@@ -41,16 +42,21 @@ test('visualizer updates independently with three styles and audioMotion, a pick
     let { app, page } = fixture
     page.setDefaultTimeout(12000)
     await mockGitHub(app)
-    const oldDirectory = path.join(catalogRoot, 'audio-visualizer/1.1.1')
-    const oldFile = (await fs.readdir(oldDirectory)).find(name => name.endsWith('.lxplugin'))
-    const archive = await fs.readFile(path.join(oldDirectory, oldFile))
-    const oldCatalog = { schemaVersion: 1, plugins: [{ id: 'audio-visualizer', version: '1.1.1', apiVersion: 1, path: `audio-visualizer/1.1.1/${oldFile}`, bytes: archive.length, sha256: createHash('sha256').update(archive).digest('hex') }] }
-    await app.evaluate((_electron, catalog) => { global.__pluginCatalogOverride = catalog }, oldCatalog)
+    const archive = await packSource({ id: 'audio-visualizer', version: '1.1.1', apiVersion: 1, entry: 'src/index.js' }, new Map([
+      ['src/index.js', Buffer.from("import { h } from 'vue'; export default { components: { Settings: () => h('div', 'Previous source version') } }")],
+    ]))
+    const sha256 = createHash('sha256').update(archive).digest('hex')
+    const oldCatalog = { schemaVersion: 2, plugins: [{ id: 'audio-visualizer', version: '1.1.1', apiVersion: 1, path: `audio-visualizer/1.1.1/${sha256}.zip`, bytes: archive.length, sha256 }] }
+    await app.evaluate((_electron, { catalog, archive }) => {
+      global.__pluginCatalogOverride = catalog
+      global.__pluginPackageOverrides[catalog.plugins[0].path] = archive
+    }, { catalog: oldCatalog, archive: archive.toString('base64') })
     await openStore(page)
     await install(page, 'audio-visualizer')
     const dataRoot = await app.evaluate(() => global.lxDataPath)
     const oldRegistry = JSON.parse(await fs.readFile(path.join(dataRoot, 'plugins/installed.json'), 'utf8'))
     assert.equal(oldRegistry['audio-visualizer'] != null, true)
+    await fs.mkdir(path.join(dataRoot, 'plugins/preferences'), { recursive: true })
     await fs.writeFile(path.join(dataRoot, 'plugins/preferences/audio-visualizer.json'), JSON.stringify({ version: 1, main: 'bars', desktop: 'ring' }))
     await app.evaluate(() => { global.__pluginCatalogOverride = null })
     await page.getByRole('button', { name: await label(page, 'setting__plugins_refresh'), exact: true }).click()

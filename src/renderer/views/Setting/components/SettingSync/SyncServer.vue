@@ -1,5 +1,5 @@
 <template lang="pug">
-dd
+dd(data-setting-search="setting__sync_server" data-setting-search-depends="setting_sync_enable setting_sync_mode_server")
   h3 {{ syncEnableServerTitle }}
   div
     .p.small {{ $t('setting__sync_server_auth_code', { code: sync.server.status.code || '' }) }}

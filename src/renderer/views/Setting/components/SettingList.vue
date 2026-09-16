@@ -40,7 +40,7 @@ dd
         id="setting_list_loading_mode_immediate" name="setting_list_loading_mode" need
         :model-value="appSetting['list.loadingMode']" value="immediate" :label="$t('setting__list_loading_mode_immediate')"
         @update:model-value="updateSetting({'list.loadingMode': $event})")
-dd(:aria-label="$t('setting__basic_sourcename_title')")
+dd(:aria-label="$t('setting__list_add_music_location_type')")
   h3#list_addMusicLocationType {{ $t('setting__list_add_music_location_type') }}
   div
     base-checkbox.gap-left(

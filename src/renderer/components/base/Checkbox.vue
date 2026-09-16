@@ -172,6 +172,7 @@ export default {
   display: flex;
   color: var(--color-primary);
   border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-standard);
   // border: 1px solid #ccc;
   &:after {
     position: absolute;
@@ -199,6 +200,12 @@ export default {
   transform: scale(0);
   border-radius: var(--radius-sm);
   // opacity: 0;
+}
+
+// The adaptive hover surface is opaque; keep the checked symbol above it.
+:global(#root[data-ambient-controls]) .icon {
+  position: relative;
+  z-index: 1;
 }
 
 .label {

@@ -1,11 +1,10 @@
 <template>
   <div
     v-if="detailMounted" v-show="detailDisplayed" ref="detailRoot" data-player-detail
-    :class="[$style.container, { fullscreen: isFullscreen }]" :aria-hidden="!isShowPlayerDetail"
+    :class="[$style.container, { fullscreen: isFullscreen, [$style.ambientDetail]: appSetting['ui.ambientBackground'] && !pluginPlayDetail }]" :aria-hidden="!isShowPlayerDetail"
     :inert="!isShowPlayerDetail ? '' : null" @contextmenu="handleContextMenu"
   >
     <div :class="$style.bg" />
-    <AmbientBackground v-if="visibled" :cover="playerCover" />
     <ControlBtnsLeftHeader v-if="appSetting['common.controlBtnPosition'] == 'left'" data-detail-part="chrome" />
     <ControlBtnsRightHeader v-else data-detail-part="chrome" />
     <component :is="pluginPlayDetail" v-if="visibled && pluginPlayDetail && !isShowPlayComment && !isShowLrcSelectContent" :class="$style.main" data-detail-part="lyrics" />
@@ -50,7 +49,6 @@ import { computed, watch } from '@common/utils/vueTools'
 import { pluginRuntime } from '@renderer/store/optionalPlugins'
 import usePlayerDetailMotion from '@renderer/utils/compositions/usePlayerDetailMotion'
 import useEntityDetailNavigation from '@renderer/utils/compositions/useEntityDetailNavigation'
-import AmbientBackground from './AmbientBackground.vue'
 import { isFullscreen } from '@renderer/store'
 import {
   isShowPlayerDetail,
@@ -77,7 +75,6 @@ import { closeWindow, maxWindow, minWindow, setFullScreen } from '@renderer/util
 export default {
   name: 'CorePlayDetail',
   components: {
-    AmbientBackground,
     ControlBtnsLeftHeader,
     ControlBtnsRightHeader,
     LyricPlayer,
@@ -201,6 +198,12 @@ export default {
   * {
     box-sizing: border-box;
   }
+}
+.ambientDetail {
+  background-color: transparent;
+  --lyric-idle-color: var(--color-font);
+  --lyric-idle-opacity: .78;
+  .bg { display: none; }
 }
 .bg {
   position: absolute;

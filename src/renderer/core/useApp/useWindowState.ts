@@ -1,6 +1,6 @@
 import { onBeforeUnmount, watch } from '@common/utils/vueTools'
 import { type WindowState, windowSizeList } from '@common/config'
-import { isFullscreen, isMaximized, windowFontSize } from '@renderer/store'
+import { isFullscreen, isMaximized, isWindowVisible, windowFontSize } from '@renderer/store'
 import { appSetting } from '@renderer/store/setting'
 import { getFontSizeWithScreen } from '@renderer/utils'
 import { getWindowState, onWindowStateChanged } from '@renderer/utils/ipc'
@@ -26,6 +26,7 @@ export default () => {
   const updateState = (state: WindowState) => {
     isMaximized.value = state.isMaximized
     isFullscreen.value = state.isFullscreen
+    isWindowVisible.value = state.isVisible !== false
   }
   let receivedState = false
   const stopWindowState = onWindowStateChanged(({ params }) => {

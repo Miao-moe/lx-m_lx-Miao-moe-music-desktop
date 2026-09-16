@@ -326,17 +326,20 @@ export default {
   outline: none;
   border-radius: @radius-border;
   cursor: pointer;
-  opacity: .1;
+  opacity: 1;
   transition: opacity @transition-normal;
   color: var(--color-button-font);
   svg {
     vertical-align: bottom;
   }
   &:active {
-    opacity: .7 !important;
+    opacity: 1 !important;
   }
   &:hover {
-    opacity: .6 !important;
+    opacity: 1 !important;
+  }
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
   }
 }
 .listsContent {

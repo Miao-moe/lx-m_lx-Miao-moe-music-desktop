@@ -89,7 +89,7 @@ useNavDrag({
   color: var(--color-nav-font);
   cursor: pointer;
   outline: none;
-  transition: background-color var(--duration-fast), opacity var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), opacity var(--duration-fast);
   .mixin-ellipsis-1();
 
   &:before {
@@ -109,10 +109,8 @@ useNavDrag({
     &:hover { background-color: var(--color-primary-light-300-alpha-800); }
   }
   &:hover:not(.active) {
-    opacity: .8;
     background-color: var(--color-primary-light-400-alpha-700);
   }
-  &:active:not(.active) { opacity: .6; }
   &:focus-visible { box-shadow: inset var(--focus-ring); }
 }
 .icon {

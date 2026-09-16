@@ -20,6 +20,7 @@ export const createPluginRuntime = (host: Record<string, unknown>, lyric = false
   const components = vue.shallowReactive<Partial<Record<PluginId, PluginModule['components']>>>({})
   const playDetails = vue.shallowReactive<Partial<Record<PluginId, NonNullable<PluginModule['playDetail']>>>>({})
   const slots = vue.shallowReactive<Partial<Record<PluginId, NonNullable<PluginModule['slots']>>>>({})
+  const downloadActions = vue.shallowReactive<Partial<Record<PluginId, NonNullable<PluginModule['downloadActions']>>>>({})
   const errors = vue.reactive<Partial<Record<PluginId, string>>>({})
   const loaded = new Map<PluginId, { directory: string, dispose: () => void }>()
   let latest: PluginStoreSnapshot | null = null
@@ -31,6 +32,7 @@ export const createPluginRuntime = (host: Record<string, unknown>, lyric = false
     Reflect.deleteProperty(components, id)
     Reflect.deleteProperty(playDetails, id)
     Reflect.deleteProperty(slots, id)
+    Reflect.deleteProperty(downloadActions, id)
     await vue.nextTick()
     try { plugin?.dispose() } finally { loaded.delete(id) }
   }
@@ -78,6 +80,7 @@ export const createPluginRuntime = (host: Record<string, unknown>, lyric = false
         ...(module.default.playDetail && module.default.components.Toggle ? { playDetailControls: module.default.components.Toggle } : {}),
         ...module.default.slots,
       })
+      if (!lyric && module.default.downloadActions) downloadActions[id] = vue.markRaw(module.default.downloadActions)
       Reflect.deleteProperty(errors, id)
     } catch (error: any) {
       dispose()
@@ -85,6 +88,7 @@ export const createPluginRuntime = (host: Record<string, unknown>, lyric = false
       Reflect.deleteProperty(components, id)
       Reflect.deleteProperty(playDetails, id)
       Reflect.deleteProperty(slots, id)
+      Reflect.deleteProperty(downloadActions, id)
       errors[id] = error.message
       console.error(`Plugin ${id} failed to load:`, error)
     }
@@ -112,6 +116,7 @@ export const createPluginRuntime = (host: Record<string, unknown>, lyric = false
     components,
     playDetails,
     slots,
+    downloadActions,
     errors,
     sync,
     unload,

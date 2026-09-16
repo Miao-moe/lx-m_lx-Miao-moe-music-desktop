@@ -123,6 +123,7 @@ export const versionInfo = window.lxData.versionInfo = reactive<{
   reCheck: boolean
   status: LX.UpdateStatus
   downloadProgress: LX.UpdateProgressInfo | null
+  updateError: string
 }>({
   // 挂载界面前由主进程提供当前安装包的版本，避免复用旧构建时显示旧版本。
   version: '',
@@ -133,6 +134,7 @@ export const versionInfo = window.lxData.versionInfo = reactive<{
   isLatest: false,
   status: 'checking',
   downloadProgress: null,
+  updateError: '',
 })
 export const userApi = reactive<{
   list: LX.UserApi.UserApiInfo[]
@@ -150,6 +152,7 @@ export const isShowChangeLog = ref(false)
 
 
 export const isFullscreen = ref(false)
+export const isWindowVisible = ref(true)
 export const isMaximized = ref(false)
 export const windowFontSize = ref(appSetting['common.fontSize'])
 

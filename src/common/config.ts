@@ -8,6 +8,7 @@ export interface WindowSize {
 export interface WindowState {
   isMaximized: boolean
   isFullscreen: boolean
+  isVisible?: boolean
 }
 
 export const windowSizeList: WindowSize[] = [

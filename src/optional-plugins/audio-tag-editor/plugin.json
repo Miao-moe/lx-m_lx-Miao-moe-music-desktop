@@ -1,0 +1,9 @@
+{
+  "format": "lx-m-plugin-source",
+  "formatVersion": 1,
+  "id": "audio-tag-editor",
+  "version": "1.1.0",
+  "apiVersion": 3,
+  "entry": "src/index.ts",
+  "dependencies": { "node-id3": "0.2.9", "iconv-lite": "0.7.3" }
+}

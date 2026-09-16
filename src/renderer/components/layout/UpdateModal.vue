@@ -7,7 +7,7 @@ material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose
         h3 最新版本：{{ versionInfo.newVersion?.version }}
         h3 当前版本：{{ versionInfo.version }}
         h3 版本变化：
-        pre(:class="$style.desc" v-text="versionInfo.newVersion?.desc")
+        pre(:class="$style.desc" v-text="desc")
     div(:class="$style.footer")
       div(:class="$style.btns")
         base-btn(v-if="versionInfo.status == 'checking'" :class="$style.btn" disabled) 检查更新中...
@@ -39,21 +39,17 @@ material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose
         h3 最新版本：{{ versionInfo.newVersion?.version }}
         h3 当前版本：{{ versionInfo.version }}
         h3 版本变化：
-        pre(:class="$style.desc" v-text="versionInfo.newVersion?.desc")
+        pre(:class="$style.desc" v-text="desc")
       div(v-if="history.length" :class="[$style.history, $style.desc]")
         h3 历史版本：
-        div(v-for="(ver, index) in history" :key="index" :class="$style.item")
-          h4 v{{ ver.version }}
-          pre(v-text="ver.desc")
+        pre(v-text="historyDesc")
     div(:class="$style.footer")
       div(:class="$style.desc")
-        p 新版本已下载完毕，
+        p 新版本已下载完毕。
         p
-          | 你可以选择
+          | 你可以点击
           strong 立即重启更新
-          | 或稍后
-          strong 关闭程序时
-          | 自动更新~
+          | 安装新版本，也可以稍后再更新。
       div(:class="$style.btns")
         base-btn(:class="$style.btn" @click="handleRestartClick") 立即重启更新
   main(v-else :class="$style.main")
@@ -63,12 +59,10 @@ material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose
         h3 最新版本：{{ versionInfo.newVersion?.version }}
         h3 当前版本：{{ versionInfo.version }}
         h3 版本变化：
-        pre(:class="$style.desc" v-text="versionInfo.newVersion?.desc")
+        pre(:class="$style.desc" v-text="desc")
       div(v-if="history.length" :class="[$style.history, $style.desc]")
         h3 历史版本：
-        div(v-for="(ver, index) in history" :key="index" :class="$style.item")
-          h4 v{{ ver.version }}
-          pre(v-text="ver.desc")
+        pre(v-text="historyDesc")
 
     div(:class="$style.footer")
       div(:class="$style.desc")
@@ -81,11 +75,13 @@ material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose
           | 。
         p(v-if="progress") 当前下载进度：{{ progress }}
         p(v-else) &nbsp;
+        p(v-if="versionInfo.updateError" role="alert") {{ versionInfo.updateError }}
+        p(v-else-if="!versionInfo.newVersion?.downloadUrl") 暂无适用的自动更新安装包，请手动更新。
       div(:class="$style.btns")
         base-btn(:class="$style.btn3" @click="handleClose") 暂不更新
         base-btn(:class="$style.btn3" @click="handleManualUpdate") 手动更新
         base-btn(v-if="versionInfo.status == 'downloading'" :class="$style.btn3" disabled) 下载更新中...
-        base-btn(v-else :class="$style.btn3" @click="handleDownloadClick") 自动更新
+        base-btn(v-else :class="$style.btn3" :disabled="!versionInfo.newVersion?.downloadUrl" @click="handleDownloadClick") 自动更新
 </template>
 
 <script>
@@ -94,6 +90,7 @@ import { openUrl, clipboardWriteText } from '@common/utils/electron'
 import { dialog } from '@renderer/plugins/Dialog'
 import { versionInfo } from '@renderer/store'
 import { getIgnoreVersion, saveIgnoreVersion, quitUpdate, downloadUpdate, checkUpdate } from '@renderer/utils/ipc'
+import { formatChangeLog } from '@renderer/utils/changeLog'
 
 export default {
   setup() {
@@ -108,6 +105,9 @@ export default {
     }
   },
   computed: {
+    desc() {
+      return formatChangeLog(this.versionInfo.newVersion?.desc)
+    },
     history() {
       if (!this.versionInfo.newVersion?.history) return []
       let arr = []
@@ -117,6 +117,9 @@ export default {
       })
 
       return arr
+    },
+    historyDesc() {
+      return this.history.map(ver => formatChangeLog(ver.desc, ver.version)).join('\n\n')
     },
     progress() {
       return this.versionInfo.status == 'downloading'
@@ -179,6 +182,7 @@ export default {
       if (this.isIgnored) saveIgnoreVersion(this.ignoreVersion = null)
       const info = this.versionInfo.newVersion
       if (!info?.downloadUrl) return
+      versionInfo.updateError = ''
       versionInfo.status = 'downloading'
       downloadUpdate({
         version: info.version,
@@ -193,6 +197,7 @@ export default {
       this.handleClose()
     },
     handleCheckUpdate() {
+      versionInfo.updateError = ''
       if (this.isIgnored) saveIgnoreVersion(this.ignoreVersion = null)
       versionInfo.status = 'checking'
       versionInfo.reCheck = true
@@ -277,23 +282,6 @@ export default {
   h3 {
     padding-top: 15px;
   }
-
-  .item {
-    h3 {
-      padding: 5px 0 3px;
-    }
-    padding: 0 15px;
-    + .item {
-      padding-top: 15px;
-    }
-    h4 {
-      font-weight: 700;
-    }
-    > p {
-      padding-left: 15px;
-    }
-  }
-
 }
 .footer {
   flex: 0 0 none;

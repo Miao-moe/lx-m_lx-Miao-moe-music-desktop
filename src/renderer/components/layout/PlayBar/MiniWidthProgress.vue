@@ -401,7 +401,6 @@ export default {
     background-color: var(--color-hover);
   }
   &:active {
-    opacity: .75;
     transform: scale(.94);
   }
   &:focus-visible {

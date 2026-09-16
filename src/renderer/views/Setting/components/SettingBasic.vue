@@ -4,7 +4,7 @@ dd
   div
     .gap-top
       base-checkbox(id="setting_show_animate" :model-value="appSetting['common.isShowAnimation']" :label="$t('setting__basic_show_animation')" @update:model-value="updateSetting({'common.isShowAnimation': $event})")
-    .gap-top
+    .gap-top(data-setting-search-depends="setting_show_animate")
       base-checkbox(id="setting_animate" :disabled="!appSetting['common.isShowAnimation']" :model-value="appSetting['common.randomAnimate']" :label="$t('setting__basic_animation')" @update:model-value="updateSetting({'common.randomAnimate': $event})")
     .gap-top
       base-checkbox(id="setting_start_in_fullscreen" :model-value="appSetting['common.startInFullscreen']" :label="$t('setting__basic_start_in_fullscreen')" @update:model-value="updateSetting({'common.startInFullscreen': $event})")
@@ -13,30 +13,30 @@ dd
     .p.gap-top
       base-btn.btn(min @click="isShowPlayTimeoutModal = true") {{ $t('setting__play_timeout')}} {{ timeLabel ? ` (${timeLabel})` : '' }}
 
-dd
+dd(data-setting-search="setting__basic_theme theme")
   h3#basic_theme {{ $t('setting__basic_theme') }}
   div
     ul(:class="$style.theme")
       li(v-for="theme in themeList" :key="theme.id" :aria-label="theme.name" :style="theme.styles" :class="[$style.themeItem, {[$style.active]: themeId == theme.id}]" @click="toggleTheme(theme)" @contextmenu="handleEditTheme(theme)")
         div(:class="$style.bg")
         span(:class="$style.label") {{ theme.name }}
-      li(v-if="showAllTheme || themeId == 'auto'" :aria-label="$t('theme_auto_tip')" :style="autoTheme" :class="[$style.themeItem, $style.auto, {[$style.active]: themeId == 'auto'}]" @click="handleSetThemeAuto" @contextmenu="isShowThemeSelectorModal = true")
+      li(v-if="showThemeOptions || themeId == 'auto'" :aria-label="$t('theme_auto_tip')" :style="autoTheme" :class="[$style.themeItem, $style.auto, {[$style.active]: themeId == 'auto'}]" @click="handleSetThemeAuto" @contextmenu="isShowThemeSelectorModal = true")
         div(:class="$style.bg")
           div(:class="$style.bgContent")
             div(:class="$style.light")
             div(:class="$style.dark")
         span(:class="$style.label") {{ $t('theme_auto') }}
-      li(v-if="showAllTheme" :aria-label="$t('theme_add')" :class="[$style.themeItem, $style.add]" @click="handleEditTheme()")
+      li(v-if="showThemeOptions" :aria-label="$t('theme_add')" :class="[$style.themeItem, $style.add]" @click="handleEditTheme()")
         div(:class="$style.bg")
           div(:class="$style.bgContent")
             svg-icon(:class="$style.icon" name="plus")
         span(:class="$style.label") {{ $t('theme_add') }}
-      li(v-if="showAllTheme" :aria-label="$t('theme_import')" :class="[$style.themeItem, $style.add]" @click="handleImportTheme")
+      li(v-if="showThemeOptions" :aria-label="$t('theme_import')" :class="[$style.themeItem, $style.add]" @click="handleImportTheme")
         div(:class="$style.bg")
           div(:class="$style.bgContent")
             svg-icon(:class="$style.icon" name="download")
         span(:class="$style.label") {{ $t('theme_import') }}
-      li(v-if="!showAllTheme" :aria-label="$t('theme_more_btn_show')" :class="[$style.themeItem, $style.moreThme]" @click="showAllTheme = true")
+      li(v-if="!showThemeOptions" :aria-label="$t('theme_more_btn_show')" :class="[$style.themeItem, $style.moreThme]" @click="showAllTheme = true")
         span(:class="$style.label") {{ $t('theme_more_btn_show') }}
         svg-icon(name="angle-right-solid" :class="$style.activeIcon")
 
@@ -147,10 +147,14 @@ export default {
     UserApiModal,
     QualityCheckModal,
   },
-  setup() {
+  props: {
+    searchKeyword: { type: String, default: '' },
+  },
+  setup(props) {
     const t = useI18n()
 
     const showAllTheme = ref(false)
+    const showThemeOptions = computed(() => showAllTheme.value || !!props.searchKeyword.trim())
     const defaultThemesRaw = shallowReactive([])
     const defaultThemes = computed(() => {
       return defaultThemesRaw.map(theme => ({ ...theme, isDefault: true, name: t('theme_' + theme.id) }))
@@ -161,7 +165,7 @@ export default {
     })
     const themeList = computed(() => {
       if (!allThemes.value.length) return []
-      return showAllTheme.value
+      return showThemeOptions.value
         ? allThemes.value
         : themeId.value == 'auto'
           ? []
@@ -414,6 +418,7 @@ export default {
       userThemes,
       autoTheme,
       showAllTheme,
+      showThemeOptions,
       themeList,
       fonts,
       updateFonts,

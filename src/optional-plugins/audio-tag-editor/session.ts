@@ -6,6 +6,8 @@ interface EditorState {
   busy: boolean
   error: string
   saved: boolean
+  downloadId: string
+  active: boolean
 }
 
 export const editor = reactive<EditorState>({
@@ -14,4 +16,6 @@ export const editor = reactive<EditorState>({
   busy: false,
   error: '',
   saved: false,
+  downloadId: '',
+  active: true,
 })

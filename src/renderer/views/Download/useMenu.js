@@ -1,7 +1,12 @@
-import { computed, ref, shallowReactive, reactive, nextTick } from '@common/utils/vueTools'
+import { computed, ref, shallowRef, shallowReactive, reactive, nextTick } from '@common/utils/vueTools'
 import musicSdk from '@renderer/utils/musicSdk'
 import { useI18n } from '@renderer/plugins/i18n'
 import { DOWNLOAD_STATUS } from '@common/constants'
+import { useRouter } from '@common/utils/vueRouter'
+import { pluginText } from '@common/optionalPlugins'
+import { pluginRuntime } from '@renderer/store/optionalPlugins'
+import { appSetting } from '@renderer/store/setting'
+import { dialog } from '@renderer/plugins/Dialog'
 
 export default ({
   handleStartTask,
@@ -26,6 +31,8 @@ export default ({
     addTo: true,
   })
   const t = useI18n()
+  const router = useRouter()
+  const menuTask = shallowRef(null)
   const menuLocation = shallowReactive({ x: 0, y: 0 })
   const isShowItemMenu = ref(false)
 
@@ -56,6 +63,13 @@ export default ({
         action: 'file',
         hide: !itemMenuControl.file,
       },
+      ...Object.entries(pluginRuntime.downloadActions).flatMap(([pluginId, actions]) => actions.map(action => ({
+        name: pluginText(action.name, appSetting['common.langId'], action.id),
+        action: `plugin:${pluginId}:${action.id}`,
+        pluginId,
+        pluginAction: action,
+        disabled: !menuTask.value || !action.isAvailable(menuTask.value),
+      }))),
       {
         name: t('list__add_to'),
         action: 'addTo',
@@ -80,6 +94,7 @@ export default ({
   })
 
   const showMenu = (event, taskInfo) => {
+    menuTask.value = taskInfo
     itemMenuControl.sourceDetail = !!musicSdk[taskInfo.metadata.musicInfo.source]?.getMusicDetailPageUrl
 
     if (taskInfo.isComplate) {
@@ -118,8 +133,21 @@ export default ({
 
   const menuClick = (action, index) => {
     // console.log(action)
+    const task = menuTask.value
+    menuTask.value = null
     hideMenu()
     if (!action) return
+    if (action.pluginAction) {
+      // Keep the clicked task ID: filtering, sorting or removing rows can change its index.
+      if (!task || !pluginRuntime.downloadActions[action.pluginId]?.includes(action.pluginAction) || !action.pluginAction.isAvailable(task)) return
+      action.pluginAction.run(task.id, {
+        openSettings: async() => {
+          if (!pluginRuntime.downloadActions[action.pluginId]?.includes(action.pluginAction)) return
+          await router.push({ path: '/setting', query: { name: `SettingPlugin_${action.pluginId}` } })
+        },
+      }).catch(error => { console.error('Download plugin action failed:', error); return dialog({ message: String(error.message ?? error) }) })
+      return
+    }
     switch (action.action) {
       case 'start':
         handleStartTask(index)

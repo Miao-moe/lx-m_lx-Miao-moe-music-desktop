@@ -4,11 +4,11 @@ const path = require('node:path')
 const { test } = require('node:test')
 const { launch, route, settled } = require('./helpers/motion-fixture.cjs')
 
-test('motion preferences survive full Electron restarts with system reduction enabled', { timeout: 60000 }, async t => {
+test('app animation switches survive restarts and obsolete system preferences are discarded', { timeout: 60000 }, async t => {
   let fixture
   let profilePath
   const start = async() => {
-    fixture = await launch({ profilePath, initializeMotion: false, reducedMotion: 'reduce' })
+    fixture = await launch({ profilePath, initializeMotion: false, reducedMotion: 'reduce', args: ['--disable-backgrounding-occluded-windows'] })
     profilePath ??= fixture.output
   }
   const close = async() => {
@@ -17,53 +17,62 @@ test('motion preferences survive full Electron restarts with system reduction en
     fixture = null
   }
   const state = () => fixture.page.evaluate(() => ({
-    follow: window.lxData.appSetting['ui.followSystemMotion'],
+    hasObsoleteSetting: Object.hasOwn(window.lxData.appSetting, 'ui.followSystemMotion'),
+    smooth: window.lxData.appSetting['ui.smoothAnimation'],
     enabled: document.documentElement.dataset.motionEnabled,
     reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
   }))
-  const config = async() => JSON.parse(await fs.readFile(path.join(profilePath, 'portable/userData/LxDatas/config_v2.json'), 'utf8')).setting
-  const toggleSystemPreference = async() => {
+  const configPath = () => path.join(profilePath, 'portable/userData/LxDatas/config_v2.json')
+  const config = async() => JSON.parse(await fs.readFile(configPath(), 'utf8')).setting
+  const openAdvanced = async() => {
     await route(fixture.page, '/setting')
     await settled(fixture.page)
     const title = await fixture.page.evaluate(() => window.i18n.t('setting__advanced'))
     await fixture.page.getByRole('tab', { name: title, exact: true }).click()
     await settled(fixture.page)
-    await fixture.page.locator('label[for="setting_advanced_ui_follow_system_motion"]').click()
   }
   try {
     await start()
     await t.test('fresh settings use the app animation switches', async() => {
-      assert.deepEqual(await state(), { follow: false, enabled: 'true', reduced: true })
-      assert.equal((await config())['ui.followSystemMotion'], false)
+      assert.deepEqual(await state(), { hasObsoleteSetting: false, smooth: true, enabled: 'true', reduced: true })
+      assert.equal(Object.hasOwn(await config(), 'ui.followSystemMotion'), false)
+      await openAdvanced()
+      assert.equal(await fixture.page.locator('#setting_advanced_ui_follow_system_motion').count(), 0)
+      assert.equal(await fixture.page.locator('#setting_advanced_ui_smooth_anim').count(), 1)
     })
-    await t.test('the actual checkbox saves the system preference', async() => {
-      await toggleSystemPreference()
+    await t.test('the smooth animation checkbox still disables and saves motion', async() => {
+      await fixture.page.locator('label[for="setting_advanced_ui_smooth_anim"]').click()
       await fixture.page.waitForFunction(() => document.documentElement.dataset.motionEnabled === 'false')
-      assert.equal((await config())['ui.followSystemMotion'], true)
+      assert.equal((await config())['ui.smoothAnimation'], false)
     })
     await close()
     await start()
-    await t.test('an explicit system preference is restored after a full restart', async() => {
-      assert.deepEqual(await state(), { follow: true, enabled: 'false', reduced: true })
-      await toggleSystemPreference()
+    await t.test('the app switch is restored and can enable motion despite system reduction', async() => {
+      assert.deepEqual(await state(), { hasObsoleteSetting: false, smooth: false, enabled: 'false', reduced: true })
+      await openAdvanced()
+      await fixture.page.locator('label[for="setting_advanced_ui_smooth_anim"]').click()
       await fixture.page.waitForFunction(() => document.documentElement.dataset.motionEnabled === 'true')
       await fixture.page.evaluate(() => window.lxData.updateSetting({ 'ui.animationSpeed': 1.2 }))
       await fixture.page.waitForFunction(() => document.documentElement.dataset.motionSpeed === '1.2')
       const saved = await config()
-      assert.equal(saved['ui.followSystemMotion'], false)
+      assert.equal(saved['ui.smoothAnimation'], true)
       assert.equal(saved['ui.animationSpeed'], 1.2)
     })
     await close()
+    // Simulate upgrading a profile that explicitly opted into the removed setting.
+    const previous = JSON.parse(await fs.readFile(configPath(), 'utf8'))
+    previous.setting['ui.followSystemMotion'] = true
+    await fs.writeFile(configPath(), JSON.stringify(previous))
     for (let i = 0; i < 2; i++) {
       await start()
       await t.test(`app-controlled motion still plays after restart ${i + 1}`, async() => {
-        assert.deepEqual(await state(), { follow: false, enabled: 'true', reduced: true })
+        assert.deepEqual(await state(), { hasObsoleteSetting: false, smooth: true, enabled: 'true', reduced: true })
         await route(fixture.page, '/search')
         await settled(fixture.page)
         await route(fixture.page, '/setting')
         await fixture.page.waitForFunction(() => document.querySelector('#view > [data-motion-outlet]').getAnimations().length > 0)
         assert.equal(await fixture.page.locator('#view > [data-motion-outlet]').evaluate(el => el.getAnimations()[0].effect.getTiming().duration), 200)
-        assert.equal((await config())['ui.followSystemMotion'], false)
+        assert.equal(Object.hasOwn(await config(), 'ui.followSystemMotion'), false)
       })
       await close()
     }

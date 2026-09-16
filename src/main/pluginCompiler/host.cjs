@@ -1,0 +1,15 @@
+module.exports = Object.fromEntries(Object.entries({
+  vue: 'vue',
+  '@common/utils/vueTools': 'vue',
+  '@renderer/plugins/player': 'player',
+  '@renderer/store/setting': 'settings',
+  '@renderer/store/player/state': 'playerState',
+  '@renderer/store/player/lyric': 'mainLyricState',
+  '@renderer/store/player/playProgress': 'playProgress',
+  '@renderer/utils/ipc': 'ipc',
+  '@renderer/plugins/Dialog': 'dialog',
+  '@renderer/utils/downloadFiles': 'downloadFiles',
+  '@renderer/core/lyric': 'lyric',
+  '@lyric/store/state': 'lyricState',
+  '@lyric/core/mainWindowChannel': 'lyricChannel',
+}).map(([name, value]) => [name, 'window.__lxPluginHost.' + value]))

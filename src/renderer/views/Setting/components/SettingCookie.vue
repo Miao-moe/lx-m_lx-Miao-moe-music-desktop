@@ -27,7 +27,7 @@ dd
       base-btn.btn(min :disabled="syncing" @click="handleSyncNow") {{ syncing ? $t('setting__cookie_sync_now_running') : $t('setting__cookie_sync_now') }}
       span(v-if="syncTip" :style="{ color: syncError ? 'var(--color-font-label)' : 'var(--color-primary)', fontSize: '12px' }") {{ syncTip }}
 
-dd(v-for="item in sources" :key="item.id")
+dd(v-for="item in sources" :key="item.id" :data-setting-search="`setting__cookie_source_${item.id}`")
   h3(:id="`cookie_${item.id}`") {{ item.name }}
   div
     .p

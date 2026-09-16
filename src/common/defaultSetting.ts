@@ -188,8 +188,10 @@ const defaultSetting: LX.AppSetting = {
 
   // ===== UI 增强 =====
   'ui.smoothAnimation': true,
-  'ui.followSystemMotion': false,
   'ui.animationSpeed': 1.0,
+  'ui.ambientBackground': true,
+  'ui.ambientBackgroundAutoContrast': false,
+  'ui.ambientBackgroundQuality': 'gentle',
   'ui.sidebar.width': 0,
   'ui.sidebar.locked': false,
   'ui.sidebar.order': DEFAULT_SIDEBAR_ORDER,

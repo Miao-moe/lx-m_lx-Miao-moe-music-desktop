@@ -103,7 +103,7 @@ export default {
   .footerLeftControlBtn {
     // width: 18px;
     // height: 18px;
-    opacity: .5;
+    opacity: 1;
     cursor: pointer;
     transition: opacity @transition-normal;
     display: flex;
@@ -114,12 +114,12 @@ export default {
     padding: 0;
 
     &:hover {
-      opacity: .9;
+      opacity: 1;
     }
 
     &.active {
       color: var(--color-primary);
-      opacity: .8;
+      opacity: 1;
     }
   }
 

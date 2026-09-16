@@ -1,5 +1,5 @@
 <template lang="pug">
-dd
+dd(data-setting-search="setting__sync_client" data-setting-search-depends="setting_sync_enable setting_sync_mode_client")
   h3 {{ $t('setting__sync_client_mode') }}
   div
     .p.small {{ $t('setting__sync_client_status', { status: clientStatus }) }}

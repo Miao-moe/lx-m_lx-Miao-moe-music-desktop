@@ -127,9 +127,9 @@ const fullscreenExit = () => {
     flex-direction: row-reverse;
     height: @height-toolbar * .7;
     transition: opacity @transition-normal;
-    opacity: .5;
+    opacity: 1;
     &.hover {
-      opacity: .8;
+      opacity: 1;
       .controBtnIcon {
         opacity: 1;
       }

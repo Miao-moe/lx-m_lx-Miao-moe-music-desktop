@@ -783,17 +783,6 @@ table {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :root:not([data-motion-enabled='true']) *,
-  :root:not([data-motion-enabled='true']) *::before,
-  :root:not([data-motion-enabled='true']) *::after {
-    scroll-behavior: auto !important;
-    animation-duration: .01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
-  }
-}
-
 // Icon buttons keep their hitbox; text buttons retain their existing slot layout.
 :root[data-motion-enabled='true'] {
   button:not(:disabled):not([data-motion-button]), a[role='tab'] {

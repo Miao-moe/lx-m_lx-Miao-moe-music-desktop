@@ -20,6 +20,7 @@ const RENDERER_RECOVERY_RESET_DELAY = 30_000
 export const getWindowState = (): WindowState => ({
   isMaximized: !!maximizedRestoreBounds || !!browserWindow?.isMaximized(),
   isFullscreen: windowFullscreen,
+  isVisible: !!browserWindow?.isVisible() && !browserWindow.isMinimized(),
 })
 
 const sendWindowState = () => {
@@ -73,6 +74,10 @@ const winEvent = () => {
 
   browserWindow.on('maximize', sendWindowState)
   browserWindow.on('unmaximize', sendWindowState)
+  browserWindow.on('minimize', sendWindowState)
+  browserWindow.on('restore', sendWindowState)
+  browserWindow.on('show', sendWindowState)
+  browserWindow.on('hide', sendWindowState)
   browserWindow.on('enter-full-screen', () => {
     // Transparent Windows windows emit this event but can report isFullScreen() as false.
     windowFullscreen = true

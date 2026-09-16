@@ -1,0 +1,19 @@
+{
+  "format": "lx-m-plugin-source",
+  "formatVersion": 1,
+  "id": "folia-lyrics",
+  "version": "1.2.0",
+  "apiVersion": 2,
+  "entry": "src/index.ts",
+  "browser": {
+    "entry": "src/engine/main.tsx",
+    "output": "engine",
+    "tailwind": true,
+    "aliases": { "@": "src/engine/vendor/src" },
+    "replacements": [
+      { "from": "src/engine/vendor/src/components/visualizer/VisualizerShell", "to": "src/engine/adapters/Shell.tsx" },
+      { "from": "src/engine/vendor/src/hooks/usePlayerBottomBarBottomPx", "to": "src/engine/adapters/bottomBar.ts" },
+      { "from": "src/engine/vendor/src/services/temperaLayerImages", "to": "src/engine/adapters/images.ts" }
+    ]
+  }
+}

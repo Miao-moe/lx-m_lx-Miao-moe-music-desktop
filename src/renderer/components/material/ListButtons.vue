@@ -105,7 +105,7 @@ export default {
 
 .btns {
   line-height: 1.2;
-  opacity: .42;
+  opacity: 1;
   transform: translateX(2px);
   transition: var(--duration-fast) var(--ease-standard);
   transition-property: opacity, transform;

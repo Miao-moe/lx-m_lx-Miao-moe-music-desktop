@@ -41,7 +41,7 @@ dd
       base-btn.btn(min :disabled="isDisabledLyricRawCacheClear" @click="handleClearLyricRawCache") {{ $t('setting__other_lyric_raw_clear_btn') }}
 
 dd
-  h3#other_lyric_edited {{ $t('setting__other_dislike_list') }}
+  h3#other_dislike_list {{ $t('setting__other_dislike_list') }}
   div
     .p
       | {{ $t('setting__other_dislike_list_label') }}
@@ -60,7 +60,7 @@ dd
       base-btn.btn(min :disabled="isDisabledLyricEditedCacheClear" @click="handleClearLyricEditedCache") {{ $t('setting__other_lyric_edited_clear_btn') }}
 
 dd
-  h3#other_lyric_edited {{ $t('setting__other_listdata') }}
+  h3#other_listdata {{ $t('setting__other_listdata') }}
   div
     .p
       base-btn.btn(min @click="handleClearListData") {{ $t('setting__other_listdata_clear_btn') }}

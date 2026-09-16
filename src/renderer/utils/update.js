@@ -1,4 +1,5 @@
 import { httpGet } from './request'
+import { getWindowsSetupPriority } from '@common/utils/update'
 
 const REPO_OWNER = 'Miao-moe'
 const REPO_NAME = 'lx-m_lx-Miao-moe-music-desktop'
@@ -39,10 +40,16 @@ const selectAsset = (assets) => {
   const arch = getArchKeyword().toLowerCase()
   const platform = process.platform
 
+  if (platform === 'win32') {
+    return assets
+      .map(asset => ({ asset, priority: getWindowsSetupPriority(asset.name || '', process.arch) }))
+      .filter(({ priority }) => priority > 0)
+      .sort((a, b) => b.priority - a.priority)[0]?.asset ?? null
+  }
+
   let candidates = assets.filter(asset => {
     const name = (asset.name || '').toLowerCase()
     switch (platform) {
-      case 'win32': return name.endsWith('.exe')
       case 'darwin': return name.endsWith('.dmg')
       case 'linux': return name.endsWith('.appimage') || name.endsWith('.deb')
       default: return false
@@ -52,11 +59,6 @@ const selectAsset = (assets) => {
 
   const archMatched = candidates.filter(asset => (asset.name || '').toLowerCase().includes(arch))
   if (archMatched.length) candidates = archMatched
-
-  if (platform === 'win32') {
-    const setup = candidates.find(asset => (asset.name || '').toLowerCase().includes('setup'))
-    if (setup) return setup
-  }
 
   return candidates[0]
 }

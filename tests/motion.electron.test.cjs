@@ -5,8 +5,23 @@ const path = require('node:path')
 const { test } = require('node:test')
 const { launch, seedTrack, seedLyrics, route, showDetail, settled } = require('./helpers/motion-fixture.cjs')
 
+const emulateMotion = async(page, reducedMotion) => {
+  // Wait for Chromium to dispatch the preference change before checking app motion.
+  await page.evaluate(reducedMotion => {
+    const media = matchMedia('(prefers-reduced-motion: reduce)')
+    window.__motionMediaReady = media.matches === (reducedMotion === 'reduce')
+      ? Promise.resolve()
+      : new Promise(resolve => media.addEventListener('change', resolve, { once: true }))
+  }, reducedMotion)
+  await page.emulateMedia({ reducedMotion })
+  await page.evaluate(async() => {
+    await window.__motionMediaReady
+    await new Promise(resolve => requestAnimationFrame(resolve))
+  })
+}
+
 test('Fluent motion in the Electron renderer', { timeout: 150000 }, async t => {
-  const { app, page, errors, output } = await launch()
+  const { app, page, errors, output } = await launch({ args: ['--disable-backgrounding-occluded-windows'] })
   t.diagnostic(`Renderer under test: ${new URL(page.url()).origin}`)
   const geometry = () => page.evaluate(() => Object.fromEntries(['#left', '#toolbar', '#player'].map(selector => {
     const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect()
@@ -158,11 +173,10 @@ test('Fluent motion in the Electron renderer', { timeout: 150000 }, async t => {
       await page.evaluate(() => { window.lxData.appSetting['ui.smoothAnimation'] = true })
     })
 
-    await t.test('app motion can override system reduction for both CSS and cover travel', async() => {
-      await page.emulateMedia({ reducedMotion: 'reduce' })
+    await t.test('system reduced motion does not disable page, CSS or cover animations', async() => {
+      await emulateMotion(page, 'reduce')
       await page.evaluate(() => {
         Object.assign(window.lxData.appSetting, {
-          'ui.followSystemMotion': false,
           'ui.smoothAnimation': true,
           'ui.animationSpeed': 1,
           'common.isShowAnimation': true,
@@ -183,18 +197,23 @@ test('Fluent motion in the Electron renderer', { timeout: 150000 }, async t => {
       await settled(page)
       await showDetail(page, true)
       await page.waitForFunction(() => document.querySelector('[data-cover-flight]'))
-      assert.equal(await page.locator('[data-cover-flight]').evaluate(el => el.getAnimations()[0].effect.getTiming().duration), 700)
+      assert.equal(await page.locator('[data-cover-flight]').evaluate(el => {
+        window.__motionCoverFlight = el
+        window.__motionCoverAnimation = el.getAnimations()[0]
+        return window.__motionCoverAnimation.effect.getTiming().duration
+      }), 700)
+      for (const preference of ['no-preference', 'reduce']) {
+        await emulateMotion(page, preference)
+        assert.equal(await page.evaluate(() => document.documentElement.dataset.motionEnabled), 'true')
+        assert.equal(await page.evaluate(() => window.__motionCoverFlight.isConnected && window.__motionCoverAnimation.playState === 'running'), true)
+      }
       await settled(page)
       await showDetail(page, false)
       await settled(page)
-      await page.evaluate(() => { window.lxData.appSetting['ui.followSystemMotion'] = true })
-      await route(page, '/search')
-      assert.equal(await page.evaluate(() => document.documentElement.dataset.motionEnabled), 'false')
-      assert.equal(await page.locator('[data-motion-snapshot]').count(), 0)
-      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      await emulateMotion(page, 'no-preference')
     })
 
-    await t.test('speed, reduced motion and the existing master switch share one clock', async() => {
+    await t.test('speed and the app animation switches share one clock', async() => {
       await page.evaluate(() => { window.lxData.appSetting['ui.smoothAnimation'] = true })
       await showDetail(page, false)
       await settled(page)
@@ -203,13 +222,13 @@ test('Fluent motion in the Electron renderer', { timeout: 150000 }, async t => {
         await showDetail(page, true)
         await page.waitForFunction(() => document.querySelector('[data-cover-flight]'))
         assert.equal(await page.locator('[data-cover-flight]').evaluate(el => el.getAnimations()[0].effect.getTiming().duration), 700 / speed)
-        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await page.evaluate(() => { window.lxData.appSetting['ui.smoothAnimation'] = false })
         await settled(page)
         assert.equal(await page.evaluate(() => document.documentElement.dataset.motionEnabled), 'false')
         await showDetail(page, false)
         await page.waitForTimeout(50)
         assert.equal(await page.locator('[data-player-detail]').isVisible(), false)
-        await page.emulateMedia({ reducedMotion: 'no-preference' })
+        await page.evaluate(() => { window.lxData.appSetting['ui.smoothAnimation'] = true })
       }
       await page.evaluate(() => { window.lxData.appSetting['common.isShowAnimation'] = false })
       await route(page, '/search')

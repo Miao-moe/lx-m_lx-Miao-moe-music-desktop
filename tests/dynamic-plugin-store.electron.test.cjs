@@ -2,17 +2,17 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const { createHash, randomUUID } = require('node:crypto')
-const { gzipSync } = require('node:zlib')
+const { packSource } = require('../src/common/pluginSource')
 const { test } = require('node:test')
 const { launch, showDetail, settled } = require('./helpers/motion-fixture.cjs')
 const { catalogRoot, mockGitHub, openStore, install, label } = require('./helpers/plugin-fixture.cjs')
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
-function plugin(id, version) {
+async function plugin(id, version) {
   const files = {
-    'renderer.js': Buffer.from(`const {h, ref} = window.__lxPluginHost.vue;
+    'src/index.js': Buffer.from(`import './style.css'; const {h, ref} = window.__lxPluginHost.vue;
 const id = ${JSON.stringify(id)}, version = ${JSON.stringify(version)}, enabled = ref(false);
-module.exports.default = {
+export default {
   activate(context) {
     (window.__catalogPluginEvents ??= []).push({ id, version, action: 'activate', apiVersion: context.apiVersion });
     return () => window.__catalogPluginEvents.push({ id, version, action: 'deactivate' });
@@ -21,14 +21,14 @@ module.exports.default = {
   slots: { playDetailControls: { setup: () => () => h('button', { 'data-dynamic-control': id, onClick: () => enabled.value = !enabled.value }, 'D') } },
   playDetail: { enabled, component: { setup: () => () => h('div', { 'data-dynamic-player': id }, 'Remote lyrics ' + version) } }
 };`),
-    'lyric.js': Buffer.from(`const {h} = window.__lxPluginHost.vue;
-module.exports.default = { components: {}, slots: { desktopLyricOverlay: { setup: () => () => h('div', { 'data-dynamic-desktop': ${JSON.stringify(id)}, style: 'position:absolute;inset:0;color:red;pointer-events:none' }, ${JSON.stringify(version)}) } } };`),
-    'renderer.css': Buffer.from('[data-dynamic-settings] { padding: 12px; }'),
+    'src/lyric.js': Buffer.from(`const {h} = window.__lxPluginHost.vue;
+export default { components: {}, slots: { desktopLyricOverlay: { setup: () => () => h('div', { 'data-dynamic-desktop': ${JSON.stringify(id)}, style: 'position:absolute;inset:0;color:red;pointer-events:none' }, ${JSON.stringify(version)}) } } };`),
+    'src/style.css': Buffer.from('[data-dynamic-settings] { padding: 12px; }'),
   }
   const display = { name: { 'zh-cn': '线上新插件', 'en-us': 'A new remote plugin' }, description: { 'zh-cn': '从目录动态发现的插件', 'en-us': 'Discovered from the catalog' }, icon: '#icon-lyric' }
-  const manifest = { id, version, apiVersion: 2, ...display, entry: 'renderer.js', lyricEntry: 'lyric.js', styles: ['renderer.css'], files: Object.entries(files).map(([path, bytes]) => ({ path, bytes: bytes.length, sha256: hash(bytes) })) }
-  const bytes = gzipSync(Buffer.from(JSON.stringify({ manifest, files: Object.fromEntries(Object.entries(files).map(([name, bytes]) => [name, bytes.toString('base64')])) })))
-  return { bytes: bytes.toString('base64'), entry: { id, version, apiVersion: 2, ...display, path: `${id}/${version}/${hash(bytes)}.lxplugin`, bytes: bytes.length, sha256: hash(bytes) } }
+  const manifest = { id, version, apiVersion: 2, ...display, entry: 'src/index.js', lyricEntry: 'src/lyric.js' }
+  const bytes = await packSource(manifest, new Map(Object.entries(files)))
+  return { bytes: bytes.toString('base64'), entry: { id, version, apiVersion: 2, ...display, path: `${id}/${version}/${hash(bytes)}.zip`, bytes: bytes.length, sha256: hash(bytes) } }
 }
 const publish = (app, catalog, packages = []) => app.evaluate((_electron, { catalog, packages }) => {
   global.__pluginOffline = false
@@ -42,10 +42,10 @@ const refresh = async page => {
 }
 
 test('a running host discovers unknown plugins, mounts their UI and updates them without a host build', { timeout: 90000 }, async t => {
-  const originalCatalog = JSON.parse(await fs.readFile(path.join(catalogRoot, 'catalog-v2.json'), 'utf8'))
+  const originalCatalog = JSON.parse(await fs.readFile(path.join(catalogRoot, 'catalog.json'), 'utf8'))
   const id = 'new-plugin-' + randomUUID().slice(0, 8)
-  const first = plugin(id, '1.0.0')
-  const next = plugin(id, '1.1.0')
+  const first = await plugin(id, '1.0.0')
+  const next = await plugin(id, '1.1.0')
   const hostBefore = hash(await fs.readFile('dist/main.js'))
   let fixture = await launch({ rendererPath: path.resolve('dist/index.html') })
   const profilePath = fixture.output
@@ -101,13 +101,13 @@ test('a running host discovers unknown plugins, mounts their UI and updates them
       await desktop.waitForFunction(id => document.querySelector(`[data-dynamic-desktop="${id}"]`)?.textContent === '1.1.0', id)
       const events = await page.evaluate(() => window.__catalogPluginEvents)
       assert.deepEqual(events.map(event => [event.version, event.action]), [['1.0.0', 'activate'], ['1.0.0', 'deactivate'], ['1.1.0', 'activate']])
-      assert.equal(events[0].apiVersion, 2)
+      assert.equal(events[0].apiVersion, 3)
       assert.equal(app.process().pid, pid)
       assert.equal(hash(await fs.readFile('dist/main.js')), hostBefore)
       assert.equal(await page.locator(`style[data-plugin="${id}"]`).count(), 1)
     })
     await t.test('incompatible future APIs keep the working installation and older catalogs do not offer downgrades', async() => {
-      const incompatible = { ...next.entry, version: '2.0.0', apiVersion: 99, path: `${id}/2.0.0/${next.entry.sha256}.lxplugin` }
+      const incompatible = { ...next.entry, version: '2.0.0', apiVersion: 99, path: `${id}/2.0.0/${next.entry.sha256}.zip` }
       await publish(app, { ...originalCatalog, plugins: [...originalCatalog.plugins, incompatible] })
       await refresh(page)
       const card = page.locator(`[data-plugin-id="${id}"]`)

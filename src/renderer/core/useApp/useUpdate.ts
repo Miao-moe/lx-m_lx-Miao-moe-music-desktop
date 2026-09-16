@@ -119,8 +119,9 @@ export default () => {
     })
   }
 
-  const rUpdateError = onUpdateError((params) => {
+  const rUpdateError = onUpdateError(({ params: message }) => {
     clearUpdateTimeout()
+    versionInfo.updateError = message || '更新失败，请重试'
     versionInfo.downloadProgress = null
     void nextTick(() => {
       showUpdateModal('error')
@@ -131,6 +132,7 @@ export default () => {
   })
   const rUpdateDownloaded = onUpdateDownloaded(({ params: info }) => {
     clearUpdateTimeout()
+    versionInfo.updateError = ''
     versionInfo.downloadProgress = null
     void nextTick(() => {
       showUpdateModal('downloaded')

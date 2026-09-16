@@ -769,13 +769,16 @@ declare global {
        */
       'ui.smoothAnimation': boolean
 
-      /** 是否跟随系统的减少动态效果偏好 */
-      'ui.followSystemMotion': boolean
-
       /**
        * 动画速率倍数（0.5 = 慢一倍 / 1.0 = 默认 / 1.5 = 快一半）
        */
       'ui.animationSpeed': number
+
+      /** 专辑封面动态背景的总开关与性能档位 */
+      'ui.ambientBackground': boolean
+      /** 根据动态背景调整按钮与选中文字的颜色 */
+      'ui.ambientBackgroundAutoContrast': boolean
+      'ui.ambientBackgroundQuality': 'static' | 'gentle' | 'full'
 
       /** 侧边栏宽度，0 使用自适应默认宽度 */
       'ui.sidebar.width': number

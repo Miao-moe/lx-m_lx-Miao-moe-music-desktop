@@ -1,7 +1,9 @@
-import { BrowserWindow, ipcMain, net } from 'electron'
+import { BrowserWindow, dialog, ipcMain, net } from 'electron'
 import path from 'node:path'
-import { OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, PLUGIN_IPC, type PluginId, type PluginStoreSnapshot } from '@common/optionalPlugins'
-import { PluginManager } from './manager'
+import { OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, PLUGIN_IPC, pluginText, comparePluginVersions, type PluginId, type PluginStoreSnapshot, type PluginTransferLabels, type PluginTransferResult } from '@common/optionalPlugins'
+import { getWebContents } from '../winMain/main'
+import { PluginManager, PluginTransferError } from './manager'
+import { compilePluginSource } from './compiler'
 
 export default () => {
   const manager = new PluginManager(path.join(global.lxDataPath, 'plugins'), async(url, maxBytes) => {
@@ -42,6 +44,12 @@ export default () => {
       })
       request.end()
     })
+  }, {
+    compileSource: compilePluginSource,
+    onCompile: id => {
+      const contents = getWebContents()
+      if (!contents.isDestroyed()) contents.send(PLUGIN_IPC.progress, { phase: 'compiling', id })
+    },
   })
   const broadcast = (snapshot: PluginStoreSnapshot) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -53,4 +61,62 @@ export default () => {
   ipcMain.handle(PLUGIN_IPC.refresh, async() => broadcast(await manager.refresh()))
   ipcMain.handle(PLUGIN_IPC.install, async(_event, id: PluginId) => broadcast(await manager.install(id)))
   ipcMain.handle(PLUGIN_IPC.uninstall, async(_event, id: PluginId) => broadcast(await manager.uninstall(id)))
+
+  const transferState = { busy: false }
+  const transfer = async<T>(event: Electron.IpcMainInvokeEvent, labels: PluginTransferLabels, operation: (window: BrowserWindow) => Promise<PluginTransferResult<T>>): Promise<PluginTransferResult<T>> => {
+    if (transferState.busy) return { status: 'error', code: 'busy' }
+    if (event.sender !== getWebContents() || event.senderFrame !== event.sender.mainFrame) throw new Error('Plugin transfer requires the main window')
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || window.isDestroyed()) return { status: 'cancelled' }
+    for (const key of ['title', 'filter', 'confirm', 'cancel', 'trust', 'install', 'replace', 'downgrade', 'unknownVersion'] as const) {
+      if (!labels || typeof labels[key] !== 'string' || labels[key].length > 2000) throw new Error('Invalid plugin dialog options')
+    }
+    transferState.busy = true
+    try { return await operation(window) } catch (error) {
+      console.error('Plugin transfer failed:', error)
+      return { status: 'error', code: error instanceof PluginTransferError ? error.code : 'write_failed', ...(error instanceof PluginTransferError && error.code === 'compile_failed' ? { detail: error.message.slice(0, 2000) } : {}) }
+    } finally { transferState.busy = false }
+  }
+  ipcMain.handle(PLUGIN_IPC.import, async(event, labels: PluginTransferLabels) => transfer(event, labels, async window => {
+    const selected = await dialog.showOpenDialog(window, {
+      title: labels.title,
+      filters: [{ name: labels.filter, extensions: ['zip'] }],
+      properties: ['openFile'],
+    })
+    if (selected.canceled || !selected.filePaths.length || window.isDestroyed()) return { status: 'cancelled' }
+    const prepared = await manager.prepareImport(selected.filePaths[0])
+    const manifest = prepared.manifest
+    const downgrade = prepared.previousVersion && comparePluginVersions(manifest.version, prepared.previousVersion) < 0
+    const template = !prepared.replacing ? labels.install : downgrade ? labels.downgrade : labels.replace
+    const values: Record<string, string> = {
+      name: pluginText(manifest.name, global.lx.appSetting['common.langId'] ?? 'zh-cn', manifest.id),
+      version: manifest.version,
+      previous: prepared.previousVersion ?? labels.unknownVersion,
+    }
+    const confirmed = await dialog.showMessageBox(window, {
+      type: 'question',
+      title: labels.title,
+      message: template.replace(/\{(name|version|previous)\}/g, (_, key: string) => values[key]),
+      detail: `ID: ${manifest.id}\n\n${labels.trust}`,
+      buttons: [labels.confirm, labels.cancel],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+    })
+    if (confirmed.response !== 0 || window.isDestroyed()) return { status: 'cancelled' }
+    return { status: 'success', value: { id: manifest.id, snapshot: broadcast(await manager.importPrepared(prepared)) } }
+  }))
+  ipcMain.handle(PLUGIN_IPC.export, async(event, id: PluginId, labels: PluginTransferLabels) => transfer(event, labels, async window => {
+    const archive = await manager.createExport(id)
+    const selected = await dialog.showSaveDialog(window, {
+      title: labels.title,
+      defaultPath: `${archive.manifest.id}-${archive.manifest.version}.zip`,
+      filters: [{ name: labels.filter, extensions: ['zip'] }],
+      properties: ['createDirectory', 'showOverwriteConfirmation'],
+    })
+    if (selected.canceled || !selected.filePath || window.isDestroyed()) return { status: 'cancelled' }
+    const filename = path.extname(selected.filePath) ? selected.filePath : selected.filePath + '.zip'
+    if (path.extname(filename).toLowerCase() !== '.zip') throw new PluginTransferError('invalid_destination')
+    return { status: 'success', value: { id, filename: await manager.writeExport(filename, archive.bytes) } }
+  }))
 }

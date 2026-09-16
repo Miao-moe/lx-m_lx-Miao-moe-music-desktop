@@ -23,7 +23,7 @@ const fields = {
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const hash = data => createHash('sha256').update(data).digest('hex')
 const blankTags = () => Object.fromEntries(Object.keys(fields).map(key => [key, '']))
-const supported = filename => /\.(mp3|flac)$/i.test(filename)
+const supported = filename => typeof filename === 'string' && /\.(mp3|flac)$/i.test(filename)
 const revision = stat => [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':')
 
 async function readAt(file, offset, length) {
@@ -228,7 +228,7 @@ function updateFlac(info, changes) {
 }
 
 const saving = new Set()
-async function saveTags(snapshot, updates) {
+async function saveTags(snapshot, updates, beforeReplace = async() => {}) {
   const filePath = path.resolve(snapshot.filePath)
   if (saving.has(filePath)) fail('FILE_BUSY')
   saving.add(filePath)
@@ -266,6 +266,7 @@ async function saveTags(snapshot, updates) {
     } finally { await input.close() }
     // Validate the completed replacement before touching the original file.
     await inspect(temporary, info.format)
+    await beforeReplace()
     if (revision(await fs.lstat(filePath)) !== revision(info.stat)) fail('FILE_CHANGED')
     await fs.rename(temporary, filePath)
     temporary = undefined

@@ -17,16 +17,8 @@ dd
         @update:model-value="updateSetting({ 'ui.smoothAnimation': $event })"
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_ui_smooth_anim_tip')")
-    .gap-top
-      base-checkbox(
-        id="setting_advanced_ui_follow_system_motion"
-        :model-value="appSetting['ui.followSystemMotion']"
-        :label="$t('setting__advanced_ui_follow_system_motion')"
-        @update:model-value="updateSetting({ 'ui.followSystemMotion': $event })"
-      )
-      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_ui_follow_system_motion_tip')")
 
-dd
+dd(data-setting-search="setting__advanced_ui_anim_speed" data-setting-search-depends="setting_advanced_ui_smooth_anim")
     .p.gap-top
       span(style="display: inline-block; width: 130px;") {{ $t('setting__advanced_ui_anim_speed') }}
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_ui_anim_speed_tip')")
@@ -37,6 +29,31 @@ dd
         style="display: inline-block; width: 200px; vertical-align: middle; margin-left: 12px;"
         @change="updateSetting({ 'ui.animationSpeed': $event })"
       )
+
+dd
+  h3#advanced_background {{ $t('setting__advanced_background') }}
+  .gap-top
+    base-checkbox(
+      id="setting_advanced_background_enabled"
+      :model-value="appSetting['ui.ambientBackground']"
+      :label="$t('setting__advanced_background_enabled')"
+      @update:model-value="updateSetting({ 'ui.ambientBackground': $event })"
+    )
+  template(v-if="appSetting['ui.ambientBackground']")
+    .gap-top
+      base-checkbox(
+        id="setting_advanced_background_auto_contrast"
+        :model-value="appSetting['ui.ambientBackgroundAutoContrast']"
+        :label="$t('setting__advanced_background_auto_contrast')"
+        @update:model-value="updateSetting({ 'ui.ambientBackgroundAutoContrast': $event })"
+      )
+      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_background_auto_contrast_tip')")
+    .p.gap-top
+      label(for="setting_advanced_background_quality") {{ $t('setting__advanced_background_quality') }}
+      select#setting_advanced_background_quality.gap-left(:value="appSetting['ui.ambientBackgroundQuality']" @change="updateSetting({ 'ui.ambientBackgroundQuality': $event.target.value })")
+        option(value="static") {{ $t('setting__advanced_background_static') }}
+        option(value="gentle") {{ $t('setting__advanced_background_gentle') }}
+        option(value="full") {{ $t('setting__advanced_background_full') }}
 
 dd
   h3#advanced_play {{ $t('setting__advanced_play') }}
@@ -84,3 +101,17 @@ export default {
   },
 }
 </script>
+
+<style lang="less" scoped>
+select {
+  min-width: 156px;
+  padding: 6px 10px;
+  color: var(--color-font);
+  background: var(--color-content-background);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+}
+</style>

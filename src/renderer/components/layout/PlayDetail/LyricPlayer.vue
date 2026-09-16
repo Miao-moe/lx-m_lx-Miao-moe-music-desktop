@@ -226,7 +226,7 @@ export default {
   }
   :global {
     .font-lrc {
-      color: var(--color-450);
+      color: var(--lyric-idle-color, var(--color-450));
       transition: var(--duration-normal) var(--ease-standard);
       transition-property: color, opacity;
     }
@@ -234,8 +234,8 @@ export default {
       line-height: 1.2;
       padding: calc(var(--playDetail-lrc-font-size, 16px) / 2) 1px;
       overflow-wrap: break-word;
-      color: var(--color-450);
-      opacity: .64;
+      color: var(--lyric-idle-color, var(--color-450));
+      opacity: var(--lyric-idle-opacity, .64);
       transition: var(--duration-normal) var(--ease-standard);
       transition-property: color, opacity;
 
@@ -263,7 +263,7 @@ export default {
           transition: opacity var(--duration-normal) var(--ease-standard);
           font-size: 1em;
           background-repeat: no-repeat;
-          background-color: var(--color-450);
+          background-color: var(--lyric-idle-color, var(--color-450));
           background-image: -webkit-linear-gradient(top, var(--color-primary-dark-200), var(--color-primary-dark-200));
           -webkit-text-fill-color: transparent;
           -webkit-background-clip: text;

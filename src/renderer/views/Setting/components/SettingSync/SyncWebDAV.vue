@@ -3,7 +3,6 @@
     <h3 id="sync_webdav">{{ $t('setting__sync_webdav') }}</h3>
     <div :class="$style.panel">
       <base-checkbox id="setting_sync_webdav_enable" :disabled="disabled" :model-value="appSetting['sync.webdav.enable']" :label="$t('setting__sync_webdav_enable')" @update:model-value="updateOption('sync.webdav.enable', $event)" />
-      <p class="p small">{{ $t('setting__sync_webdav_intro') }}</p>
       <div :class="$style.fields">
         <label for="setting_sync_webdav_url">{{ $t('setting__sync_webdav_url') }}</label>
         <base-input id="setting_sync_webdav_url" v-model="form.url" :disabled="disabled" placeholder="https://dav.example.com/dav/" :auto-paste="false" />
@@ -30,7 +29,6 @@
           @update:model-value="updateOption('sync.webdav.' + section, $event)"
         />
       </div>
-      <p class="p small">{{ $t('setting__sync_webdav_items_tip') }}</p>
       <p class="p small">{{ $t('setting__sync_webdav_download_tip') }}</p>
       <p class="p small">{{ $t('setting__sync_webdav_settings_tip') }}</p>
 
@@ -39,7 +37,6 @@
         <label for="setting_sync_webdav_interval">{{ $t('setting__sync_webdav_interval') }}</label>
         <base-input id="setting_sync_webdav_interval" v-model="intervalInput" :class="$style.interval" type="number" min="1" max="1440" :disabled="disabled" @change="setInterval" />
       </div>
-      <p class="p small">{{ $t('setting__sync_webdav_auto_tip') }}</p>
       <div class="p" :class="$style.buttons">
         <base-btn min :disabled="disabled || !canSync" @click="run('sync')">{{ $t('setting__sync_webdav_sync') }}</base-btn>
         <base-btn min :disabled="disabled || !canSync" @click="run('upload')">{{ $t('setting__sync_webdav_upload') }}</base-btn>

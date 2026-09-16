@@ -1,5 +1,5 @@
 <template lang="pug">
-dt#sync {{ $t('setting__open_api') }}
+dt#open_api {{ $t('setting__open_api') }}
 dd.gap-top
   div
     .p

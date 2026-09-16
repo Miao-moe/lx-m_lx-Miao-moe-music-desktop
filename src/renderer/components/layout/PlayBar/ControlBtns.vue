@@ -85,7 +85,7 @@ export default {
   width: 24px;
   padding: 0;
 
-  opacity: .6;
+  opacity: 1;
   cursor: pointer;
 
   svg {

@@ -120,13 +120,13 @@ const toggleMode = (mode) => {
 
   svg {
     transition: opacity @transition-fast;
-    opacity: .6;
+    opacity: 1;
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
     background-color: var(--color-hover);
     svg {
-      opacity: .9;
+      opacity: 1;
     }
   }
   &:active {
