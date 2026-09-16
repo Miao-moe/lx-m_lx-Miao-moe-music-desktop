@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "plugins": [
+    {
+      "id": "audio-tag-editor",
+      "version": "1.1.0",
+      "apiVersion": 3,
+      "path": "audio-tag-editor/1.1.0/d8a8f266ff86e76609a5099fcce5907de079e98f6a46b9a05acbca8c4c43ae50.zip",
+      "bytes": 444993,
+      "sha256": "d8a8f266ff86e76609a5099fcce5907de079e98f6a46b9a05acbca8c4c43ae50",
+      "name": {
+        "zh-cn": "音频标签编辑",
+        "zh-tw": "音訊標籤編輯",
+        "en-us": "Audio Tag Editor"
+      },
+      "description": {
+        "zh-cn": "在下载列表右键修改 MP3、FLAC 的音频标签，也可选择本地文件，保留音频、封面与歌词。",
+        "zh-tw": "在下載列表按右鍵修改 MP3、FLAC 的音訊標籤，也可選擇本機檔案，保留音訊、封面與歌詞。",
+        "en-us": "Right-click a download to edit MP3 or FLAC tags, or choose a local file, preserving audio, artwork and lyrics."
+      },
+      "icon": "#icon-music"
+    },
+    {
+      "id": "audio-visualizer",
+      "version": "1.2.0",
+      "apiVersion": 1,
+      "path": "audio-visualizer/1.2.0/abab85b773d5790d54bd83d00c732eed7766d30d6dff815e78c793e1f93dda79.zip",
+      "bytes": 123383,
+      "sha256": "abab85b773d5790d54bd83d00c732eed7766d30d6dff815e78c793e1f93dda79",
+      "name": {
+        "zh-cn": "音频可视化",
+        "zh-tw": "音訊視覺化",
+        "en-us": "Audio Visualizer"
+      },
+      "description": {
+        "zh-cn": "为播放详情页和桌面歌词添加随音乐变化的频谱，可分别开关。",
+        "zh-tw": "為播放詳細頁與桌面歌詞加入隨音樂變化的頻譜，可分別開關。",
+        "en-us": "Music spectrum for player details and desktop lyrics, with separate display switches."
+      },
+      "icon": "#icon-audio-wave"
+    },
+    {
+      "id": "folia-lyrics",
+      "version": "1.2.0",
+      "apiVersion": 2,
+      "path": "folia-lyrics/1.2.0/58968e0e6e4ea90098625bbcd5fcd4f19eafc080dd1653a224d67b8ad0d42d9a.zip",
+      "bytes": 28428545,
+      "sha256": "58968e0e6e4ea90098625bbcd5fcd4f19eafc080dd1653a224d67b8ad0d42d9a",
+      "name": {
+        "zh-cn": "Folia 歌词动效",
+        "zh-tw": "Folia 歌詞動效",
+        "en-us": "Folia Lyrics"
+      },
+      "description": {
+        "zh-cn": "13 种 Folia 歌词动效铺满播放页，鼠标靠近时显示控制栏，支持逐字动效、样式预览与独立开关。",
+        "zh-tw": "13 種 Folia 歌詞動效鋪滿播放頁，滑鼠靠近時顯示控制列，支援逐字動效、樣式預覽與獨立開關。",
+        "en-us": "Fill the player with 13 Folia lyric styles and controls that appear as the pointer approaches, with word animations, previews and a separate toggle."
+      },
+      "icon": "#icon-lyric"
+    },
+    {
+      "id": "sound-effects",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "path": "sound-effects/1.0.0/5690a2c17a9f037ce7109a20ffd4c75026e94e7b01193ee230a5d917e9bb75da.zip",
+      "bytes": 2547909,
+      "sha256": "5690a2c17a9f037ce7109a20ffd4c75026e94e7b01193ee230a5d917e9bb75da",
+      "name": {
+        "zh-cn": "音效增强",
+        "zh-tw": "音效增強",
+        "en-us": "Sound Effects"
+      },
+      "description": {
+        "zh-cn": "包含十段均衡器、环境混响、环绕音效和变调，支持保存个人预设。",
+        "zh-tw": "包含十段等化器、環境混響、環繞音效與變調，支援儲存個人預設。",
+        "en-us": "Ten-band equalizer, convolution reverb, surround effects and pitch shifting, with personal presets."
+      },
+      "icon": "#icon-tune-variant"
+    }
+  ]
+}
