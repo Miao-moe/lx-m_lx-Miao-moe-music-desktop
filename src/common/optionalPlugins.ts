@@ -22,14 +22,22 @@ export interface PluginManifest extends PluginDisplayInfo {
   files: Array<{ path: string, bytes: number, sha256: string }>
 }
 
-export interface PluginCatalogEntry extends PluginDisplayInfo {
-  id: PluginId
-  version: string
-  apiVersion: number
+export type PluginPackageFormat = 'lxplugin' | 'zip'
+export interface PluginPackage {
   path: string
   bytes: number
   sha256: string
 }
+export interface PluginCatalogEntry extends PluginDisplayInfo, PluginPackage {
+  id: PluginId
+  version: string
+  apiVersion: number
+  packages?: Partial<Record<PluginPackageFormat, PluginPackage>>
+}
+export const pluginPackages = (entry: PluginCatalogEntry): Partial<Record<PluginPackageFormat, PluginPackage>> => ({
+  [entry.path.endsWith('.lxplugin') ? 'lxplugin' : 'zip']: { path: entry.path, bytes: entry.bytes, sha256: entry.sha256 },
+  ...entry.packages,
+})
 
 export interface PluginSourceManifest extends PluginDisplayInfo {
   format: 'lx-m-plugin-source'
@@ -53,6 +61,7 @@ export interface InstalledPlugin {
   manifest: PluginManifest
   directory: string
   source?: 'official' | 'local'
+  format?: PluginPackageFormat
 }
 
 export interface PluginStoreSnapshot {

@@ -64,7 +64,7 @@ test('source ZIP import compiles Vue offline, exports only source, rolls back er
       await idle(page)
       assert.equal(await status().innerText(), await label(page, 'setting__plugins_import_success'))
       await showSettings('1.0.0')
-      assert.equal(await page.locator('[data-source-version]').evaluate(node => getComputedStyle(node).color), 'rgb(12, 123, 45)')
+      assert.equal(await page.locator('[data-source-version]').evaluate(node => window.getComputedStyle(node).color), 'rgb(12, 123, 45)')
       await page.getByRole('button', { name: '源码计数 0', exact: true }).click()
       await page.getByRole('button', { name: '源码计数 1', exact: true }).waitFor()
     })
@@ -137,6 +137,7 @@ test('an installation without its source record requires reinstall and then expo
     await mockGitHub(app)
     await dialogs(app)
     await openStore(page)
+    await card.getByRole('combobox').selectOption('zip')
     await install(page, official.id)
     const installedPaths = await app.evaluate(async(_electron, id) => {
       const fs = process.mainModule.require('node:fs/promises')

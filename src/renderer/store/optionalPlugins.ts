@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import { computed, reactive, shallowRef } from '@common/utils/vueTools'
-import { PLUGIN_IPC, type PluginId, type PluginStoreSnapshot, type PluginTransferLabels, type PluginTransferResult } from '@common/optionalPlugins'
+import { PLUGIN_IPC, type PluginPackageFormat, type PluginId, type PluginStoreSnapshot, type PluginTransferLabels, type PluginTransferResult } from '@common/optionalPlugins'
 import { createPluginRuntime } from '@common/optionalPluginRuntime'
 import * as player from '@renderer/plugins/player'
 import * as settings from './setting'
@@ -41,13 +41,13 @@ export const refreshPlugins = async() => {
   pluginStoreError.value = null
   try { await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.refresh)) } catch (error: any) { pluginStoreError.value = error.message }
 }
-export const changePluginInstallation = async(id: PluginId, install: boolean) => {
+export const changePluginInstallation = async(id: PluginId, install: boolean, format: PluginPackageFormat = 'lxplugin') => {
   if (pluginBusy[id] || pluginTransferBusy.value) return
   pluginBusy[id] = true
   Reflect.deleteProperty(pluginOperationErrors, id)
   try {
     if (!install) await pluginRuntime.unload(id)
-    await applySnapshot(await ipcRenderer.invoke(install ? PLUGIN_IPC.install : PLUGIN_IPC.uninstall, id))
+    await applySnapshot(await ipcRenderer.invoke(install ? PLUGIN_IPC.install : PLUGIN_IPC.uninstall, id, format))
   } catch (error: any) {
     pluginOperationErrors[id] = error.message
     await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.list)).catch(console.error)

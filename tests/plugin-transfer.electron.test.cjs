@@ -21,8 +21,12 @@ export default {
     'src/licenses/NOTICE.txt': Buffer.from('Keep this license'),
   }
   const manifest = {
-    id, version, apiVersion, name: { 'zh-cn': '离线测试插件', 'en-us': 'Offline test plugin' },
-    description: '从本地文件导入的插件', entry: 'src/index.js',
+    id,
+    version,
+    apiVersion,
+    name: { 'zh-cn': '离线测试插件', 'en-us': 'Offline test plugin' },
+    description: '从本地文件导入的插件',
+    entry: 'src/index.js',
     assets: [{ from: 'src/assets', to: 'assets' }, { from: 'src/licenses', to: 'licenses' }],
   }
   return packSource(manifest, new Map(Object.entries(files)))
@@ -79,7 +83,7 @@ test('the store imports and exports local packages offline through the real UI a
       await importChosen()
       assert.equal(await card().count(), 0)
       assert.equal(await status(page).count(), 0)
-      assert.deepEqual(await app.evaluate(() => global.__transferDialogs.openOptions.filters[0].extensions), ['zip'])
+      assert.deepEqual(await app.evaluate(() => global.__transferDialogs.openOptions.filters[0].extensions), ['lxplugin', 'zip'])
     })
     await t.test('an unknown local plugin loads immediately with its own metadata and source', async() => {
       await prepare('1.0.0')
@@ -143,9 +147,8 @@ test('the store imports and exports local packages offline through the real UI a
     })
     await t.test('bad packages and future APIs report errors and leave the running plugin intact', async() => {
       const confirmations = await app.evaluate(() => global.__transferDialogs.confirmations.length)
-      const oldCatalog = require('../plugins/official/catalog-v2.json')
       const legacy = path.join(profilePath, 'legacy.lxplugin')
-      await fs.copyFile(path.join('plugins/official', oldCatalog.plugins[0].path), legacy)
+      await fs.writeFile(legacy, 'broken compiled package')
       await choose(app, { incoming: legacy })
       await importChosen()
       assert.equal(await status(page).innerText(), await label(page, 'setting__plugins_transfer_invalid_package'))
@@ -199,7 +202,7 @@ test('the store imports and exports local packages offline through the real UI a
       await settled(page)
       const bounds = await page.evaluate(() => {
         const card = document.querySelector('[data-plugin-id]')
-        return { viewport: innerWidth, card: card.getBoundingClientRect().right, buttons: [...card.querySelectorAll('button')].map(button => button.getBoundingClientRect().right) }
+        return { viewport: window.innerWidth, card: card.getBoundingClientRect().right, buttons: [...card.querySelectorAll('button')].map(button => button.getBoundingClientRect().right) }
       })
       assert.ok(bounds.card <= bounds.viewport)
       assert.ok(bounds.buttons.every(right => right <= bounds.card))

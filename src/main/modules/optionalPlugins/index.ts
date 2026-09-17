@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog, ipcMain, net } from 'electron'
 import path from 'node:path'
-import { OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, PLUGIN_IPC, pluginText, comparePluginVersions, type PluginId, type PluginStoreSnapshot, type PluginTransferLabels, type PluginTransferResult } from '@common/optionalPlugins'
+import { OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, PLUGIN_IPC, pluginText, comparePluginVersions, type PluginPackageFormat, type PluginId, type PluginStoreSnapshot, type PluginTransferLabels, type PluginTransferResult } from '@common/optionalPlugins'
 import { getWebContents } from '../winMain/main'
 import { PluginManager, PluginTransferError } from './manager'
 import { compilePluginSource } from './compiler'
@@ -59,7 +59,7 @@ export default () => {
   }
   ipcMain.handle(PLUGIN_IPC.list, async() => manager.snapshot())
   ipcMain.handle(PLUGIN_IPC.refresh, async() => broadcast(await manager.refresh()))
-  ipcMain.handle(PLUGIN_IPC.install, async(_event, id: PluginId) => broadcast(await manager.install(id)))
+  ipcMain.handle(PLUGIN_IPC.install, async(_event, id: PluginId, format?: PluginPackageFormat) => broadcast(await manager.install(id, format)))
   ipcMain.handle(PLUGIN_IPC.uninstall, async(_event, id: PluginId) => broadcast(await manager.uninstall(id)))
 
   const transferState = { busy: false }
@@ -80,7 +80,7 @@ export default () => {
   ipcMain.handle(PLUGIN_IPC.import, async(event, labels: PluginTransferLabels) => transfer(event, labels, async window => {
     const selected = await dialog.showOpenDialog(window, {
       title: labels.title,
-      filters: [{ name: labels.filter, extensions: ['zip'] }],
+      filters: [{ name: labels.filter, extensions: ['lxplugin', 'zip'] }],
       properties: ['openFile'],
     })
     if (selected.canceled || !selected.filePaths.length || window.isDestroyed()) return { status: 'cancelled' }
@@ -110,13 +110,12 @@ export default () => {
     const archive = await manager.createExport(id)
     const selected = await dialog.showSaveDialog(window, {
       title: labels.title,
-      defaultPath: `${archive.manifest.id}-${archive.manifest.version}.zip`,
-      filters: [{ name: labels.filter, extensions: ['zip'] }],
+      defaultPath: `${archive.manifest.id}-${archive.manifest.version}.${archive.format}`,
+      filters: [{ name: labels.filter, extensions: [archive.format] }],
       properties: ['createDirectory', 'showOverwriteConfirmation'],
     })
     if (selected.canceled || !selected.filePath || window.isDestroyed()) return { status: 'cancelled' }
-    const filename = path.extname(selected.filePath) ? selected.filePath : selected.filePath + '.zip'
-    if (path.extname(filename).toLowerCase() !== '.zip') throw new PluginTransferError('invalid_destination')
-    return { status: 'success', value: { id, filename: await manager.writeExport(filename, archive.bytes) } }
+    const filename = path.extname(selected.filePath) ? selected.filePath : selected.filePath + '.' + archive.format
+    return { status: 'success', value: { id, filename: await manager.writeExport(filename, archive.bytes, archive.format) } }
   }))
 }

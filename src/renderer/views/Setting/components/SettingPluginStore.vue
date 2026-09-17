@@ -27,8 +27,14 @@
         <p v-if="item.local" :class="$style.notice">{{ $t('setting__plugins_local_hint') }}</p>
         <p v-else-if="item.installed && !item.available" :class="$style.notice" role="status">{{ $t('setting__plugins_removed') }}</p>
         <p v-if="item.broken || pluginOperationErrors[item.id]" :class="$style.notice" role="alert">{{ $t('setting__plugins_operation_error') }}</p>
+        <label v-if="item.formats.length > 1 && !item.local && (!item.installed || item.update || item.broken)" :class="$style.installFormat">
+          {{ $t('setting__plugins_install_format') }}
+          <select :value="item.format" :aria-label="$t('setting__plugins_install_format')" :disabled="pluginBusy[item.id] || pluginTransferBusy" @change="selectedFormats[item.id] = $event.target.value">
+            <option v-for="format in item.formats" :key="format" :value="format">{{ $t(`setting__plugins_format_${format}`) }}</option>
+          </select>
+        </label>
         <div :class="$style.actions">
-          <base-btn v-if="!item.local && (!item.installed || item.update || item.broken)" min :disabled="pluginBusy[item.id] || pluginTransferBusy || !item.available || item.incompatible" @click="changePluginInstallation(item.id, true)">
+          <base-btn v-if="!item.local && (!item.installed || item.update || item.broken)" min :disabled="pluginBusy[item.id] || pluginTransferBusy || !item.available || item.incompatible" @click="changePluginInstallation(item.id, true, item.format)">
             {{ $t(pluginBusy[item.id] ? 'setting__plugins_working' : item.broken ? 'setting__plugins_reinstall' : item.update ? 'setting__plugins_update' : 'setting__plugins_install') }}
           </base-btn>
           <base-btn v-if="item.hasSettings" min :disabled="pluginBusy[item.id] || pluginTransferBusy" @click="expanded = expanded === item.id ? null : item.id">{{ $t(expanded === item.id ? 'setting__plugins_close_settings' : 'setting__plugins_settings') }}</base-btn>
@@ -46,13 +52,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from '@common/utils/vueTools'
-import { isPluginApiSupported, pluginText, comparePluginVersions } from '@common/optionalPlugins'
+import { computed, onMounted, reactive, ref } from '@common/utils/vueTools'
+import { isPluginApiSupported, pluginPackages, pluginText, comparePluginVersions } from '@common/optionalPlugins'
 import { pluginStore, pluginRuntime, pluginBusy, pluginOperationErrors, pluginStoreError, pluginTransferBusy, pluginTransferNotice, refreshPlugins, changePluginInstallation, transferPlugin } from '@renderer/store/optionalPlugins'
 import { appSetting } from '@renderer/store/setting'
 
 const expanded = ref(null)
 const refreshing = ref(false)
+const selectedFormats = reactive({})
 const storeBusy = computed(() => pluginTransferBusy.value || Object.values(pluginBusy).some(Boolean))
 const items = computed(() => {
   const snapshot = pluginStore.value
@@ -62,10 +69,15 @@ const items = computed(() => {
   return [...ids].map(id => {
     const installed = snapshot.installed[id]
     const available = catalog.get(id)
+    const packages = available ? pluginPackages(available) : {}
+    const formats = ['lxplugin', 'zip'].filter(format => packages[format])
+    const format = formats.includes(selectedFormats[id]) ? selectedFormats[id] : formats[0]
     const local = installed?.source === 'local' || snapshot.sources?.[id] === 'local'
     const display = local ? installed?.manifest : available ?? installed?.manifest
     return {
       id,
+      formats,
+      format,
       local,
       title: pluginText(display?.name, language, id),
       description: pluginText(display?.description, language),
@@ -77,7 +89,7 @@ const items = computed(() => {
       broken: !!snapshot.errors[id] || !!pluginRuntime.errors[id],
       available: !!available,
       version: installed?.manifest.version ?? (local ? undefined : available?.version),
-      bytes: local ? undefined : available?.bytes,
+      bytes: local ? undefined : packages[format]?.bytes,
       update: installed && available && comparePluginVersions(available.version, installed.manifest.version) > 0,
       incompatible: !local && available && !isPluginApiSupported(available.apiVersion),
     }
@@ -111,6 +123,9 @@ onMounted(() => { void refresh() })
 .installed { color: var(--color-primary); }
 .meta { font-size: 11px; line-height: 1.4; color: var(--color-font-label); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 4px; }
+.installFormat { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--color-font-label); }
+.installFormat select { max-width: 100%; padding: 5px 8px; border: 1px solid var(--color-primary-light-100-alpha-700); border-radius: var(--radius-sm); color: var(--color-font); background: var(--color-main-background); }
+.installFormat select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .note { margin: 16px 15px; font-size: 12px; line-height: 1.6; color: var(--color-font-label); }
 .notice { margin: 8px 15px; color: var(--color-font); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-line; }
 .card .notice { margin: 0; }

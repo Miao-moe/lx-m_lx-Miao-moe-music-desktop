@@ -5,9 +5,16 @@
       "id": "audio-tag-editor",
       "version": "1.1.0",
       "apiVersion": 3,
-      "path": "audio-tag-editor/1.1.0/d8a8f266ff86e76609a5099fcce5907de079e98f6a46b9a05acbca8c4c43ae50.zip",
-      "bytes": 444993,
-      "sha256": "d8a8f266ff86e76609a5099fcce5907de079e98f6a46b9a05acbca8c4c43ae50",
+      "path": "audio-tag-editor/1.1.0/d2fac82f613bf9ae71b28d5a712c25ba84b45c4cbc7ff38e0e10c9cdc9a69f94.zip",
+      "bytes": 447737,
+      "sha256": "d2fac82f613bf9ae71b28d5a712c25ba84b45c4cbc7ff38e0e10c9cdc9a69f94",
+      "packages": {
+        "lxplugin": {
+          "path": "audio-tag-editor/1.1.0/79e1142ac469c0306bd48f78b32840a6240eac1cadac9dac2aad2ac97dc6ab67.lxplugin",
+          "bytes": 272694,
+          "sha256": "79e1142ac469c0306bd48f78b32840a6240eac1cadac9dac2aad2ac97dc6ab67"
+        }
+      },
       "name": {
         "zh-cn": "音频标签编辑",
         "zh-tw": "音訊標籤編輯",
@@ -24,9 +31,16 @@
       "id": "audio-visualizer",
       "version": "1.2.0",
       "apiVersion": 1,
-      "path": "audio-visualizer/1.2.0/abab85b773d5790d54bd83d00c732eed7766d30d6dff815e78c793e1f93dda79.zip",
-      "bytes": 123383,
-      "sha256": "abab85b773d5790d54bd83d00c732eed7766d30d6dff815e78c793e1f93dda79",
+      "path": "audio-visualizer/1.2.0/27184b783f2541b0ede03396ea9efafd58234d4c8869758cadc923aa456c9f24.zip",
+      "bytes": 126083,
+      "sha256": "27184b783f2541b0ede03396ea9efafd58234d4c8869758cadc923aa456c9f24",
+      "packages": {
+        "lxplugin": {
+          "path": "audio-visualizer/1.2.0/4ce1168bbd2b0a66397673f9052904045ea9f8c4810b2afd943d47cef544ea5e.lxplugin",
+          "bytes": 126168,
+          "sha256": "4ce1168bbd2b0a66397673f9052904045ea9f8c4810b2afd943d47cef544ea5e"
+        }
+      },
       "name": {
         "zh-cn": "音频可视化",
         "zh-tw": "音訊視覺化",
@@ -43,9 +57,16 @@
       "id": "folia-lyrics",
       "version": "1.2.0",
       "apiVersion": 2,
-      "path": "folia-lyrics/1.2.0/58968e0e6e4ea90098625bbcd5fcd4f19eafc080dd1653a224d67b8ad0d42d9a.zip",
-      "bytes": 28428545,
-      "sha256": "58968e0e6e4ea90098625bbcd5fcd4f19eafc080dd1653a224d67b8ad0d42d9a",
+      "path": "folia-lyrics/1.2.0/85a3607b852aaa7fea4000e5e4d7503d0ed9395c13b5f24c029f79b12b735f13.zip",
+      "bytes": 28489911,
+      "sha256": "85a3607b852aaa7fea4000e5e4d7503d0ed9395c13b5f24c029f79b12b735f13",
+      "packages": {
+        "lxplugin": {
+          "path": "folia-lyrics/1.2.0/992f93a314ca8b90bd1ef978efb24390f12f5ff2948103567ddf0346feba6f02.lxplugin",
+          "bytes": 10471192,
+          "sha256": "992f93a314ca8b90bd1ef978efb24390f12f5ff2948103567ddf0346feba6f02"
+        }
+      },
       "name": {
         "zh-cn": "Folia 歌词动效",
         "zh-tw": "Folia 歌詞動效",
@@ -62,9 +83,16 @@
       "id": "sound-effects",
       "version": "1.0.0",
       "apiVersion": 1,
-      "path": "sound-effects/1.0.0/5690a2c17a9f037ce7109a20ffd4c75026e94e7b01193ee230a5d917e9bb75da.zip",
-      "bytes": 2547909,
-      "sha256": "5690a2c17a9f037ce7109a20ffd4c75026e94e7b01193ee230a5d917e9bb75da",
+      "path": "sound-effects/1.0.0/feb439a9f83443206f9e225e252ed1b9ebe65b19302dbfb7ab37755a238b41f5.zip",
+      "bytes": 2550604,
+      "sha256": "feb439a9f83443206f9e225e252ed1b9ebe65b19302dbfb7ab37755a238b41f5",
+      "packages": {
+        "lxplugin": {
+          "path": "sound-effects/1.0.0/9b341b7910125e13dbd9f1212cbd0e227a879a9b94cc43e5f4218dcd93e1dabd.lxplugin",
+          "bytes": 2971963,
+          "sha256": "9b341b7910125e13dbd9f1212cbd0e227a879a9b94cc43e5f4218dcd93e1dabd"
+        }
+      },
       "name": {
         "zh-cn": "音效增强",
         "zh-tw": "音效增強",

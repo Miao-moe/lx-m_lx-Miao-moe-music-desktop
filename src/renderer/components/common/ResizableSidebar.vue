@@ -3,7 +3,7 @@
     <div :id="contentId" :class="$style.content" :aria-hidden="collapsed || undefined" :inert="collapsed ? '' : null">
       <slot />
     </div>
-    <div :class="$style.rail">
+    <div v-if="keys.collapsed" :class="$style.rail">
       <button
         type="button" :class="$style.toggle" :aria-expanded="!collapsed" :aria-controls="contentId" data-motion-button
         :aria-label="$t(collapsed ? 'sidebar__expand_panel' : 'sidebar__collapse_panel', { name: label })"
@@ -15,7 +15,7 @@
       </button>
     </div>
     <div
-      v-if="!collapsed" :class="$style.resizeHandle" data-panel-sidebar-resize role="separator" tabindex="0"
+      v-if="!collapsed" :class="[$style.resizeHandle, { [$style.fullHeight]: !keys.collapsed }]" data-panel-sidebar-resize role="separator" tabindex="0"
       aria-orientation="vertical" :aria-controls="contentId" :aria-label="$t('sidebar__resize')"
       :aria-valuemin="MIN_WIDTH" :aria-valuemax="maxWidth" :aria-valuenow="currentWidth"
       @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp"
@@ -28,17 +28,19 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
 import { computed, onBeforeUnmount, onMounted, ref } from '@common/utils/vueTools'
+import { windowFontSize } from '@renderer/store'
 import { appSetting } from '@renderer/store/setting'
 import { updateSetting } from '@renderer/utils/ipc'
 import showToast from '@renderer/plugins/Toast'
 
 const props = defineProps({
-  name: { type: String as PropType<'myList' | 'leaderboard'>, required: true },
+  name: { type: String as PropType<'myList' | 'leaderboard' | 'setting'>, required: true },
   label: { type: String, required: true },
 })
 const settings = {
-  myList: { width: 'ui.myListSidebar.width', collapsed: 'ui.myListSidebar.collapsed', ratio: 0.16 },
-  leaderboard: { width: 'ui.leaderboardSidebar.width', collapsed: 'ui.leaderboardSidebar.collapsed', ratio: 0.148 },
+  myList: { width: 'ui.myListSidebar.width', collapsed: 'ui.myListSidebar.collapsed', defaultWidth: (width: number) => width * 0.16 },
+  leaderboard: { width: 'ui.leaderboardSidebar.width', collapsed: 'ui.leaderboardSidebar.collapsed', defaultWidth: (width: number) => width * 0.148 },
+  setting: { width: 'ui.settingSidebar.width', collapsed: null, defaultWidth: () => 180 * windowFontSize.value / 16 },
 } as const
 const keys = computed(() => settings[props.name])
 const contentId = computed(() => `panel-sidebar-${props.name}`)
@@ -56,9 +58,9 @@ const maxWidth = computed(() => parentWidth.value
 const clamp = (width: number) => Math.round(Math.max(MIN_WIDTH, Math.min(maxWidth.value, width)))
 const currentWidth = computed(() => {
   const width = draftWidth.value ?? appSetting[keys.value.width]
-  return clamp(Number.isFinite(width) && width > 0 ? width : parentWidth.value * keys.value.ratio)
+  return clamp(Number.isFinite(width) && width > 0 ? width : keys.value.defaultWidth(parentWidth.value))
 })
-const collapsed = computed(() => draftCollapsed.value ?? appSetting[keys.value.collapsed])
+const collapsed = computed(() => draftCollapsed.value ?? (keys.value.collapsed ? appSetting[keys.value.collapsed] : false))
 const sidebarStyle = computed(() => ({
   width: `${collapsed.value ? RAIL_WIDTH : currentWidth.value}px`,
   marginRight: `${collapsed.value ? -RAIL_WIDTH : 0}px`,
@@ -120,12 +122,14 @@ const resetWidth = () => {
   void saveWidth(0)
 }
 const toggleCollapsed = async() => {
+  const key = keys.value.collapsed
+  if (!key) return
   cancelResize()
   const revision = ++collapseRevision
   const value = !collapsed.value
   draftCollapsed.value = value
   try {
-    await updateSetting({ [keys.value.collapsed]: value })
+    await updateSetting({ [key]: value })
   } catch {
     showToast(window.i18n.t('sidebar__save_error'))
   } finally {
@@ -264,6 +268,7 @@ onBeforeUnmount(() => {
     transition: opacity var(--duration-fast);
   }
   &:hover:before, &:focus-visible:before { opacity: .65; }
+  &.fullHeight { top: 0; }
 }
 .resizing {
   transition: none;

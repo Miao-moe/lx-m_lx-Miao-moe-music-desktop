@@ -203,6 +203,7 @@ const defaultSetting: LX.AppSetting = {
   'ui.myListSidebar.collapsed': false,
   'ui.leaderboardSidebar.width': 0,
   'ui.leaderboardSidebar.collapsed': false,
+  'ui.settingSidebar.width': 0,
 
   // ===== 播放增强 =====
   'player.gaplessPlayback': true,

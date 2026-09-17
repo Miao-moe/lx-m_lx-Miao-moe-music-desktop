@@ -1,16 +1,16 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { isPluginId, OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, isPluginApiSupported, type PluginDisplayInfo, type PluginCatalog, type PluginCatalogEntry, type PluginId, type PluginManifest, type PluginStoreSnapshot, type PluginTransferErrorCode, type PluginSourceManifest } from '@common/optionalPlugins'
+import { isPluginId, OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, isPluginApiSupported, pluginPackages, type PluginPackage, type PluginPackageFormat, type PluginDisplayInfo, type PluginCatalog, type PluginCatalogEntry, type PluginId, type PluginManifest, type PluginStoreSnapshot, type PluginTransferErrorCode, type PluginSourceManifest } from '@common/optionalPlugins'
 import { MAX_SOURCE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_UNPACKED, validPath, packSource, unpackSource } from '@common/pluginSource'
+import { MAX_PACKAGE_BYTES, MAX_UNPACKED_BYTES, packPlugin, unpackPlugin } from '@common/pluginPackage'
 
-const MAX_UNPACKED_BYTES = 40 * 1024 * 1024
 const MAX_CATALOG_BYTES = 512 * 1024
 const digest = (data: Buffer) => createHash('sha256').update(data).digest('hex')
 const validVersion = (value: unknown): value is string => typeof value == 'string' && /^\d{1,8}\.\d{1,8}\.\d{1,8}$/.test(value)
 const validHash = (value: unknown): value is string => typeof value == 'string' && /^[a-f0-9]{64}$/.test(value)
 const validFile = (value: unknown): value is string => typeof value == 'string' && value.length < 180 && value.split('/').every(part => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part) && !part.endsWith('.') && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))
-type Registry = Partial<Record<PluginId, { directory: string, manifestHash: string, source?: 'official' | 'local', sourceManifestHash: string }>>
+type Registry = Partial<Record<PluginId, { directory: string, manifestHash: string, source?: 'official' | 'local', format?: PluginPackageFormat, sourceManifestHash?: string }>>
 type FetchBinary = (url: string, maxBytes: number) => Promise<Buffer>
 
 export class PluginTransferError extends Error {
@@ -42,6 +42,10 @@ const validText = (value: unknown, limit: number): boolean => value == null || (
     /^[a-z]{2,3}(?:-[a-z]{2,4})?$/.test(key) && typeof text === 'string' && text.length <= limit))
 const validDisplayInfo = (value: PluginDisplayInfo) => validText(value.name, 120) && validText(value.description, 2000) &&
   (value.icon == null || (typeof value.icon === 'string' && /^#icon-[a-z0-9-]{1,64}$/.test(value.icon)))
+const validPackage = (value: PluginPackage, id: PluginId, version: string, format: string) => value &&
+  (format === 'zip' || format === 'lxplugin') && validHash(value.sha256) && Number.isSafeInteger(value.bytes) &&
+  value.bytes > 0 && value.bytes <= (format === 'zip' ? MAX_SOURCE_BYTES : MAX_PACKAGE_BYTES) &&
+  validFile(value.path) && value.path.startsWith(`${id}/${version}/`) && value.path.endsWith('.' + format)
 
 export const parseCatalog = (bytes: Buffer): PluginCatalog => {
   if (bytes.length > MAX_CATALOG_BYTES) throw new Error('Plugin catalog is too large')
@@ -50,8 +54,9 @@ export const parseCatalog = (bytes: Buffer): PluginCatalog => {
   const ids = new Set<string>()
   for (const plugin of catalog.plugins) {
     if (!plugin || !isPluginId(plugin.id) || ids.has(plugin.id) || !validDisplayInfo(plugin) || !validVersion(plugin.version) || !Number.isSafeInteger(plugin.apiVersion) ||
-      !validHash(plugin.sha256) || !Number.isSafeInteger(plugin.bytes) || plugin.bytes <= 0 || plugin.bytes > MAX_SOURCE_BYTES ||
-      !validFile(plugin.path) || !plugin.path.startsWith(`${plugin.id}/${plugin.version}/`) || !plugin.path.endsWith('.zip')) throw new Error('Invalid plugin catalog entry')
+      !validPackage(plugin, plugin.id, plugin.version, typeof plugin.path === 'string' ? plugin.path.split('.').pop()! : '')) throw new Error('Invalid plugin catalog entry')
+    if (plugin.packages != null && (typeof plugin.packages !== 'object' || Array.isArray(plugin.packages) ||
+      Object.entries(plugin.packages).some(([format, value]) => !validPackage(value, plugin.id, plugin.version, format)))) throw new Error('Invalid plugin catalog packages')
     ids.add(plugin.id)
   }
   return catalog
@@ -84,11 +89,10 @@ const validateManifest = (manifest: PluginManifest, id: PluginId) => {
     [...manifest.styles, ...(manifest.lyricStyles ?? [])].some(file => !names.has(file) || !file.endsWith('.css'))) throw new Error('Incomplete plugin package')
 }
 
-interface PluginArchive { manifest: PluginManifest, files: Array<{ path: string, data: Buffer }>, source: SourceArchive }
+interface PluginArchive { manifest: PluginManifest, files: Array<{ path: string, data: Buffer }>, source?: SourceArchive }
 interface SourceArchive { manifest: PluginSourceManifest, files: Map<string, Buffer> }
-interface PreparedImport {
-  manifest: PluginSourceManifest
-  source: SourceArchive
+type PreparedPackage = { format: 'zip', manifest: PluginSourceManifest, source: SourceArchive } | { format: 'lxplugin', manifest: PluginManifest, archive: PluginArchive }
+type PreparedImport = PreparedPackage & {
   previous: string
   replacing: boolean
   previousVersion: string | null
@@ -182,7 +186,6 @@ export class PluginManager {
   }
 
   private async readInstalled(id: PluginId, record: NonNullable<Registry[string]>) {
-    if (!validHash(record.sourceManifestHash)) throw new Error('Plugin sources are missing. Reinstall the plugin from a source ZIP.')
     const directory = this.installedDirectory(id, record.directory)
     if (!(await fs.lstat(directory)).isDirectory()) throw new Error('Invalid installed plugin directory')
     const manifestBytes = await readLimitedFile(path.join(directory, 'manifest.json'), MAX_CATALOG_BYTES)
@@ -200,12 +203,20 @@ export class PluginManager {
       if (data.length !== file.bytes || digest(data) !== file.sha256) throw new Error('Installed plugin file checksum mismatch')
     }
     const sourceDirectory = path.join(directory, '.source')
+    const sourceStat = await fs.lstat(sourceDirectory).catch(error => { if (error.code !== 'ENOENT') throw error; return null })
+    const format = record.format ?? (record.sourceManifestHash != null || sourceStat ? 'zip' : 'lxplugin')
+    const source = record.source === 'local' ? 'local' as const : 'official' as const
+    if (format === 'lxplugin') {
+      if (record.sourceManifestHash != null || sourceStat) throw new Error('Unexpected sources in compiled plugin installation')
+      return { manifest, directory, source, format, sourceDirectory: undefined, sourceManifest: undefined }
+    }
+    if (format !== 'zip' || !validHash(record.sourceManifestHash)) throw new Error('Plugin sources are missing. Reinstall the plugin from a source ZIP.')
     if (!(await fs.lstat(sourceDirectory)).isDirectory()) throw new Error('Invalid installed source directory')
     const sourceBytes = await readLimitedFile(path.join(sourceDirectory, 'plugin.json'), 4 * 1024 * 1024)
     if (digest(sourceBytes) !== record.sourceManifestHash) throw new Error('Installed source manifest checksum mismatch')
     const sourceManifest = JSON.parse(sourceBytes.toString('utf8')) as PluginSourceManifest
     if (sourceManifest.id !== id || sourceManifest.version !== manifest.version || sourceManifest.apiVersion !== manifest.apiVersion) throw new Error('Installed source does not match the plugin')
-    return { manifest, directory, sourceDirectory, sourceManifest, source: record.source === 'local' ? 'local' as const : 'official' as const }
+    return { manifest, directory, sourceDirectory, sourceManifest, source, format }
   }
 
   async snapshot(): Promise<PluginStoreSnapshot> {
@@ -217,8 +228,8 @@ export class PluginManager {
       if (!isPluginId(id) || !record) continue
       snapshot.sources![id] = record.source === 'local' ? 'local' : 'official'
       try {
-        const { manifest, directory, source } = await this.readInstalled(id, record)
-        snapshot.installed[id] = { manifest, directory, source }
+        const { manifest, directory, source, format } = await this.readInstalled(id, record)
+        snapshot.installed[id] = { manifest, directory, source, format }
       } catch (error: any) {
         snapshot.errors[id] = error.message
       }
@@ -240,21 +251,24 @@ export class PluginManager {
     return this.snapshot()
   }
 
-  async install(id: PluginId) {
+  async install(id: PluginId, format: PluginPackageFormat = 'lxplugin') {
     return this.exclusive(async() => {
       if (!isPluginId(id)) throw new Error('Unknown official plugin')
+      if (format !== 'lxplugin' && format !== 'zip') throw new Error('Invalid plugin package format')
       await this.loadCatalogCache()
       if (!this.catalog.length) await this.refresh()
       const entry = this.catalog.find(plugin => plugin.id === id)
       if (!entry) throw new Error(this.catalogError ?? 'Plugin is not published in the official catalog')
       if (!isPluginApiSupported(entry.apiVersion)) throw new Error('Plugin requires a different application version')
-      const bytes = await this.fetchBinary(new URL(entry.path, OFFICIAL_PLUGIN_ROOT).href, MAX_SOURCE_BYTES)
-      if (bytes.length !== entry.bytes || digest(bytes) !== entry.sha256) throw new Error('Plugin download checksum mismatch')
-      const source = await this.readSource(bytes)
-      if (source.manifest.id !== entry.id || source.manifest.version !== entry.version || source.manifest.apiVersion !== entry.apiVersion) throw new Error('Plugin source does not match the catalog')
-      // The downloaded ZIP stays in memory only. Installation stores verified source files,
-      // so export can rebuild a ZIP offline without retaining the downloaded archive.
-      const archive = await this.compileSource(source)
+      const packages = pluginPackages(entry)
+      const selected = packages[format] ?? (format === 'lxplugin' ? packages.zip : undefined)
+      if (!selected) throw new Error('Plugin package format is unavailable')
+      const sourcePackage = selected.path.endsWith('.zip')
+      const bytes = await this.fetchBinary(new URL(selected.path, OFFICIAL_PLUGIN_ROOT).href, sourcePackage ? MAX_SOURCE_BYTES : MAX_PACKAGE_BYTES)
+      if (bytes.length !== selected.bytes || digest(bytes) !== selected.sha256) throw new Error('Plugin download checksum mismatch')
+      const prepared = await this.readPackage(bytes, sourcePackage ? 'zip' : 'lxplugin')
+      if (prepared.manifest.id !== entry.id || prepared.manifest.version !== entry.version || prepared.manifest.apiVersion !== entry.apiVersion) throw new Error('Plugin package does not match the catalog')
+      const archive = prepared.format === 'zip' ? await this.compileSource(prepared.source) : prepared.archive
       await this.commitArchive(archive, await this.readRegistry(), 'official')
       return this.snapshot()
     })
@@ -276,12 +290,16 @@ export class PluginManager {
       }
       const manifestBytes = Buffer.from(JSON.stringify(archive.manifest))
       await fs.writeFile(path.join(temporary, 'manifest.json'), manifestBytes, { flag: 'wx' })
-      const sourceDirectory = path.join(temporary, '.source')
-      await this.writeSourceFiles(sourceDirectory, archive.source)
-      const sourceManifestBytes = Buffer.from(JSON.stringify(archive.source.manifest))
-      await fs.writeFile(path.join(sourceDirectory, 'plugin.json'), sourceManifestBytes, { flag: 'wx' })
+      let sourceManifestHash: string | undefined
+      if (archive.source) {
+        const sourceDirectory = path.join(temporary, '.source')
+        await this.writeSourceFiles(sourceDirectory, archive.source)
+        const sourceManifestBytes = Buffer.from(JSON.stringify(archive.source.manifest))
+        await fs.writeFile(path.join(sourceDirectory, 'plugin.json'), sourceManifestBytes, { flag: 'wx' })
+        sourceManifestHash = digest(sourceManifestBytes)
+      }
       await fs.rename(temporary, this.child(directoryName))
-      registry[id] = { directory: directoryName, manifestHash: digest(manifestBytes), source, sourceManifestHash: digest(sourceManifestBytes) }
+      registry[id] = { directory: directoryName, manifestHash: digest(manifestBytes), source, format: archive.source ? 'zip' : 'lxplugin', ...(sourceManifestHash ? { sourceManifestHash } : {}) }
       await this.saveRegistry(registry)
       this.revision++
       committed = true
@@ -297,6 +315,25 @@ export class PluginManager {
     if (!validDisplayInfo(source.manifest)) throw new Error('Invalid plugin source metadata')
     if (!isPluginApiSupported(source.manifest.apiVersion)) throw new PluginTransferError('incompatible')
     return source
+  }
+
+  private async readPackage(bytes: Buffer, format: PluginPackageFormat): Promise<PreparedPackage> {
+    if (format === 'zip') {
+      const source = await this.readSource(bytes)
+      return { format, manifest: source.manifest, source }
+    }
+    const decoded = unpackPlugin(bytes) as { manifest: PluginManifest, files: Record<string, string> }
+    if (!decoded || typeof decoded !== 'object') throw new Error('Invalid plugin package')
+    validateManifest(decoded.manifest, decoded.manifest?.id)
+    if (!decoded.files || typeof decoded.files !== 'object' || Array.isArray(decoded.files) || Object.keys(decoded.files).length !== decoded.manifest.files.length) throw new Error('Invalid plugin package files')
+    const files = decoded.manifest.files.map(file => {
+      const encoded = Object.hasOwn(decoded.files, file.path) ? decoded.files[file.path] : undefined
+      if (typeof encoded !== 'string' || encoded.length !== Math.ceil(file.bytes / 3) * 4) throw new Error('Invalid plugin file encoding')
+      const data = Buffer.from(encoded, 'base64')
+      if (data.toString('base64') !== encoded || data.length !== file.bytes || digest(data) !== file.sha256) throw new Error('Plugin file checksum mismatch')
+      return { path: file.path, data }
+    })
+    return { format, manifest: decoded.manifest, archive: { manifest: decoded.manifest, files } }
   }
 
   private async writeSourceFiles(directory: string, source: SourceArchive) {
@@ -360,24 +397,25 @@ export class PluginManager {
   }
 
   async prepareImport(filename: string): Promise<PreparedImport> {
-    if (path.extname(filename).toLowerCase() !== '.zip') throw new PluginTransferError('invalid_package')
+    const extension = path.extname(filename).toLowerCase()
+    if (extension !== '.zip' && extension !== '.lxplugin') throw new PluginTransferError('invalid_package')
     let bytes: Buffer
-    try { bytes = await readLimitedFile(filename, MAX_SOURCE_BYTES) } catch { throw new PluginTransferError('read_failed') }
-    let source: SourceArchive
+    try { bytes = await readLimitedFile(filename, extension === '.zip' ? MAX_SOURCE_BYTES : MAX_PACKAGE_BYTES) } catch { throw new PluginTransferError('read_failed') }
+    let prepared: PreparedPackage
     try {
-      source = await this.readSource(bytes)
+      prepared = await this.readPackage(bytes, extension === '.zip' ? 'zip' : 'lxplugin')
     } catch (error) {
       if (error instanceof PluginTransferError) throw error
       throw new PluginTransferError('invalid_package')
     }
-    const manifest = source.manifest
+    const manifest = prepared.manifest
     return this.exclusive(async() => {
       const record = (await this.readRegistry())[manifest.id]
       let previousVersion: string | null = null
       if (record) {
         try { previousVersion = (await this.readInstalled(manifest.id, record)).manifest.version } catch { /* A valid import can repair a broken installation. */ }
       }
-      return { manifest, source, previous: JSON.stringify(record ?? null), replacing: !!record, previousVersion }
+      return { ...prepared, previous: JSON.stringify(record ?? null), replacing: !!record, previousVersion }
     })
   }
 
@@ -386,7 +424,7 @@ export class PluginManager {
       const registry = await this.readRegistry()
       // Confirmation applies to the exact version shown, even if another operation ran meanwhile.
       if (JSON.stringify(registry[prepared.manifest.id] ?? null) !== prepared.previous) throw new PluginTransferError('changed')
-      const archive = await this.compileSource(prepared.source)
+      const archive = prepared.format === 'zip' ? await this.compileSource(prepared.source) : prepared.archive
       await this.commitArchive(archive, registry, 'local')
       return this.snapshot()
     })
@@ -398,7 +436,12 @@ export class PluginManager {
       const record = (await this.readRegistry())[id]
       if (!record) throw new PluginTransferError('not_installed')
       try {
-        const { manifest, sourceDirectory, sourceManifest } = await this.readInstalled(id, record)
+        const { manifest, directory, sourceDirectory, sourceManifest } = await this.readInstalled(id, record)
+        if (!sourceManifest || !sourceDirectory) {
+          const files = await Promise.all(manifest.files.map(async file => ({ path: file.path, data: await readLimitedFile(path.join(directory, file.path), file.bytes) })))
+          for (const [index, file] of files.entries()) if (digest(file.data) !== manifest.files[index].sha256) throw new Error('Installed plugin changed during export')
+          return { manifest, format: 'lxplugin' as const, bytes: packPlugin(manifest, files) }
+        }
         if (!Array.isArray(sourceManifest.files) || sourceManifest.files.length > MAX_SOURCE_FILES) throw new Error('Invalid source files')
         const files = new Map<string, Buffer>()
         let total = 0
@@ -415,13 +458,13 @@ export class PluginManager {
           if (bytes.length !== file.bytes || digest(bytes) !== file.sha256) throw new Error('Installed source file checksum mismatch')
           files.set(file.path, bytes)
         }
-        return { manifest, bytes: await packSource(sourceManifest, files) }
+        return { manifest, format: 'zip' as const, bytes: await packSource(sourceManifest, files) }
       } catch { throw new PluginTransferError('corrupt_installation') }
     })
   }
 
-  async writeExport(filename: string, bytes: Buffer) {
-    if (path.extname(filename).toLowerCase() !== '.zip') throw new PluginTransferError('invalid_destination')
+  async writeExport(filename: string, bytes: Buffer, format: PluginPackageFormat = 'zip') {
+    if (!['zip', 'lxplugin'].includes(format) || path.extname(filename).toLowerCase() !== '.' + format) throw new PluginTransferError('invalid_destination')
     // Resolve the parent as well, so a junction cannot redirect the export into installed plugins.
     const parent = await fs.realpath(path.dirname(path.resolve(filename)))
     const root = await fs.realpath(this.root)

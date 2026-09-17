@@ -5,17 +5,17 @@
       "id": "sound-effects",
       "version": "1.0.0",
       "apiVersion": 1,
-      "path": "sound-effects/1.0.0/a170f8018bcade0c7084559372e544c968f0c8dc348695090b60570918181daa.lxplugin",
-      "bytes": 2961255,
-      "sha256": "a170f8018bcade0c7084559372e544c968f0c8dc348695090b60570918181daa"
+      "path": "sound-effects/1.0.0/9ba8338d363aa05363a3da48686643732b7aa458c7bc1df8b715b33d2834681c.lxplugin",
+      "bytes": 2961905,
+      "sha256": "9ba8338d363aa05363a3da48686643732b7aa458c7bc1df8b715b33d2834681c"
     },
     {
       "id": "audio-visualizer",
       "version": "1.2.0",
       "apiVersion": 1,
-      "path": "audio-visualizer/1.2.0/2b9401a231125732dc6efbaf7e0673945f9a9700a8ac743f6036601199646213.lxplugin",
-      "bytes": 69379,
-      "sha256": "2b9401a231125732dc6efbaf7e0673945f9a9700a8ac743f6036601199646213"
+      "path": "audio-visualizer/1.2.0/6ca1fb9a5041d5c641967f34a0cc01aaad646a7b1e3a418a7108927b77cc3254.lxplugin",
+      "bytes": 69880,
+      "sha256": "6ca1fb9a5041d5c641967f34a0cc01aaad646a7b1e3a418a7108927b77cc3254"
     }
   ]
 }

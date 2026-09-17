@@ -8,6 +8,7 @@ const { VueLoaderPlugin } = require('vue-loader')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const base = require('../renderer/webpack.config.base')
 const buildSourcePackage = require('./source-package.cjs')
+const buildCompiledPackage = require('./compiled-package.cjs')
 const { validPath } = require('../../src/common/pluginSource')
 
 const root = path.resolve(__dirname, '../..')
@@ -15,6 +16,14 @@ const outputRoot = path.join(root, 'build/optional-plugins')
 const catalogRoot = path.join(root, 'plugins/store')
 const sourceRoot = path.join(root, 'src/optional-plugins')
 const sha256 = data => createHash('sha256').update(data).digest('hex')
+const writeArchive = async(filename, bytes) => {
+  const existing = await fs.readFile(filename).catch(error => { if (error.code !== 'ENOENT') throw error; return null })
+  if (existing) {
+    if (!existing.equals(bytes)) throw new Error('Existing plugin package checksum mismatch: ' + filename)
+    return
+  }
+  await fs.writeFile(filename, bytes, { flag: 'wx' })
+}
 const externals = require('../../src/main/pluginCompiler/host.cjs')
 
 const compile = config => new Promise((resolve, reject) => {
@@ -134,13 +143,18 @@ async function main() {
     const sourceHash = sha256(sourceArchive)
     const sourceRelative = `${id}/${manifest.version}/${sourceHash}.zip`
     await fs.mkdir(path.dirname(path.join(catalogRoot, sourceRelative)), { recursive: true })
-    await fs.writeFile(path.join(catalogRoot, sourceRelative), sourceArchive)
-    catalog.plugins.push({ id, version: manifest.version, apiVersion: manifest.apiVersion, path: sourceRelative, bytes: sourceArchive.length, sha256: sourceHash, ...display })
-    console.log(`Packaged ${id} ${manifest.version}: source ZIP ${sourceArchive.length} bytes`)
+    await writeArchive(path.join(catalogRoot, sourceRelative), sourceArchive)
+    const compiledArchive = await buildCompiledPackage(sourceArchive)
+    const compiledHash = sha256(compiledArchive)
+    const compiledRelative = `${id}/${manifest.version}/${compiledHash}.lxplugin`
+    await writeArchive(path.join(catalogRoot, compiledRelative), compiledArchive)
+    // Keep the primary ZIP fields readable by source-only clients; newer clients prefer packages.lxplugin.
+    catalog.plugins.push({ id, version: manifest.version, apiVersion: manifest.apiVersion, path: sourceRelative, bytes: sourceArchive.length, sha256: sourceHash, packages: { lxplugin: { path: compiledRelative, bytes: compiledArchive.length, sha256: compiledHash } }, ...display })
+    console.log(`Packaged ${id} ${manifest.version}: LXPlugin ${compiledArchive.length} bytes, source ZIP ${sourceArchive.length} bytes`)
   }
   for (const plugin of catalog.plugins) Object.assign(plugin, sources.get(plugin.id)?.display ?? {})
   catalog.plugins.sort((a, b) => order.get(a.id) - order.get(b.id))
   await fs.writeFile(catalogFile, JSON.stringify(catalog, null, 2) + '\n')
-  console.log('Source catalog written to plugins/store/catalog.json')
+  console.log('Plugin catalog written to plugins/store/catalog.json')
 }
 main().catch(error => { console.error(error); process.exitCode = 1 })

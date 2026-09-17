@@ -1,6 +1,6 @@
 <template>
   <div :class="$style.main">
-    <div ref="dom_toc_ref" :class="$style.toc">
+    <common-resizable-sidebar name="setting" :label="$t('setting')">
       <div :class="$style.searchBox">
         <svg :class="$style.searchIcon" viewBox="0 0 30.239 30.239" aria-hidden="true">
           <use xlink:href="#icon-search" />
@@ -21,7 +21,7 @@
           </svg>
         </button>
       </div>
-      <div class="scroll" :class="$style.tocScroll">
+      <div ref="dom_toc_ref" class="scroll" :class="$style.tocScroll">
         <ul v-if="visibleTocList.length" :class="$style.tocList" role="tablist" aria-orientation="vertical">
           <li v-for="h2 in visibleTocList" :key="h2.id" :class="$style.tocListItem" role="presentation">
             <h2
@@ -47,7 +47,7 @@
         </ul>
         <p v-else :class="$style.searchEmpty">{{ $t('setting__filter_empty') }}</p>
       </div>
-    </div>
+    </common-resizable-sidebar>
     <common-motion-view :motion-key="avtiveComponentName" :distance="24">
       <div ref="dom_content_ref" class="scroll" :class="[$style.setting, {[$style.searchFiltering]: isFiltering}]" data-setting-content>
       <p v-if="isFiltering && !visibleTocList.length" :class="$style.contentEmpty">{{ $t('setting__filter_empty') }}</p>
@@ -571,13 +571,6 @@ export default {
   border-top: var(--color-list-header-border-bottom);
 }
 
-.toc {
-  flex: 0 0 180px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
 .tocScroll {
   flex: auto;
   min-height: 0;

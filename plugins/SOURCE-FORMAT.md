@@ -16,6 +16,10 @@ my-plugin-1.0.0.zip
 │   ├── main/             # 主界面及桌面歌词依赖
 │   └── engine/           # 独立浏览器引擎依赖
 ├── LICENSE
+├── DEVELOPMENT.md        # 独立开发和重新打包说明
+├── types/lx-m-plugin.d.ts # 插件 API 类型
+├── package.json          # 可选的编辑器开发依赖
+├── tsconfig.json
 └── README.md
 ```
 
@@ -51,7 +55,9 @@ my-plugin-1.0.0.zip
 | `assets` | 可选数组：`{ "from": "src/filters", "to": "filters" }`，复制静态资源到运行目录 |
 | `browser` | 可选，独立浏览器引擎，见下文 |
 
-Vue、播放器、设置和歌词接口由宿主提供，沿用 [插件接口说明](README.md#新增插件)。第三方包按 npm 的目录结构放在 `vendor/main/`；依赖的嵌套 `node_modules` 结构须保留。编译器不联网安装依赖，缺失依赖会报错。
+Vue、播放器、设置和歌词接口由宿主提供，见 [插件接口说明](README.md#新增插件)。第三方包按 npm 的目录结构放在 `vendor/main/`；依赖的嵌套 `node_modules` 结构须保留。编译器不联网安装依赖，缺失依赖会报错。
+
+编译器桥接 `vue`、`@common/utils/vueTools`、`@renderer/plugins/player`、`@renderer/store/setting`、`@renderer/store/player/state`、`@renderer/store/player/lyric`、`@renderer/store/player/playProgress`、`@renderer/utils/ipc`、`@renderer/plugins/Dialog`、`@renderer/utils/downloadFiles`、`@renderer/core/lyric`、`@lyric/store/state` 和 `@lyric/core/mainWindowChannel` 到宿主实例。其余别名导入需要对应的 sdk 源码；新插件优先使用文档中的通用 PluginModule 接口。
 
 ## 构建行为
 
@@ -59,7 +65,7 @@ Vue、播放器、设置和歌词接口由宿主提供，沿用 [插件接口说
 - Vue 和播放器接口使用宿主实例；插件 SDK 辅助源码放在 `sdk/common`、`sdk/renderer` 等目录，保持原有别名和相对路径。
 - 主界面和桌面歌词生成独立入口。插件的 `activate`、设置组件、下载菜单和卸载清理规则保持一致。
 - 编译完成后检查全部运行文件，再原子切换安装。语法错误、依赖缺失、编译超时或写入失败保留旧安装及个人设置。
-- 下载 ZIP 在内存中校验和解压，安装后不保留压缩包；无论成功或失败都清理编译临时目录。`.source/` 保留解压后的源码与依赖，导出时校验并重新打包，不包含构建缓存或个人设置。用户选择导入的原始 ZIP 保持不变。插件安装、导入和导出统一使用源码 ZIP，不支持 `.lxplugin`；缺少源码的旧安装需要重新安装，个人设置保留。
+- 下载 ZIP 在内存中校验和解压，安装后不保留压缩包；无论成功或失败都清理编译临时目录。`.source/` 保留解压后的源码与依赖，导出时校验并重新打包，不包含构建缓存或个人设置。用户选择导入的原始 ZIP 保持不变。商店同时支持预编译 `.lxplugin`，默认选择该格式；预编译安装无需源码或编译器，导出时仍为 `.lxplugin`。本规范描述源码 ZIP 通道，两种格式不能通过改名相互转换。
 
 独立浏览器引擎采用声明式配置，例如 Folia：
 
@@ -87,7 +93,7 @@ Vue、播放器、设置和歌词接口由宿主提供，沿用 [插件接口说
 npm run build:plugins -- audio-tag-editor
 ```
 
-产物写入 `plugins/store/<id>/<version>/<sha256>.zip`。`catalog.json` 使用 `schemaVersion: 2`，插件条目的 `path`、`bytes`、`sha256` 直接提供 ZIP 地址、大小和哈希。商店更新与本地导入使用相同的源码编译流程。构建不再输出 `.lxplugin`，仓库 `plugins/official/` 下的旧包和旧目录文件保留，供旧版软件使用。
+构建同时输出 `plugins/store/<id>/<version>/<sha256>.zip` 和 `.lxplugin`。`catalog.json` 仍是 UTF-8 文字列表，使用 `schemaVersion: 2`；插件条目的 `path`、`bytes`、`sha256` 保留 ZIP 地址、大小和哈希，`packages.lxplugin` 提供预编译包的对应信息。新版默认安装 `.lxplugin`，可在卡片中选择 ZIP；只有 ZIP 的条目仍可安装。预编译包由该源码 ZIP 编译生成，ZIP 安装与本地导入使用同一编译流程。仓库 `plugins/official/` 下的旧包和旧目录文件继续保留。
 
 从 [最小模板](template) 开始，或修改已解压的源码包后，在仓库执行：
 

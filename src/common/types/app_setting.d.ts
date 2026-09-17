@@ -797,6 +797,8 @@ declare global {
       /** 排行榜侧栏宽度，0 使用自适应默认宽度 */
       'ui.leaderboardSidebar.width': number
       'ui.leaderboardSidebar.collapsed': boolean
+      /** 设置侧栏宽度，0 使用默认宽度 */
+      'ui.settingSidebar.width': number
 
       /**
        * 是否启用无缝衔接（gapless playback，预加载下一首并交叉淡化）

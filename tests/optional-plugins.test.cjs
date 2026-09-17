@@ -6,6 +6,7 @@ const os = require('node:os')
 const Module = require('node:module')
 const { createHash } = require('node:crypto')
 const { packSource, unpackSource, readZip, writeZip } = require('../src/common/pluginSource')
+const { packPlugin, unpackPlugin } = require('../src/common/pluginPackage')
 const { test } = require('node:test')
 const ts = require('typescript')
 
@@ -38,6 +39,12 @@ const bundle = async(id, version = '1.0.0', extra = {}) => {
   ]))
   return { archive, entry: { id, version, apiVersion: manifest.apiVersion, name: manifest.name, path: id + '/' + version + '/' + hash(archive) + '.zip', bytes: archive.length, sha256: hash(archive) } }
 }
+const compiledBundle = (id, version = '1.0.0', extra = {}) => {
+  const data = Buffer.from('module.exports.default = { components: {}, compiled: true }')
+  const manifest = { id, version, apiVersion: 3, entry: 'renderer.js', styles: [], files: [{ path: 'renderer.js', bytes: data.length, sha256: hash(data) }], ...extra }
+  const archive = packPlugin(manifest, [{ path: 'renderer.js', data }])
+  return { archive, entry: { path: `${id}/${version}/${hash(archive)}.lxplugin`, bytes: archive.length, sha256: hash(archive) } }
+}
 async function fixture(t) {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'lx-plugin-manager-'))
   const root = path.join(temporary, 'plugins')
@@ -50,7 +57,7 @@ async function fixture(t) {
   const fetchBinary = async url => {
     if (state.offline) throw new Error('Offline')
     if (url === OFFICIAL_PLUGIN_ROOT + PLUGIN_CATALOG_FILE) return Buffer.from(JSON.stringify({ schemaVersion: 2, plugins: state.packages.map(item => item.entry) }))
-    const item = state.packages.find(item => url === OFFICIAL_PLUGIN_ROOT + item.entry.path)
+    const item = state.packages.flatMap(item => [item, ...(item.compiled ? [item.compiled] : [])]).find(item => url === OFFICIAL_PLUGIN_ROOT + item.entry.path)
     assert.ok(item, url)
     return state.corruptDownload ? Buffer.from('broken') : item.archive
   }
@@ -71,7 +78,7 @@ async function fixture(t) {
   return { root, files: temporary, state, manager: restart(), restart, writePackage }
 }
 
-test('the source catalog and all four official ZIPs pass package checks', async() => {
+test('the text catalog advertises verified source ZIP and LXPlugin packages for all four plugins', async() => {
   const root = path.join(project, 'plugins/store')
   const catalog = parseCatalog(await fs.readFile(path.join(root, PLUGIN_CATALOG_FILE)))
   assert.deepEqual(catalog.plugins.map(entry => entry.id).sort(), ['audio-tag-editor', 'audio-visualizer', 'folia-lyrics', 'sound-effects'])
@@ -86,6 +93,17 @@ test('the source catalog and all four official ZIPs pass package checks', async(
     assert.ok(files.has('src/index.ts'))
     assert.ok(files.has('LICENSE'))
     assert.equal(files.has('renderer.js'), false)
+    const compiled = entry.packages.lxplugin
+    const compiledBytes = await fs.readFile(path.join(root, compiled.path))
+    assert.equal(compiledBytes.length, compiled.bytes)
+    assert.equal(hash(compiledBytes), compiled.sha256)
+    const compiledArchive = unpackPlugin(compiledBytes)
+    for (const key of ['id', 'version', 'apiVersion']) assert.equal(compiledArchive.manifest[key], entry[key])
+    for (const file of compiledArchive.manifest.files) {
+      const bytes = Buffer.from(compiledArchive.files[file.path], 'base64')
+      assert.equal(bytes.length, file.bytes)
+      assert.equal(hash(bytes), file.sha256)
+    }
     if (entry.id === 'sound-effects') assert.ok([...files.keys()].some(name => name.startsWith('src/filters/')))
     if (entry.id === 'audio-visualizer') assert.ok(files.has(manifest.lyricEntry))
     if (entry.id === 'folia-lyrics') assert.ok(files.has(manifest.browser.entry))
@@ -93,13 +111,95 @@ test('the source catalog and all four official ZIPs pass package checks', async(
   assert.throws(() => parseCatalog(fsSync.readFileSync(path.join(project, 'plugins/official/catalog-v2.json'))), /Invalid plugin catalog/)
 })
 
-test('catalog rejects old formats, unsafe URLs, duplicate IDs and oversized ZIPs', async() => {
+test('catalog rejects unsafe URLs, unknown formats, duplicate IDs and oversized packages', async() => {
   const { entry } = await bundle('sound-effects')
-  for (const patch of [{ path: '../escape.zip' }, { path: 'https://example.com/a.zip' }, { path: 'sound-effects/1.0.0/a/../b.zip' }, { path: entry.path.replace('.zip', '.lxplugin') }, { id: 'unknown' }, { bytes: 64 * 1024 * 1024 + 1 }]) {
+  for (const patch of [{ path: '../escape.zip' }, { path: 'https://example.com/a.zip' }, { path: 'sound-effects/1.0.0/a/../b.zip' }, { path: entry.path.replace('.zip', '.tar') }, { id: 'unknown' }, { bytes: 64 * 1024 * 1024 + 1 }]) {
     assert.throws(() => parseCatalog(Buffer.from(JSON.stringify({ schemaVersion: 2, plugins: [{ ...entry, ...patch }] }))))
   }
   assert.throws(() => parseCatalog(Buffer.from(JSON.stringify({ schemaVersion: 1, plugins: [entry] }))))
   assert.throws(() => parseCatalog(Buffer.from(JSON.stringify({ schemaVersion: 2, plugins: [entry, entry] }))))
+  const compiled = compiledBundle(entry.id)
+  for (const packages of [[], { exe: compiled.entry }, { lxplugin: entry }, { lxplugin: { ...compiled.entry, path: '../escape.lxplugin' } }, { lxplugin: { ...compiled.entry, bytes: 20 * 1024 * 1024 + 1 } }]) {
+    assert.throws(() => parseCatalog(Buffer.from(JSON.stringify({ schemaVersion: 2, plugins: [{ ...entry, packages }] }))))
+  }
+})
+
+test('store defaults to LXPlugin, can explicitly compile ZIP, and rolls back a failed format change', async t => {
+  const { manager, state, root, restart } = await fixture(t)
+  const item = state.packages[0]
+  item.compiled = compiledBundle(item.entry.id)
+  item.entry.packages = { lxplugin: item.compiled.entry }
+  await manager.refresh()
+  const compiled = (await manager.install(item.entry.id)).installed[item.entry.id]
+  assert.equal(compiled.format, 'lxplugin')
+  assert.equal(state.compilations, 0)
+  assert.deepEqual((await fs.readdir(compiled.directory)).sort(), ['manifest.json', 'renderer.js'])
+  state.offline = true
+  const offline = restart()
+  assert.equal((await offline.snapshot()).installed[item.entry.id].directory, compiled.directory)
+  const exported = await offline.createExport(item.entry.id)
+  assert.equal(exported.format, 'lxplugin')
+  assert.deepEqual(unpackPlugin(exported.bytes), unpackPlugin(item.compiled.archive))
+  state.offline = false
+  const source = (await manager.install(item.entry.id, 'zip')).installed[item.entry.id]
+  assert.equal(source.format, 'zip')
+  assert.equal(state.compilations, 1)
+  assert.equal((await manager.createExport(item.entry.id)).format, 'zip')
+  state.corruptDownload = true
+  await assert.rejects(manager.install(item.entry.id), /checksum/)
+  assert.equal((await manager.snapshot()).installed[item.entry.id].directory, source.directory)
+  state.corruptDownload = false
+  item.compiled = compiledBundle(item.entry.id, '2.0.0')
+  item.compiled.entry.path = item.compiled.entry.path.replace('/2.0.0/', '/1.0.0/')
+  item.entry.packages = { lxplugin: item.compiled.entry }
+  await manager.refresh()
+  await assert.rejects(manager.install(item.entry.id), /does not match/)
+  await assert.rejects(manager.install(item.entry.id, 'exe'), /format/)
+  assert.equal((await manager.snapshot()).installed[item.entry.id].directory, source.directory)
+  assert.equal((await fs.readdir(root)).some(name => /^(install|source)-/.test(name)), false)
+})
+
+test('compiled imports work without a compiler, export offline and recognize legacy installed records', async t => {
+  const { root, files, writePackage } = await fixture(t)
+  const manager = new PluginManager(root, async() => { throw new Error('Offline') })
+  const item = compiledBundle('compiled-local')
+  const filename = await writePackage(item, 'compiled.LXPLUGIN')
+  const prepared = await manager.prepareImport(filename)
+  assert.equal(prepared.format, 'lxplugin')
+  const installed = (await manager.importPrepared(prepared)).installed['compiled-local']
+  assert.equal(installed.source, 'local')
+  const exported = await manager.createExport('compiled-local')
+  const destination = path.join(files, 'exported.lxplugin')
+  await manager.writeExport(destination, exported.bytes, exported.format)
+  assert.deepEqual(unpackPlugin(await fs.readFile(destination)), unpackPlugin(item.archive))
+  const registryPath = path.join(root, 'installed.json')
+  const registry = JSON.parse(await fs.readFile(registryPath, 'utf8'))
+  delete registry['compiled-local'].format
+  await fs.writeFile(registryPath, JSON.stringify(registry))
+  assert.equal((await manager.snapshot()).installed['compiled-local'].format, 'lxplugin')
+  await fs.writeFile(path.join(installed.directory, 'renderer.js'), 'corrupt')
+  assert.match((await manager.snapshot()).errors['compiled-local'], /checksum/)
+  await assert.rejects(manager.createExport('compiled-local'), { code: 'corrupt_installation' })
+})
+
+test('compiled packages reject traversal, missing files, tampering, invalid encoding and incompatible APIs', async t => {
+  const { manager, state, writePackage } = await fixture(t)
+  const original = unpackPlugin(compiledBundle('checked-plugin').archive)
+  const { gzipSync } = require('node:zlib')
+  for (const mutate of [
+    archive => { archive.manifest.files[0].path = '../escape.js' },
+    archive => { archive.manifest.id = '../escape' },
+    archive => { archive.files = {} },
+    archive => { archive.files['extra.js'] = '' },
+    archive => { archive.files['renderer.js'] = Buffer.from('changed').toString('base64') },
+    archive => { archive.files['renderer.js'] = '!'.repeat(archive.files['renderer.js'].length) },
+  ]) {
+    const archive = structuredClone(original)
+    mutate(archive)
+    await assert.rejects(manager.prepareImport(await writePackage({ archive: gzipSync(JSON.stringify(archive)) }, 'invalid.lxplugin')), { code: 'invalid_package' })
+  }
+  await assert.rejects(manager.prepareImport(await writePackage(compiledBundle('checked-plugin', '1.0.0', { apiVersion: 99 }), 'future.lxplugin')), { code: 'incompatible' })
+  assert.equal(state.compilations, 0)
 })
 
 test('plugins compile independently, restart offline and uninstall only their own files', async t => {
@@ -310,14 +410,16 @@ test('confirmation rejects stale replacements and supports downgrades and repair
   assert.equal((await manager.importPrepared(repair)).errors[id], undefined)
 })
 
-test('lxplugin files, renamed old archives and invalid ZIPs are rejected before compilation', async t => {
+test('legacy LXPlugin imports are supported while renamed archives and invalid ZIPs are rejected', async t => {
   const { manager, state, root, writePackage } = await fixture(t)
   const id = 'safe-local'
   const item = await bundle(id)
   const first = (await manager.importPrepared(await manager.prepareImport(await writePackage(item)))).installed[id]
   const oldCatalog = require('../plugins/official/catalog-v2.json')
   const oldBytes = await fs.readFile(path.join(project, 'plugins/official', oldCatalog.plugins[0].path))
-  await assert.rejects(manager.prepareImport(await writePackage({ archive: oldBytes }, 'legacy.lxplugin')), { code: 'invalid_package' })
+  const legacy = await manager.prepareImport(await writePackage({ archive: oldBytes }, 'legacy.lxplugin'))
+  assert.equal(legacy.format, 'lxplugin')
+  assert.equal((await manager.importPrepared(legacy)).installed[legacy.manifest.id].format, 'lxplugin')
   await assert.rejects(manager.prepareImport(await writePackage({ archive: oldBytes }, 'renamed.zip')), { code: 'invalid_package' })
   await assert.rejects(manager.prepareImport(await writePackage(item, 'source.lxplugin')), { code: 'invalid_package' })
   const altered = await readZip(item.archive)

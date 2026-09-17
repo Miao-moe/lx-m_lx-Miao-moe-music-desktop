@@ -5,9 +5,9 @@
       "id": "sound-effects",
       "version": "1.0.0",
       "apiVersion": 1,
-      "path": "sound-effects/1.0.0/a170f8018bcade0c7084559372e544c968f0c8dc348695090b60570918181daa.lxplugin",
-      "bytes": 2961255,
-      "sha256": "a170f8018bcade0c7084559372e544c968f0c8dc348695090b60570918181daa",
+      "path": "sound-effects/1.0.0/9ba8338d363aa05363a3da48686643732b7aa458c7bc1df8b715b33d2834681c.lxplugin",
+      "bytes": 2961905,
+      "sha256": "9ba8338d363aa05363a3da48686643732b7aa458c7bc1df8b715b33d2834681c",
       "name": {
         "zh-cn": "音效增强",
         "zh-tw": "音效增強",
@@ -18,15 +18,20 @@
         "zh-tw": "包含十段等化器、環境混響、環繞音效與變調，支援儲存個人預設。",
         "en-us": "Ten-band equalizer, convolution reverb, surround effects and pitch shifting, with personal presets."
       },
-      "icon": "#icon-tune-variant"
+      "icon": "#icon-tune-variant",
+      "sourcePackage": {
+        "path": "sound-effects/1.0.0/bc6bd28509b32d62c5ece7f523cfdecfe0b952591ff2869b81f981332cb2e97c.zip",
+        "bytes": 2547897,
+        "sha256": "bc6bd28509b32d62c5ece7f523cfdecfe0b952591ff2869b81f981332cb2e97c"
+      }
     },
     {
       "id": "audio-visualizer",
       "version": "1.2.0",
       "apiVersion": 1,
-      "path": "audio-visualizer/1.2.0/2b9401a231125732dc6efbaf7e0673945f9a9700a8ac743f6036601199646213.lxplugin",
-      "bytes": 69379,
-      "sha256": "2b9401a231125732dc6efbaf7e0673945f9a9700a8ac743f6036601199646213",
+      "path": "audio-visualizer/1.2.0/6ca1fb9a5041d5c641967f34a0cc01aaad646a7b1e3a418a7108927b77cc3254.lxplugin",
+      "bytes": 69880,
+      "sha256": "6ca1fb9a5041d5c641967f34a0cc01aaad646a7b1e3a418a7108927b77cc3254",
       "name": {
         "zh-cn": "音频可视化",
         "zh-tw": "音訊視覺化",
@@ -37,15 +42,20 @@
         "zh-tw": "為播放詳細頁與桌面歌詞加入隨音樂變化的頻譜，可分別開關。",
         "en-us": "Music spectrum for player details and desktop lyrics, with separate display switches."
       },
-      "icon": "#icon-audio-wave"
+      "icon": "#icon-audio-wave",
+      "sourcePackage": {
+        "path": "audio-visualizer/1.2.0/af495e46826471ffcd327a17c67ced46721bc60635da97a39a317cdf963767c5.zip",
+        "bytes": 123373,
+        "sha256": "af495e46826471ffcd327a17c67ced46721bc60635da97a39a317cdf963767c5"
+      }
     },
     {
       "id": "folia-lyrics",
       "version": "1.2.0",
       "apiVersion": 2,
-      "path": "folia-lyrics/1.2.0/9135348e14c4aadcebc35de4859fc97681c125aa69342bbe2afe576975b40dd0.lxplugin",
-      "bytes": 10596760,
-      "sha256": "9135348e14c4aadcebc35de4859fc97681c125aa69342bbe2afe576975b40dd0",
+      "path": "folia-lyrics/1.2.0/08f4173513d2f492666b77e99b75f17ccd096a4453d3a15d8175161d05e230f4.lxplugin",
+      "bytes": 10596957,
+      "sha256": "08f4173513d2f492666b77e99b75f17ccd096a4453d3a15d8175161d05e230f4",
       "name": {
         "zh-cn": "Folia 歌词动效",
         "zh-tw": "Folia 歌詞動效",
@@ -56,26 +66,36 @@
         "zh-tw": "13 種 Folia 歌詞動效鋪滿播放頁，滑鼠靠近時顯示控制列，支援逐字動效、樣式預覽與獨立開關。",
         "en-us": "Fill the player with 13 Folia lyric styles and controls that appear as the pointer approaches, with word animations, previews and a separate toggle."
       },
-      "icon": "#icon-lyric"
+      "icon": "#icon-lyric",
+      "sourcePackage": {
+        "path": "folia-lyrics/1.2.0/758689bd23b5d376405764c6a752440a88a264ddcc4c13ac5813922f4463ec7e.zip",
+        "bytes": 28428349,
+        "sha256": "758689bd23b5d376405764c6a752440a88a264ddcc4c13ac5813922f4463ec7e"
+      }
     },
     {
       "id": "audio-tag-editor",
-      "version": "1.0.0",
-      "apiVersion": 2,
-      "path": "audio-tag-editor/1.0.0/ffeddd734eeb3c8e689abe056f0cb1afde2657e66a499319ea14d47c72d8b6f5.lxplugin",
-      "bytes": 236825,
-      "sha256": "ffeddd734eeb3c8e689abe056f0cb1afde2657e66a499319ea14d47c72d8b6f5",
+      "version": "1.1.0",
+      "apiVersion": 3,
+      "path": "audio-tag-editor/1.1.0/f3cb309ddd4ae23fec7ca95327927f203cd6ae2afdf96319b561f73f5e387a61.lxplugin",
+      "bytes": 239217,
+      "sha256": "f3cb309ddd4ae23fec7ca95327927f203cd6ae2afdf96319b561f73f5e387a61",
       "name": {
         "zh-cn": "音频标签编辑",
         "zh-tw": "音訊標籤編輯",
         "en-us": "Audio Tag Editor"
       },
       "description": {
-        "zh-cn": "修改已下载 MP3、FLAC 文件的标题、艺术家、专辑、年份、流派和备注，保留音频、封面与歌词。",
-        "zh-tw": "修改已下載 MP3、FLAC 檔案的標題、演出者、專輯、年份、類型和備註，保留音訊、封面與歌詞。",
-        "en-us": "Edit titles, artists, albums, years, genres and comments in downloaded MP3 and FLAC files, preserving audio, artwork and lyrics."
+        "zh-cn": "在下载列表右键修改 MP3、FLAC 的音频标签，也可选择本地文件，保留音频、封面与歌词。",
+        "zh-tw": "在下載列表按右鍵修改 MP3、FLAC 的音訊標籤，也可選擇本機檔案，保留音訊、封面與歌詞。",
+        "en-us": "Right-click a download to edit MP3 or FLAC tags, or choose a local file, preserving audio, artwork and lyrics."
       },
-      "icon": "#icon-music"
+      "icon": "#icon-music",
+      "sourcePackage": {
+        "path": "audio-tag-editor/1.1.0/971e5c4a15366d653126b000ed6e3e27d8e7d157b01989606a20e3cb1c19239b.zip",
+        "bytes": 444987,
+        "sha256": "971e5c4a15366d653126b000ed6e3e27d8e7d157b01989606a20e3cb1c19239b"
+      }
     }
   ]
 }
