@@ -1,10 +1,10 @@
+import './adapters/frameRate'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MotionConfig, motionValue } from 'framer-motion'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { FOLIA_CHANNEL, type FoliaConfig, type FoliaFrame, type FoliaSong } from '../protocol'
-import { installGlobalVisualizerFrameRateLimiter } from './vendor/src/utils/frameRateLimiter'
 import { getLineRenderEndTime } from './vendor/src/utils/lyrics/renderHints'
 import { playerBottomInset } from './adapters/bottomBar'
 import './styles.css'
@@ -29,7 +29,6 @@ void i18n.use(initReactI18next).init({ lng: 'zh', fallbackLng: 'en', interpolati
   zh: { translation: { ui: { waitingForMusic: '等待歌词', noTrack: '暂无歌曲' }, common: { reset: '重置' } } },
   en: { translation: { ui: { waitingForMusic: 'Waiting for lyrics', noTrack: 'No track' }, common: { reset: 'Reset' } } },
 } })
-installGlobalVisualizerFrameRateLimiter(60)
 const currentTime = motionValue(0)
 const audioPower = motionValue(0)
 const audioBands = { bass: motionValue(0), lowMid: motionValue(0), mid: motionValue(0), vocal: motionValue(0), treble: motionValue(0), spectrum: motionValue(new Uint8Array(0)) }

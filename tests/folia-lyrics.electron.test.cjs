@@ -20,6 +20,14 @@ test('Folia installs, renders every style, follows playback and restores prefere
   let { app, page } = fixture
   try {
     page.setDefaultTimeout(12000)
+    await page.addInitScript(() => {
+      const native = window.requestAnimationFrame.bind(window)
+      window.__foliaNativeCallbacks = new Set()
+      window.requestAnimationFrame = callback => {
+        window.__foliaNativeCallbacks.add(callback)
+        return native(callback)
+      }
+    })
     await page.evaluate(() => {
       window.__foliaAnalysers = []
       const create = AudioContext.prototype.createAnalyser
@@ -66,6 +74,32 @@ test('Folia installs, renders every style, follows playback and restores prefere
       const messages = await frame.evaluate(() => window.__stateMessages)
       assert.equal(messages.filter(type => type === 'state').length, 0)
       assert.equal(messages.filter(type => type === 'config').length, modes.length - 1)
+    })
+    await t.test('Motion and canvas styles share one native frame clock, including on high refresh displays', async() => {
+      assert.equal(await frame.evaluate(() => window.__foliaNativeCallbacks.size), 1, 'animation libraries must not retain a native RAF that bypasses the frame limit')
+    })
+    await t.test('Cadenza reuses unchanged text metrics and nodes while refreshing them when the font changes', async() => {
+      await page.locator('[data-folia-mode]').selectOption('cadenza')
+      await frame.waitForFunction(() => document.documentElement.dataset.mode === 'cadenza' && Number(document.documentElement.dataset.time) % 4 >= 1.8 && Number(document.documentElement.dataset.time) % 4 <= 2.1 && [...document.querySelectorAll('#root span')].some(span => span.style.zIndex === '1' && span.firstChild?.nodeType === Node.TEXT_NODE))
+      await frame.evaluate(() => {
+        window.__cadenzaMeasurements = 0
+        const measure = CanvasRenderingContext2D.prototype.measureText
+        CanvasRenderingContext2D.prototype.measureText = function(...args) { window.__cadenzaMeasurements++; return measure.apply(this, args) }
+        window.__cadenzaBody = [...document.querySelectorAll('#root span')].find(span => span.style.zIndex === '1' && span.firstChild?.nodeType === Node.TEXT_NODE)
+        window.__cadenzaText = window.__cadenzaBody.firstChild
+      })
+      await page.waitForTimeout(500)
+      const measured = await frame.evaluate(() => ({ count: window.__cadenzaMeasurements, retainedText: window.__cadenzaText.isConnected && window.__cadenzaBody.firstChild === window.__cadenzaText }))
+      assert(measured.count < 8, 'newly revealed words may be measured, but existing words must reuse their metrics')
+      assert.equal(measured.retainedText, true)
+      const originalFont = await page.evaluate(() => {
+        const previous = window.lxData.appSetting['common.font']
+        window.lxData.appSetting['common.font'] = 'serif'
+        return previous
+      })
+      await frame.waitForFunction(before => window.__cadenzaMeasurements > before, measured.count)
+      await frame.waitForFunction(() => [...document.querySelectorAll('#root [style]')].some(element => element.style.font.includes('serif')))
+      await page.evaluate(font => { window.lxData.appSetting['common.font'] = font }, originalFont)
     })
     await page.locator('[data-folia-mode]').selectOption('classic')
     await page.evaluate(() => {

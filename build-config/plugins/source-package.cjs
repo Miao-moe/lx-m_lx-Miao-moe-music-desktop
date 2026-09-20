@@ -38,6 +38,9 @@ module.exports = async({ id, source, display, output, stats }) => {
     const { patchPausedFumeCamera } = await import(pathToFileURL(path.join(source, 'engine/adapters/pausedCamera.mjs')).href)
     const filename = 'src/engine/vendor/src/components/visualizer/fume/VisualizerFume.tsx'
     files.set(filename, Buffer.from(patchPausedFumeCamera(files.get(filename).toString())))
+    const { patchCadenzaLayout } = await import(pathToFileURL(path.join(source, 'engine/adapters/cadenzaLayout.mjs')).href)
+    const cadenza = 'src/engine/vendor/src/components/visualizer/cadenza/VisualizerCadenza.tsx'
+    files.set(cadenza, Buffer.from(patchCadenzaLayout(files.get(cadenza).toString())))
   }
   const assets = [...(spec.assets ?? [])]
   if (await fs.stat(path.join(output, 'licenses')).catch(() => null)) {

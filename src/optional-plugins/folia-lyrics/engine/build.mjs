@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 import tailwind from '@tailwindcss/postcss'
 import { patchPausedFumeCamera } from './adapters/pausedCamera.mjs'
+import { patchCadenzaLayout } from './adapters/cadenzaLayout.mjs'
 
 // Build a self-contained browser renderer, isolated from the host's Vue and CSS.
 const root = path.dirname(fileURLToPath(import.meta.url))
@@ -28,6 +29,7 @@ await build({
     },
     transform(source, id) {
       if (id.replaceAll('\\', '/').endsWith('/visualizer/fume/VisualizerFume.tsx')) return patchPausedFumeCamera(source)
+      if (id.replaceAll('\\', '/').endsWith('/visualizer/cadenza/VisualizerCadenza.tsx')) return patchCadenzaLayout(source)
     },
   }],
   css: { postcss: { plugins: [tailwind({ base: root })] } },
