@@ -38,6 +38,12 @@ test('Folia installs, renders every style, follows playback and restores prefere
     const settings = page.locator('[data-plugin-id="folia-lyrics"]')
     await settings.getByRole('button', { name: await label(page, 'setting__plugins_settings'), exact: true }).click()
     let frame = await engineFor(page, 'preview')
+    await frame.evaluate(() => {
+      window.__stateMessages = []
+      addEventListener('message', event => {
+        if (event.data?.channel === 'lx-m:folia-lyrics' && ['state', 'config'].includes(event.data.type)) window.__stateMessages.push(event.data.type)
+      })
+    })
     await t.test('installation exposes all thirteen choices and enables the plugin', async() => {
       assert.equal(await page.locator('[data-folia-enabled]').isChecked(), true)
       assert.equal(await page.locator('[data-folia-mode] option').count(), modes.length)
@@ -56,6 +62,11 @@ test('Folia installs, renders every style, follows playback and restores prefere
         await page.locator('[data-folia-stage="preview"]').screenshot({ path: path.join(profilePath, `folia-${mode}.png`) })
       })
     }
+    await t.test('preview style changes reuse the song instead of resending all lyric lines', async() => {
+      const messages = await frame.evaluate(() => window.__stateMessages)
+      assert.equal(messages.filter(type => type === 'state').length, 0)
+      assert.equal(messages.filter(type => type === 'config').length, modes.length - 1)
+    })
     await page.locator('[data-folia-mode]').selectOption('classic')
     await page.evaluate(() => {
       const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#297c88"/></svg>'
@@ -82,6 +93,23 @@ test('Folia installs, renders every style, follows playback and restores prefere
       assert.equal(await frame.evaluate(() => document.documentElement.dataset.time), time)
       assert.equal(await page.locator('[data-player-detail] .lyric').count(), 0)
       await frame.waitForFunction(() => document.querySelector('#root')?.textContent.includes('第'))
+    })
+    await t.test('paused seeks within a line reuse its measured text layout', async() => {
+      await page.evaluate(() => { window.__lxPluginHost.player.getAudioElement().currentTime = 0.2 })
+      await frame.waitForFunction(() => document.documentElement.dataset.time === '0.200')
+      await page.waitForTimeout(100)
+      await frame.evaluate(() => {
+        window.__textMeasurements = 0
+        const measure = CanvasRenderingContext2D.prototype.measureText
+        CanvasRenderingContext2D.prototype.measureText = function(...args) { window.__textMeasurements++; return measure.apply(this, args) }
+      })
+      for (const time of [0.3, 0.4, 0.5]) {
+        await page.evaluate(time => { window.__lxPluginHost.player.getAudioElement().currentTime = time }, time)
+        await frame.waitForFunction(time => document.documentElement.dataset.time === time, time.toFixed(3))
+        await page.waitForTimeout(100)
+      }
+      assert.equal(await frame.evaluate(() => document.documentElement.dataset.line), '0')
+      assert.equal(await frame.evaluate(() => window.__textMeasurements), 0)
     })
     await t.test('seeking and lyric offsets synchronize while paused', async() => {
       await page.evaluate(() => { window.__lxPluginHost.player.getAudioElement().currentTime = 0.9 })
@@ -121,6 +149,22 @@ test('Folia installs, renders every style, follows playback and restores prefere
       const bounds = await page.locator('[data-folia-stage="player"] select, [data-folia-stage="player"] button').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().right))
       assert.ok(bounds.every(right => right <= viewport.width), 'The Folia toolbar must fit inside the player')
       await page.screenshot({ path: path.join(profilePath, 'folia-player.png') })
+    })
+    await t.test('paused Fume redraws forward and backward across lyric lines', async() => {
+      await page.evaluate(() => {
+        window.__lxPluginHost.mainLyricState.lyric.tempOffset = 0
+        window.__lxPluginHost.player.getAudioElement().currentTime = 0.2
+      })
+      await frame.waitForFunction(() => document.documentElement.dataset.time === '0.200')
+      await page.waitForTimeout(80)
+      let before = await frame.locator('canvas').evaluate(canvas => canvas.toDataURL())
+      for (const [time, index] of [[0.9, 1], [1.7, 2], [0.2, 0]]) {
+        await page.evaluate(time => { window.__lxPluginHost.player.getAudioElement().currentTime = time }, time)
+        await frame.waitForFunction(({ time, index }) => document.documentElement.dataset.time === time && document.documentElement.dataset.line === String(index), { time: time.toFixed(3), index })
+        await frame.waitForFunction(before => document.querySelector('canvas').toDataURL() !== before, before)
+        await page.waitForTimeout(80)
+        before = await frame.locator('canvas').evaluate(canvas => canvas.toDataURL())
+      }
     })
     await t.test('track changes clear old lyrics and display plain LRC', async() => {
       await frame.evaluate(() => {

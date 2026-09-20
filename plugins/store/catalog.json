@@ -55,16 +55,16 @@
     },
     {
       "id": "folia-lyrics",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "apiVersion": 2,
-      "path": "folia-lyrics/1.2.0/85a3607b852aaa7fea4000e5e4d7503d0ed9395c13b5f24c029f79b12b735f13.zip",
-      "bytes": 28489911,
-      "sha256": "85a3607b852aaa7fea4000e5e4d7503d0ed9395c13b5f24c029f79b12b735f13",
+      "path": "folia-lyrics/1.2.1/707a75ee64d07eeb685cd7e0ff99d9cdf5a1ad13c7a389a06400301d11e89d7b.zip",
+      "bytes": 28491591,
+      "sha256": "707a75ee64d07eeb685cd7e0ff99d9cdf5a1ad13c7a389a06400301d11e89d7b",
       "packages": {
         "lxplugin": {
-          "path": "folia-lyrics/1.2.0/992f93a314ca8b90bd1ef978efb24390f12f5ff2948103567ddf0346feba6f02.lxplugin",
-          "bytes": 10471192,
-          "sha256": "992f93a314ca8b90bd1ef978efb24390f12f5ff2948103567ddf0346feba6f02"
+          "path": "folia-lyrics/1.2.1/8af002f7f449af0d1f9bda1326cb02435f5af72b3cc7fe4d77aa37178165b05b.lxplugin",
+          "bytes": 10470880,
+          "sha256": "8af002f7f449af0d1f9bda1326cb02435f5af72b3cc7fe4d77aa37178165b05b"
         }
       },
       "name": {

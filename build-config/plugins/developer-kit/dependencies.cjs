@@ -8,7 +8,9 @@ const packageDirectory = async(name, from) => {
   const resolve = createRequire(path.join(from, 'package.json')).resolve
   // Locate installed metadata without resolving a CommonJS entry. ESM-only and
   // subpath-only packages can hide both their root entry and package.json.
-  for (const modules of resolve.paths(name) ?? []) {
+  // A package such as "buffer" can share a name with a Node builtin, whose root
+  // has no lookup paths. The metadata subpath still uses normal package lookup.
+  for (const modules of resolve.paths(name + '/package.json') ?? []) {
     const directory = path.join(modules, name)
     const stat = await fs.lstat(path.join(directory, 'package.json')).catch(error => {
       if (!['ENOENT', 'ENOTDIR'].includes(error.code)) throw error

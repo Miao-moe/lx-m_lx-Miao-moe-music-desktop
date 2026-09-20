@@ -8,6 +8,7 @@ import { getAudioElement, createAudioAnalyser } from '@renderer/plugins/player'
 import { FOLIA_CHANNEL, type FoliaConfig, type FoliaFrame, type FoliaSong } from './protocol'
 import { buildTimeline, demoSong } from './timeline'
 import { preferences } from './preferences'
+import { createStageStateSender } from './stateSync'
 
 export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
   const ready = ref(false)
@@ -27,6 +28,7 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
   const send = (type: string, data: unknown) => {
     if (ready.value && !disposed) element.value?.contentWindow?.postMessage({ channel: FOLIA_CHANNEL, type, data }, '*')
   }
+  const stateSender = createStageStateSender(send)
   const fail = () => {
     failed.value = true
     ready.value = false
@@ -36,6 +38,7 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
     analyser = undefined
   }
   const syncState = () => {
+    if (!ready.value || disposed) return
     const currentControls = preview ? null : element.value?.closest('[data-player-detail]')?.querySelector<HTMLElement>('[data-detail-part="controls"]') ?? null
     if (controls !== currentControls) {
       layoutObserver?.disconnect()
@@ -45,7 +48,7 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
         layoutObserver.observe(controls)
       }
     }
-    const song: FoliaSong = preview ? demoSong : {
+    const buildSong = (): FoliaSong => preview ? demoSong : {
       id: musicInfo.id ?? '',
       title: musicInfo.name,
       artist: musicInfo.singer,
@@ -62,7 +65,10 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
       reducedMotion: document.documentElement.dataset.motionEnabled === 'false',
       bottomInset: controls?.offsetHeight ?? 0,
     }
-    send('state', { song, config })
+    stateSender.sync(preview ? [demoSong] : [
+      lyric.lines, musicInfo.id, musicInfo.name, musicInfo.singer, musicInfo.album,
+      musicInfo.lrc, musicInfo.lxlrc, musicInfo.tlrc, musicInfo.rlrc, musicInfo.pic, playProgress.maxPlayTime,
+    ], buildSong, config)
   }
   const syncFrame = () => {
     if (!ready.value || disposed) return false
@@ -107,6 +113,7 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
     if (disposed || event.source !== element.value?.contentWindow || event.data?.channel !== FOLIA_CHANNEL) return
     if (event.data.type === 'ready') {
       clearTimeout(loadTimer)
+      stateSender.reset()
       ready.value = true
       syncState()
       restartClock()
@@ -121,7 +128,7 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
     restartClock()
   }
   const audioEvents = ['playing', 'canplay', 'pause', 'ended', 'waiting', 'stalled', 'seeking', 'seeked', 'ratechange', 'timeupdate']
-  watch([() => lyric.lines, () => musicInfo.id, () => musicInfo.lrc, () => musicInfo.pic, () => preferences.mode, () => appSetting['common.langId'], () => appSetting['common.font'], () => appSetting['playDetail.style.fontSize'], () => playProgress.maxPlayTime], syncState, { flush: 'post' })
+  watch([() => lyric.lines, () => musicInfo.id, () => musicInfo.name, () => musicInfo.singer, () => musicInfo.album, () => musicInfo.lrc, () => musicInfo.lxlrc, () => musicInfo.tlrc, () => musicInfo.rlrc, () => musicInfo.pic, () => preferences.mode, () => appSetting['common.langId'], () => appSetting['common.font'], () => appSetting['playDetail.style.fontSize'], () => playProgress.maxPlayTime], syncState, { flush: 'post' })
   watch([isPlay, () => lyric.offset, () => lyric.tempOffset, isShowPlayerDetail], restartClock, { flush: 'post' })
   watch(element, value => {
     ready.value = false

@@ -4,7 +4,7 @@
 
 - `sound-effects-1.0.0.zip`：音效增强。
 - `audio-visualizer-1.2.0.zip`：音频可视化，包含桌面歌词入口。
-- `folia-lyrics-1.2.0.zip`：Folia 歌词动效，包含独立浏览器引擎。
+- `folia-lyrics-1.2.1.zip`：Folia 歌词动效，包含独立浏览器引擎。
 - `audio-tag-editor-1.1.0.zip`：音频标签编辑，包含下载菜单入口。
 
 四个插件共用 [开发工具包](../developer-kit/README.md) 的打包流程，统一带有 plugin.json 校验清单、DEVELOPMENT.md、接口类型及编辑器配置。源码、SDK 辅助源码、离线依赖、素材和原许可证均保留。

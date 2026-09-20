@@ -1,6 +1,6 @@
 {
   "id": "folia-lyrics",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "apiVersion": 2,
   "entry": "renderer.js",
   "styles": ["renderer.css"]

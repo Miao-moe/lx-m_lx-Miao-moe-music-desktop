@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MotionConfig, motionValue } from 'framer-motion'
 import i18n from 'i18next'
@@ -34,6 +34,7 @@ const currentTime = motionValue(0)
 const audioPower = motionValue(0)
 const audioBands = { bass: motionValue(0), lowMid: motionValue(0), mid: motionValue(0), vocal: motionValue(0), treble: motionValue(0), spectrum: motionValue(new Uint8Array(0)) }
 const send = (type: string, data?: unknown) => parent.postMessage({ channel: FOLIA_CHANNEL, type, data }, '*')
+const seek = (time: number) => send('seek', time)
 const theme = { name: 'LX-M Folia', backgroundColor: '#111b2c', primaryColor: '#f5f7fb', secondaryColor: '#a9bed0', accentColor: '#74dab5', fontStyle: 'sans' as const, animationIntensity: 'normal' as const }
 let webGLAvailable: boolean | undefined
 function hasWebGL() {
@@ -57,11 +58,13 @@ function App() {
   const [playing, setPlaying] = useState(false)
   const [, setPausedTime] = useState(0)
   const stateRef = useRef(state)
+  // Renderer layout/scene caches depend on theme identity, not only its values.
+  const rendererTheme = useMemo(() => ({ ...theme, fontFamily: state?.config.fontFamily || undefined }), [state?.config.fontFamily])
   useEffect(() => {
     let frameId = 0
     let clock: FoliaFrame | null = null
     let clockAt = 0
-    let previousLineIndex = -1
+    let previousLineIndex: number | null = null
     let previousPlaying = false
     const applyTime = (time: number) => {
       currentTime.set(time)
@@ -72,8 +75,11 @@ function App() {
         if (lines[mid].startTime <= time) { index = mid; low = mid + 1 } else high = mid - 1
       }
       if (index >= 0 && time > getLineRenderEndTime(lines[index])) index = -1
-      if (index !== previousLineIndex) { previousLineIndex = index; setLineIndex(index) }
-      document.documentElement.dataset.line = String(index)
+      if (index !== previousLineIndex) {
+        previousLineIndex = index
+        setLineIndex(index)
+        document.documentElement.dataset.line = String(index)
+      }
       document.documentElement.dataset.time = time.toFixed(3)
     }
     const tick = () => {
@@ -84,13 +90,15 @@ function App() {
     const receive = (event: MessageEvent) => {
       if (event.source !== parent || event.data?.channel !== FOLIA_CHANNEL) return
       const { type, data } = event.data
-      if (type === 'state') {
-        if (!renderers[data.config?.mode as keyof typeof renderers] || !Array.isArray(data.song?.lines)) return
-        playerBottomInset.set(Math.max(0, Number(data.config.bottomInset) || 0))
-        stateRef.current = data
-        setState(data)
-        void i18n.changeLanguage(data.config.language.startsWith('zh') ? 'zh' : 'en')
-        document.documentElement.dataset.mode = data.config.mode
+      if (type === 'state' || type === 'config') {
+        const next = type === 'config' ? stateRef.current && { ...stateRef.current, config: data } : data
+        if (!next || !renderers[next.config?.mode as keyof typeof renderers] || !Array.isArray(next.song?.lines)) return
+        playerBottomInset.set(Math.max(0, Number(next.config.bottomInset) || 0))
+        stateRef.current = next
+        setState(next)
+        const language = next.config.language.startsWith('zh') ? 'zh' : 'en'
+        if (i18n.language !== language) void i18n.changeLanguage(language)
+        document.documentElement.dataset.mode = next.config.mode
         if (clock) applyTime(clock.time)
       } else if (type === 'frame' && Number.isFinite(data?.time)) {
         clock = data
@@ -99,7 +107,7 @@ function App() {
         if (data.playing !== previousPlaying) { previousPlaying = data.playing; setPlaying(data.playing) }
         // Canvas modes stop their RAF while paused; a seek still needs one fresh draw.
         if (!data.playing) setPausedTime(data.time)
-        document.documentElement.dataset.playing = String(data.playing)
+        if (document.documentElement.dataset.playing !== String(data.playing)) document.documentElement.dataset.playing = String(data.playing)
         audioPower.set(data.power)
         ;[audioBands.bass, audioBands.lowMid, audioBands.mid, audioBands.vocal, audioBands.treble].forEach((band, index) => band.set(data.bands[index] ?? 0))
         audioBands.spectrum.set(data.spectrum)
@@ -121,11 +129,11 @@ function App() {
   return <MotionConfig reducedMotion={config.reducedMotion ? 'always' : 'never'}>
     <RenderBoundary key={config.mode + song.id}>
       <Suspense fallback={null}>
-        <Renderer currentTime={currentTime} currentLineIndex={lineIndex} lines={song.lines} theme={{ ...theme, fontFamily: config.fontFamily || undefined }}
+        <Renderer currentTime={currentTime} currentLineIndex={lineIndex} lines={song.lines} theme={rendererTheme}
           audioPower={audioPower} audioBands={audioBands} showText paused={!playing} staticMode={config.reducedMotion}
           songTitle={song.title} songArtist={song.artist} songAlbum={song.album} coverUrl={song.coverUrl || undefined} seed={song.id}
           lyricsFontScale={config.fontScale} isPlayerChromeHidden showSubtitleTranslation
-          onLyricLineSeek={time => send('seek', time)} />
+          onLyricLineSeek={seek} />
       </Suspense>
     </RenderBoundary>
   </MotionConfig>

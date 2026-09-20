@@ -100,6 +100,11 @@ dist
 # Generated plugin packages and standalone toolkit output
 /plugins/**/*.zip
 /plugins/**/*.lxplugin
+# Published store packages must remain available at their catalog URLs.
+!/plugins/official/**/*.zip
+!/plugins/official/**/*.lxplugin
+!/plugins/store/**/*.zip
+!/plugins/store/**/*.lxplugin
 /plugins/development-examples/index.json
 /plugins/developer-kit/lx-plugin.cjs
 /plugins/developer-kit/template/
