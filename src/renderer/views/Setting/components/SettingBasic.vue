@@ -4,8 +4,9 @@ dd
   div
     .gap-top
       base-checkbox(id="setting_show_animate" :model-value="appSetting['common.isShowAnimation']" :label="$t('setting__basic_show_animation')" @update:model-value="updateSetting({'common.isShowAnimation': $event})")
-    .gap-top(data-setting-search-depends="setting_show_animate")
-      base-checkbox(id="setting_animate" :disabled="!appSetting['common.isShowAnimation']" :model-value="appSetting['common.randomAnimate']" :label="$t('setting__basic_animation')" @update:model-value="updateSetting({'common.randomAnimate': $event})")
+    common-setting-reveal(:show="appSetting['common.isShowAnimation']" depends="setting_show_animate")
+      .gap-top
+        base-checkbox(id="setting_animate" :model-value="appSetting['common.randomAnimate']" :label="$t('setting__basic_animation')" @update:model-value="updateSetting({'common.randomAnimate': $event})")
     .gap-top
       base-checkbox(id="setting_start_in_fullscreen" :model-value="appSetting['common.startInFullscreen']" :label="$t('setting__basic_start_in_fullscreen')" @update:model-value="updateSetting({'common.startInFullscreen': $event})")
     .gap-top
@@ -51,14 +52,13 @@ dd
           | {{ item.name }}
           span(v-if="item.desc" :class="$style.desc") {{ item.desc }}
           span(v-if="item.statusLabel" :class="$style.status") {{ item.statusLabel }}
-    .p.gap-top
+    .p.gap-top.setting-actions
       base-btn.btn(min @click="isShowUserApiModal = true") {{ $t('setting__basic_source_user_api_btn') }}
-    .p.gap-top
       base-btn.btn(min @click="isShowQualityCheckModal = true") {{ $t('setting__basic_source_check_quality') }}
 
 dd
   h3#basic_window_size {{ $t('setting__basic_window_size') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       v-for="item in windowSizeList" :id="`setting_window_size_${item.id}`" :key="item.id"
       name="setting_window_size" need :model-value="appSetting['common.windowSizeId']" :disabled="isFullscreen" :value="item.id" :label="$t('setting__basic_window_size_' + item.name)"
@@ -66,7 +66,7 @@ dd
 
 dd
   h3#basic_font_size {{ $t('setting__basic_font_size') }}
-  div
+  div.setting-options
     //- base-selection.gap-teft(:list="fontSizeList" :model-value="appSetting['common.fontSize']" @update:model-value="updateSetting({'common.fontSize': $event})")
     base-checkbox.gap-left(
       v-for="item in fontSizeList" :id="`setting_basic_font_size_${item.id}`" :key="item.id"
@@ -75,33 +75,33 @@ dd
 
 dd
   h3#basic_font {{ $t('setting__basic_font') }}
-  div(style="--selection-width: 12rem;")
+  div.setting-row(style="--selection-width: 12rem;")
     base-selection.gap-left(:list="fontList" :model-value="fonts[0]" item-key="id" item-name="label" @update:model-value="updateFonts($event, fonts[1])")
     base-selection.gap-left(v-if="fonts[0]" :list="fontList" :model-value="fonts[1]" item-key="id" item-name="label" @update:model-value="updateFonts(fonts[0], $event)")
     //- base-selection.gap-teft(:list="fontList" :model-value="appSetting['common.font']" item-key="id" item-name="label" @update:model-value="updateSetting({'common.font': $event})")
 
 dd
   h3#basic_lang {{ $t('setting__basic_lang') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       v-for="item in langList" :id="`setting_lang_${item.locale}`" :key="item.locale" name="setting_lang"
       need :model-value="appSetting['common.langId']" :value="item.locale" :label="item.name" @update:model-value="updateSetting({'common.langId': $event})")
 
 dd
   h3#basic_sourcename {{ $t('setting__basic_sourcename') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       v-for="item in sourceNameTypes" :id="`setting_abasic_sourcename_${item.id}`" :key="item.id"
       name="setting_basic_sourcename" need :model-value="appSetting['common.sourceNameType']" :value="item.id" :label="item.label" @update:model-value="updateSetting({'common.sourceNameType': $event})")
 dd
   h3#basic_control_btn_position {{ $t('setting__basic_control_btn_position') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       v-for="item in controlBtnPositionList" :id="`setting_basic_control_btn_position_${item.id}`" :key="item.id"
       name="setting_basic_control_btn_position" need :model-value="appSetting['common.controlBtnPosition']" :value="item.id" :label="item.name" @update:model-value="updateSetting({'common.controlBtnPosition': $event})")
 dd
   h3#basic_playbar_progress_style {{ $t('setting__basic_playbar_progress_style') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       id="setting_basic_playbar_progress_style_mini" name="setting_basic_playbar_progress_style"
       need :model-value="appSetting['common.playBarProgressStyle']" value="mini" :label="$t('setting__basic_playbar_progress_style_mini')" @update:model-value="updateSetting({'common.playBarProgressStyle': $event})")

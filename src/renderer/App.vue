@@ -172,6 +172,7 @@ body {
   isolation: isolate;
   background-color: var(--color-surface);
   --setting-search-background: transparent;
+  --player-control-opacity: 1;
 
   // The same canvas stays behind both screens throughout player expansion.
   > [data-ambient-background] { z-index: -1; }

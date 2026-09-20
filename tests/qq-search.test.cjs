@@ -9,20 +9,26 @@ const load = (filename, imports, globals = {}) => {
   const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText
-  vm.runInNewContext(code, { module, exports: module.exports, console, setTimeout, window: { i18n: { t: key => key } }, ...globals,
+  vm.runInNewContext(code, {
+    module,
+    exports: module.exports,
+    console,
+    setTimeout,
+    window: { i18n: { t: key => key } },
+    ...globals,
     require: name => { assert(Object.hasOwn(imports, name), name); return imports[name] },
   }, { filename })
   return module.exports
 }
 const { buildDesktopSearchRequest } = require('./helpers/load-search-sdk.cjs')(() => {}).load('musicSdk/tx/searchFallback.js')
-const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
+const deferred = () => { let resolve, reject; const promise = new Promise((_resolve, _reject) => { resolve = _resolve; reject = _reject }); return { promise, resolve, reject } }
 const flush = () => new Promise(resolve => setImmediate(resolve))
 const success = (songs = []) => ({ statusCode: 200, body: { code: 0, req: { code: 0, data: { body: { song: { list: songs } }, meta: { sum: songs.length } } } } })
 const rejected = () => ({ statusCode: 200, body: { code: 0, req: { code: 2001, data: { body: { item_song: [] } } } } })
 const messages = { cancelRequest: '取消http请求', timeout: '请求超时', notConnectNetwork: '无法连接到服务器', unachievable: '接口无法访问' }
 
 function sdkFixture(respond) {
-  const calls = [], waits = [], logs = []
+  const calls = []; const waits = []; const logs = []
   const shared = load('src/renderer/utils/musicSdk/searchFallback.js', { '../message': { requestMsg: messages } })
   const sdk = load('src/renderer/utils/musicSdk/tx/musicSearch.js', {
     '../../index': { formatPlayTime: String, sizeFormate: String },
@@ -143,6 +149,7 @@ function storeFixture() {
   const make = () => ({ list: [], key: null, page: 0, maxPage: 0, total: 0, limit: 30, noItemLabel: '' })
   const listInfos = { tx: make(), all: make() }
   const store = load('src/renderer/store/search/music/action.ts', {
+    '../aggregate': load('src/renderer/store/search/aggregate.ts', { '@renderer/store/setting': { appSetting: { 'list.loadingMode': 'together' } } }),
     '@renderer/store/setting': { appSetting: { 'list.loadingMode': 'together' } },
     '@common/utils/vueTools': { markRaw: value => value },
     '@renderer/utils/musicSdk': { tx: { musicSearch: { search: (text, page) => { const gate = deferred(); calls.push({ text, page, ...gate }); return gate.promise } } } },
@@ -156,14 +163,14 @@ function storeFixture() {
 
 test('the search store coalesces repeated clicks and caches only completed results', async() => {
   const f = storeFixture()
-  const a = f.search('A', 1, 'tx'), b = f.search('A', 1, 'tx')
+  const a = f.search('A', 1, 'tx'); const b = f.search('A', 1, 'tx')
   await flush()
   assert.equal(f.calls.length, 1)
   f.calls[0].resolve(f.result('A'))
   await Promise.all([a, b])
   await f.search('A', 1, 'tx')
   assert.equal(f.calls.length, 1)
-  const c = f.search('B', 1, 'tx'), d = f.search('B', 1, 'tx')
+  const c = f.search('B', 1, 'tx'); const d = f.search('B', 1, 'tx')
   assert.equal(f.listInfos.tx.list.length, 0)
   await flush()
   assert.equal(f.calls.length, 2)
@@ -217,7 +224,7 @@ test('a failed search displays retry state and a later click can succeed', async
 
 test('all-source search also suppresses duplicates and stale results', async() => {
   const f = storeFixture()
-  const a = f.search('A', 1, 'all'), b = f.search('A', 1, 'all')
+  const a = f.search('A', 1, 'all'); const b = f.search('A', 1, 'all')
   await flush()
   assert.equal(f.calls.length, 1)
   const latest = f.search('B', 1, 'all')

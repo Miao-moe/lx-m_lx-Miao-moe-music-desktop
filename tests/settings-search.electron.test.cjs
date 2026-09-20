@@ -76,19 +76,19 @@ test('settings search keeps matching controls visible and usable', { timeout: 90
       assert(await visibleSections() > 0)
     })
 
-    await t.test('hidden option text reveals its enabling control and newly mounted options remain visible', async() => {
+    await t.test('hidden option text reveals its enabling control and expanded options remain searchable', async() => {
       await search.fill(await label('setting__advanced_background_gentle'))
       await selectTab('setting__advanced')
       const toggle = page.locator('label[for="setting_advanced_background_enabled"]')
       await toggle.waitFor()
-      assert.equal(await page.locator('#setting_advanced_background_quality').count(), 0)
+      assert.equal(await page.locator('#setting_advanced_background_quality').isVisible(), false)
       await toggle.click()
       const quality = page.locator('#setting_advanced_background_quality')
       await quality.waitFor()
       assert.equal(await quality.isVisible(), true)
       await quality.selectOption('full')
       await toggle.click()
-      await quality.waitFor({ state: 'detached' })
+      await quality.waitFor({ state: 'hidden' })
       await toggle.click()
       await quality.waitFor()
       assert.equal(await quality.inputValue(), 'full')

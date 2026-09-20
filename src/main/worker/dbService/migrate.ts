@@ -66,11 +66,12 @@ export default (db: Database.Database) => {
     ensureMusicUrlIndexes(db)
     return
   }
-  if (version != '1' && version != '2') return
+  if (version != '1' && version != '2' && version != '3') return
 
   db.transaction(() => {
     if (version == '1') migrateV1(db)
-    migrateV2(db)
+    if (version == '1' || version == '2') migrateV2(db)
+    for (const name of ['list_trash', 'index_list_trash_expires_at'] as const) db.exec(tables.get(name)!)
     db.prepare('UPDATE "main"."db_info" SET "field_value"=@value WHERE "field_name"=@name').run({ name: 'version', value: DB_VERSION })
   })()
 }

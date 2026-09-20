@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "lib": ["ES2020", "DOM"],
+    "baseUrl": ".",
+    "paths": {
+      "@common/*": ["sdk/common/*"],
+      "@renderer/*": ["sdk/renderer/*"],
+      "@lyric/*": ["sdk/renderer-lyric/*"],
+      "@root/*": ["sdk/*"]
+    }
+  },
+  "include": ["src/**/*", "types/**/*.d.ts"],
+  "exclude": ["node_modules", "vendor", "dist", "build"]
+}

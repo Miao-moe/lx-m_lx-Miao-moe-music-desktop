@@ -10,18 +10,20 @@
         @update:model-value="updateEnabled"
       />
     </div>
-    <div :class="$style.eqList">
-      <div :class="$style.eqItem">
-        <span :class="$style.label">{{ $t('player__sound_effect_panner_sound_speed') }}</span>
-        <base-slider-bar :class="$style.slider" :value="appSetting['player.soundEffect.panner.speed']" :min="1" :max="50" @change="handleUpdateSpeed" />
-        <span :class="[$style.value, { [$style.active]: appSetting['player.soundEffect.panner.speed'] != 25 }]">{{ appSetting['player.soundEffect.panner.speed'] }}</span>
+    <SettingReveal :show="appSetting['player.soundEffect.panner.enable']" depends="player__sound_effect_panner_enabled">
+      <div :class="$style.eqList">
+        <div :class="$style.eqItem">
+          <span :class="$style.label">{{ $t('player__sound_effect_panner_sound_speed') }}</span>
+          <base-slider-bar :class="$style.slider" :value="appSetting['player.soundEffect.panner.speed']" :min="1" :max="50" @change="handleUpdateSpeed" />
+          <span :class="[$style.value, { [$style.active]: appSetting['player.soundEffect.panner.speed'] != 25 }]">{{ appSetting['player.soundEffect.panner.speed'] }}</span>
+        </div>
+        <div :class="$style.eqItem">
+          <span :class="$style.label">{{ $t('player__sound_effect_panner_sound_r') }}</span>
+          <base-slider-bar :class="$style.slider" :value="appSetting['player.soundEffect.panner.soundR']" :min="1" :max="30" @change="handleUpdateSoundR" />
+          <span :class="[$style.value, { [$style.active]: appSetting['player.soundEffect.panner.soundR'] != 5 }]">{{ appSetting['player.soundEffect.panner.soundR'] }}</span>
+        </div>
       </div>
-      <div :class="$style.eqItem">
-        <span :class="$style.label">{{ $t('player__sound_effect_panner_sound_r') }}</span>
-        <base-slider-bar :class="$style.slider" :value="appSetting['player.soundEffect.panner.soundR']" :min="1" :max="30" @change="handleUpdateSoundR" />
-        <span :class="[$style.value, { [$style.active]: appSetting['player.soundEffect.panner.soundR'] != 5 }]">{{ appSetting['player.soundEffect.panner.soundR'] }}</span>
-      </div>
-    </div>
+    </SettingReveal>
   </div>
 </template>
 
@@ -29,6 +31,7 @@
 // import { reactive } from '@common/utils/vueTools'
 import { setMediaDeviceId } from '@renderer/plugins/player'
 import { appSetting, saveMediaDeviceId, updateSetting } from '@renderer/store/setting'
+import SettingReveal from '@renderer/components/common/SettingReveal.vue'
 
 // const setting = reactive({
 //   enabled: false,

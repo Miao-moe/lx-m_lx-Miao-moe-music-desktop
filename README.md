@@ -226,9 +226,25 @@ npm run pack:win:7z:arm64
 
 - **产物目录：** `build/`。
 - **执行范围：** `npm run pack:win` 只完成代码块中的第一步，全部格式需执行后续命令。
-- **保留旧包：** 第一步会清理 `build/`，构建前请将旧包另存到该目录之外。
+- **保留旧包：** 第一步会清理 `build/` 中的普通版产物，保留独立的 `build/win7/`；普通版旧包请在构建前另存。
 
 </details>
+
+### Windows 7 兼容版
+
+兼容版单独锁定 **Electron 22.3.27**（Chromium 108 / Node 16），与普通版分别构建，提供 x64、x86 安装包和绿色压缩包。
+
+```bash
+# 在 Windows 10/11、Node 22 或更新版本的构建环境执行
+npm run build:win7
+npm run test:win7
+npm run pack:win7:setup:x64
+npm run pack:win7:7z:x64
+npm run pack:win7:setup:x86
+npm run pack:win7:7z:x86
+```
+
+产物位于 `build/win7/artifacts/`，文件名带 `win7_`。兼容依赖、功能适配和验证范围见 [Windows 7 兼容说明](./doc/win7-compatibility.md)。
 
 macOS、Linux 的脚本与目标架构见 [package.json](./package.json)，构建需要相应环境及原生依赖。
 

@@ -1,7 +1,7 @@
 import { markRawList } from '@common/utils/vueTools'
 import music from '@renderer/utils/musicSdk'
 import { sortInsert, similar } from '@common/utils/common'
-import { appSetting } from '@renderer/store/setting'
+import { createAggregateSearch } from '../aggregate'
 import type { EntityType, ListInfoItem, SearchSource } from './state'
 import { listInfos, sources } from './state'
 
@@ -12,6 +12,9 @@ interface SearchResult {
   total: number
   source: LX.OnlineSource
 }
+
+const aggregateSearch = createAggregateSearch<SearchResult>()
+export const retryFailedSources = async(type: EntityType) => aggregateSearch.retry(listInfos[type].all)
 
 const requests = new WeakMap<object, symbol>()
 
@@ -69,6 +72,7 @@ const setList = (type: EntityType, data: SearchResult, page: number, text: strin
 export const resetListInfo = (type: EntityType, sourceId: SearchSource): [] => {
   const listInfo = listInfos[type][sourceId]
   if (!listInfo) return []
+  aggregateSearch.reset(listInfo)
   requests.delete(listInfo)
   listInfo.page = 1
   listInfo.total = 0
@@ -92,30 +96,9 @@ export const search = async(type: EntityType, text: string, page: number, source
   listInfo.noItemLabel = window.i18n.t('list__loading')
   listInfo.key = key
   if (sourceId == 'all') {
-    const tasks = []
-    for (const source of sources) {
-      if (source == 'all') continue
-      tasks.push((music[source]?.entitySearch?.search(type, text, page, listInfo.limit) ?? Promise.reject(new Error(`source not found: ${source}`))).catch((error: any) => {
-        console.log(error)
-        return {
-          list: [],
-          allPage: 1,
-          total: 0,
-          limit: listInfo.limit,
-          source,
-        }
-      }))
-    }
-    const partial: SearchResult[] = []
-    return Promise.all(tasks.map(async(request, index) => {
-      const result: SearchResult = await request
-      partial[index] = result
-      if (isCurrent() && appSetting['list.loadingMode'] === 'immediate') setLists(type, partial.filter(Boolean), page, text, true)
-      return result
-    })).then((results: SearchResult[]) => {
-      if (!isCurrent()) return []
-      return setLists(type, results, page, text)
-    }).finally(finish)
+    return aggregateSearch.search(listInfo, sources, source => music[source]?.entitySearch?.search(type, text, page, listInfo.limit), (results, pending) => {
+      setLists(type, results, page, text, pending)
+    }).then(() => isCurrent() ? listInfo.list : []).finally(finish)
   }
 
   return (music[sourceId]?.entitySearch?.search(type, text, page, listInfo.limit).then((data: SearchResult) => {

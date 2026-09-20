@@ -11,7 +11,7 @@ dd
     base-checkbox(id="setting_list_clickAction_enable" :model-value="appSetting['list.isClickPlayList']" :label="$t('setting__list_click_action')" @update:model-value="updateSetting({'list.isClickPlayList': $event})")
 dd
   h3#list_cover_size {{ $t('setting__list_cover_size') }}
-  div
+  .setting-row
     input.gap-left(
       id="setting_list_cover_size"
       type="number"
@@ -20,29 +20,29 @@ dd
       min="20" max="100" step="1"
       @change="handleUpdateCoverSize"
     )
-    span(style="margin-left: 4px; font-size: 13px;") px
-    span(v-if="coverSizeHint" style="margin-left: 8px; color: var(--color-font-label); font-size: 12px;") {{ coverSizeHint }}
+    span(style="font-size: 13px;") px
+    span.setting-value(v-if="coverSizeHint") {{ coverSizeHint }}
 dd
   h3#list_loading_mode {{ $t('setting__list_loading_mode') }}
   div(role="radiogroup" aria-labelledby="list_loading_mode")
-    .gap-top
+    .gap-top.setting-options
       base-checkbox.gap-left(
         id="setting_list_loading_mode_together" name="setting_list_loading_mode" need
         :model-value="appSetting['list.loadingMode']" value="together" :label="$t('setting__list_loading_mode_together')"
         @update:model-value="updateSetting({'list.loadingMode': $event})")
-    .gap-top
+    .gap-top.setting-options
       base-checkbox.gap-left(
         id="setting_list_loading_mode_progressive" name="setting_list_loading_mode" need
         :model-value="appSetting['list.loadingMode']" value="progressive" :label="$t('setting__list_loading_mode_progressive')"
         @update:model-value="updateSetting({'list.loadingMode': $event})")
-    .gap-top
+    .gap-top.setting-options
       base-checkbox.gap-left(
         id="setting_list_loading_mode_immediate" name="setting_list_loading_mode" need
         :model-value="appSetting['list.loadingMode']" value="immediate" :label="$t('setting__list_loading_mode_immediate')"
         @update:model-value="updateSetting({'list.loadingMode': $event})")
 dd(:aria-label="$t('setting__list_add_music_location_type')")
   h3#list_addMusicLocationType {{ $t('setting__list_add_music_location_type') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       id="setting_list_add_music_location_type_top" name="setting_list_add_music_location_type" need
       :model-value="appSetting['list.addMusicLocationType']" value="top" :label="$t('setting__list_add_music_location_type_top')"

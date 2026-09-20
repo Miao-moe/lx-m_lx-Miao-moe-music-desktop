@@ -13,6 +13,7 @@ export default ({
   handlePauseTask,
   handleRemoveTask,
   handleOpenFile,
+  handleRelocateFile,
   handlePlayMusic,
   handlePlayMusicLater,
   handleShowMusicAddModal,
@@ -70,6 +71,11 @@ export default ({
         pluginAction: action,
         disabled: !menuTask.value || !action.isAvailable(menuTask.value),
       }))),
+      {
+        name: t('download__relocate'),
+        action: 'relocate',
+        hide: !menuTask.value?.isComplate,
+      },
       {
         name: t('list__add_to'),
         action: 'addTo',
@@ -149,6 +155,9 @@ export default ({
       return
     }
     switch (action.action) {
+      case 'relocate':
+        handleRelocateFile(task)
+        break
       case 'start':
         handleStartTask(index)
         break

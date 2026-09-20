@@ -14,6 +14,6 @@ const toggle = (event: Event) => { savePreferences({ enabled: (event.target as H
 </script>
 <style lang="less" module>
 .settings { display: flex; flex-direction: column; gap: 14px; font-size: 13px; line-height: 1.6; }
-.enable { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.enable { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .preview { height: 340px; }
 </style>

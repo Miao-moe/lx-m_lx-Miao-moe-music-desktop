@@ -14,9 +14,11 @@ export default {
     const itemset = type == 'singer' ? 'artist_2015' : 'web_2013'
     const url = `https://search.kuwo.cn/r.s?client=kt&all=${encodeURIComponent(str)}&pn=${page - 1}&rn=${limit}&ft=${type == 'singer' ? 'artist' : 'album'}&itemset=${itemset}&encoding=utf8&rformat=json&mobi=1`
 
-    return httpFetch(url).promise.then(({ body }) => {
-      if (!body) throw new Error('Search failed')
+    return httpFetch(url).promise.then(({ statusCode, body }) => {
+      if (statusCode !== 200 || !body || typeof body !== 'object') throw new Error('Search failed')
       const rawList = type == 'singer' ? body.abslist : body.albumlist
+      const total = parseInt(type == 'singer' ? body.TOTAL : body.total ?? body.TOTAL)
+      if (!Array.isArray(rawList) && !(rawList == null && total === 0)) throw new Error('Invalid search response')
       const list = (rawList || []).map(item => type == 'singer'
         ? {
             play_count: '',
@@ -39,13 +41,11 @@ export default {
             source: 'kw',
             total: item.musiccnt == null ? undefined : String(item.musiccnt),
           }).filter(item => item.id && item.name)
-      const total = parseInt(type == 'singer' ? body.TOTAL : body.total ?? body.TOTAL) || 0
-
       return {
         list,
-        allPage: Math.max(list.length ? 1 : 0, Math.ceil(total / limit)),
+        allPage: Math.max(list.length ? 1 : 0, Math.ceil((total || 0) / limit)),
         limit,
-        total,
+        total: total || 0,
         source: 'kw',
       }
     })

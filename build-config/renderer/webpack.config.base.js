@@ -3,6 +3,8 @@ const { VueLoaderPlugin } = require('vue-loader')
 const HTMLPlugin = require('html-webpack-plugin')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const ESLintPlugin = require('eslint-webpack-plugin')
+const CopyWebpackPlugin = require('copy-webpack-plugin')
+const soundEffectsVersion = require('../../src/optional-plugins/sound-effects/manifest.json').version
 
 const vueLoaderConfig = require('../vue-loader.config')
 const { mergeCSSLoader } = require('../utils')
@@ -10,7 +12,7 @@ const { mergeCSSLoader } = require('../utils')
 const isDev = process.env.NODE_ENV === 'development'
 
 module.exports = {
-  target: 'electron-renderer',
+  target: process.env.BUILD_WIN7 ? 'electron22.3-renderer' : 'electron-renderer',
   entry: {
     renderer: path.join(__dirname, '../../src/renderer/main.ts'),
   },
@@ -131,6 +133,24 @@ module.exports = {
     ],
   },
   plugins: [
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: path.join(__dirname, '../../src/optional-plugins/sound-effects/filters'), to: 'builtin/sound-effects/filters' },
+        {
+          from: path.join(__dirname, '../../src/optional-plugins/sound-effects/pitch-shifter'),
+          to: 'builtin/sound-effects/pitch-shifter',
+          transform(content, filename) {
+            if (path.basename(filename) !== 'phase-vocoder.js') return content
+            return content.toString().replace("from './fft'", "from './fft.js'").replace("from './ola-processor'", "from './ola-processor.js'").replaceAll('phase-vocoder-processor', `lx-sound-effects-${soundEffectsVersion}`)
+          },
+        },
+        { from: path.join(__dirname, '../../src/optional-plugins/audio-tag-editor/NOTICE.md'), to: 'builtin/audio-tag-editor/NOTICE.md' },
+        ...['node-id3', 'iconv-lite', 'safer-buffer'].map(name => ({
+          from: path.join(__dirname, '../../node_modules', name, 'LICENSE'),
+          to: `builtin/audio-tag-editor/licenses/${name}-MIT.txt`,
+        })),
+      ],
+    }),
     new HTMLPlugin({
       filename: 'index.html',
       template: path.join(__dirname, '../../src/renderer/index.html'),

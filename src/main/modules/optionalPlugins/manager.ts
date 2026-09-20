@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { isPluginId, OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, isPluginApiSupported, pluginPackages, type PluginPackage, type PluginPackageFormat, type PluginDisplayInfo, type PluginCatalog, type PluginCatalogEntry, type PluginId, type PluginManifest, type PluginStoreSnapshot, type PluginTransferErrorCode, type PluginSourceManifest } from '@common/optionalPlugins'
 import { MAX_SOURCE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_UNPACKED, validPath, packSource, unpackSource } from '@common/pluginSource'
 import { MAX_PACKAGE_BYTES, MAX_UNPACKED_BYTES, packPlugin, unpackPlugin } from '@common/pluginPackage'
+import { isBuiltinPlugin } from '@common/builtinPlugins'
 
 const MAX_CATALOG_BYTES = 512 * 1024
 const digest = (data: Buffer) => createHash('sha256').update(data).digest('hex')
@@ -225,7 +226,7 @@ export class PluginManager {
     const registry = await this.readRegistry()
     const snapshot: PluginStoreSnapshot = { revision, catalog: this.catalog, installed: {}, errors: {}, sources: {}, catalogError: this.catalogError }
     for (const [id, record] of Object.entries(registry)) {
-      if (!isPluginId(id) || !record) continue
+      if (!isPluginId(id) || isBuiltinPlugin(id) || !record) continue
       snapshot.sources![id] = record.source === 'local' ? 'local' : 'official'
       try {
         const { manifest, directory, source, format } = await this.readInstalled(id, record)
@@ -253,6 +254,7 @@ export class PluginManager {
 
   async install(id: PluginId, format: PluginPackageFormat = 'lxplugin') {
     return this.exclusive(async() => {
+      if (isBuiltinPlugin(id)) throw new PluginTransferError('builtin')
       if (!isPluginId(id)) throw new Error('Unknown official plugin')
       if (format !== 'lxplugin' && format !== 'zip') throw new Error('Invalid plugin package format')
       await this.loadCatalogCache()
@@ -276,6 +278,7 @@ export class PluginManager {
 
   private async commitArchive(archive: PluginArchive, registry: Registry, source: 'official' | 'local') {
     const id = archive.manifest.id
+    if (isBuiltinPlugin(id)) throw new PluginTransferError('builtin')
     const previous = registry[id]
     const temporaryName = `install-${randomUUID()}`
     const directoryName = `${id}-${randomUUID()}`
@@ -409,6 +412,7 @@ export class PluginManager {
       throw new PluginTransferError('invalid_package')
     }
     const manifest = prepared.manifest
+    if (isBuiltinPlugin(manifest.id)) throw new PluginTransferError('builtin')
     return this.exclusive(async() => {
       const record = (await this.readRegistry())[manifest.id]
       let previousVersion: string | null = null
@@ -421,6 +425,7 @@ export class PluginManager {
 
   async importPrepared(prepared: PreparedImport) {
     return this.exclusive(async() => {
+      if (isBuiltinPlugin(prepared.manifest.id)) throw new PluginTransferError('builtin')
       const registry = await this.readRegistry()
       // Confirmation applies to the exact version shown, even if another operation ran meanwhile.
       if (JSON.stringify(registry[prepared.manifest.id] ?? null) !== prepared.previous) throw new PluginTransferError('changed')
@@ -432,6 +437,7 @@ export class PluginManager {
 
   async createExport(id: PluginId) {
     return this.exclusive(async() => {
+      if (isBuiltinPlugin(id)) throw new PluginTransferError('builtin')
       if (!isPluginId(id)) throw new PluginTransferError('not_installed')
       const record = (await this.readRegistry())[id]
       if (!record) throw new PluginTransferError('not_installed')
@@ -493,6 +499,7 @@ export class PluginManager {
 
   async uninstall(id: PluginId) {
     return this.exclusive(async() => {
+      if (isBuiltinPlugin(id)) throw new PluginTransferError('builtin')
       if (!isPluginId(id)) throw new Error('Unknown official plugin')
       const registry = await this.readRegistry()
       const previous = registry[id]

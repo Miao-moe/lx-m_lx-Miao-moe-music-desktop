@@ -18,6 +18,7 @@ import { DOWNLOAD_STATUS } from '@common/constants'
 import { proxy } from '../index'
 import { buildSavePath } from './utils'
 import showToast from '@renderer/plugins/Toast'
+import { getFileStats } from '@common/utils/nodejs'
 
 let downloadSyncLocked = false
 let downloadMutations = 0
@@ -125,6 +126,22 @@ const setUrl = (downloadInfo: LX.Download.ListItem, url: string) => {
 const updateFilePath = (downloadInfo: LX.Download.ListItem, filePath: string) => {
   downloadInfo.metadata.filePath = filePath
   throttleUpdateTask([downloadInfo])
+}
+
+export const relocateDownloadTask = async(id: string, filePath: string) => {
+  if (checkDownloadSyncLock()) return false
+  if (!/\.(mp3|flac|ogg|oga|wav|m4a|ape)$/i.test(filePath)) return false
+  downloadMutations++
+  try {
+    const stats = await getFileStats(filePath)
+    const task = downloadList.find(item => item.id === id)
+    if (!stats?.isFile() || !stats.size || !task?.isComplate) return false
+    const metadata = markRaw({ ...task.metadata, filePath })
+    await downloadTasksUpdate([{ ...toRaw(task), metadata }])
+    task.metadata = metadata
+    window.app_event.downloadListUpdate()
+    return true
+  } finally { downloadMutations-- }
 }
 
 const setProgress = (downloadInfo: LX.Download.ListItem, progress: LX.Download.ProgressInfo) => {
@@ -256,7 +273,7 @@ const getUrl = async(downloadInfo: LX.Download.ListItem, isRefresh: boolean = fa
     isRefresh,
     quality: downloadInfo.metadata.quality,
     allowToggleSource: false,
-  }) : Promise.reject(new Error('not found'))).catch(() => {
+  }) : Promise.reject(new Error('not found'))).catch(async() => {
     return getMusicUrl({
       musicInfo: downloadInfo.metadata.musicInfo,
       isRefresh: false,
@@ -273,7 +290,7 @@ const handleRefreshUrl = (downloadInfo: LX.Download.ListItem) => {
     isRefresh: true,
     quality: downloadInfo.metadata.quality,
     allowToggleSource: false,
-  }) : Promise.reject(new Error('not found'))).catch(() => {
+  }) : Promise.reject(new Error('not found'))).catch(async() => {
     return getMusicUrl({
       musicInfo: downloadInfo.metadata.musicInfo,
       isRefresh: true,

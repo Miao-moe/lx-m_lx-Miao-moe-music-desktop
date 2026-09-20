@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { EventEmitter } from 'events'
 import { performance } from 'perf_hooks'
+import { URL } from 'url'
 import { STATUS } from './util'
 import type http from 'http'
 import { request, type Options as RequestOptions } from './request'
@@ -39,7 +40,7 @@ class Task extends EventEmitter {
   progress = { total: 0, downloaded: 0, speed: 0, progress: 0 }
   statsEstimate = { time: 0, bytes: 0, prevBytes: 0 }
   requestInstance: http.ClientRequest | null = null
-  maxRedirectNum = 2
+  maxRedirectNum = 10
   private redirectNum = 0
   private dataWriteQueueLength = 0
   private closeWaiting = false
@@ -67,6 +68,8 @@ class Task extends EventEmitter {
   async __init() {
     const { path, startByte, endByte } = this.chunkInfo
     this.redirectNum = 0
+    this.resumeLastChunk = null
+    this.progress.total = 0
     this.progress.downloaded = 0
     this.progress.progress = 0
     this.progress.speed = 0
@@ -138,13 +141,21 @@ class Task extends EventEmitter {
             })
             return
           }
-          if ((response.statusCode == 301 || response.statusCode == 302) && response.headers.location && this.redirectNum < this.maxRedirectNum) {
-            console.log('current url:', url)
-            console.log('redirect to:', response.headers.location)
+          if ([301, 302, 303, 307, 308].includes(response.statusCode ?? 0) && response.headers.location && this.redirectNum < this.maxRedirectNum) {
             redirected = true
             this.redirectNum++
-            const location = response.headers.location
-            this.__httpFetch(location, options)
+            response.resume()
+            try {
+              const location = new URL(response.headers.location, url)
+              const headers = { ...options.headers }
+              if (location.origin !== new URL(url).origin) {
+                for (const name of Object.keys(headers)) {
+                  if (['authorization', 'cookie', 'host'].includes(name.toLowerCase())) Reflect.deleteProperty(headers, name)
+                }
+              }
+              this.__startTimeout()
+              this.__httpFetch(location.href, { ...options, headers, method: response.statusCode === 303 && options.method !== 'head' ? 'get' : options.method })
+            } catch (error: any) { this.__handleError(error) }
             return
           }
           this.status = STATUS.failed
@@ -175,7 +186,7 @@ class Task extends EventEmitter {
             }
           })
       })
-      .on('error', err => { this.__handleError(err) })
+      .on('error', err => { if (!redirected) this.__handleError(err) })
       .on('close', () => {
         if (redirected) return
         void this.__closeWriteStream()
@@ -184,33 +195,27 @@ class Task extends EventEmitter {
   }
 
   __initDownload(response: http.IncomingMessage) {
-    this.progress.total = response.headers['content-length'] ? parseInt(response.headers['content-length']) : 0
-    if (!this.progress.total) {
-      this.__handleError(new Error('Content length is 0'))
-      return
-    }
-    let options: any = {}
-    let isResumable = this.options.forceResume ||
-      response.headers['accept-ranges'] !== 'none' ||
-      (typeof response.headers['accept-ranges'] == 'string' &&
-        parseInt(response.headers['accept-ranges'].replace(/^bytes=(\d+)/, '$1')) > 0)
-
-    if (isResumable) {
-      options.flags = 'a'
-      if (this.progress.downloaded) this.progress.total -= 10
+    const length = Number(response.headers['content-length'])
+    const contentLength = Number.isSafeInteger(length) && length >= 0 ? length : 0
+    let offset = 0
+    if (response.statusCode === 206) {
+      const range = /^bytes (\d+)-(\d+)\/(\d+|\*)$/.exec(response.headers['content-range'] ?? '')
+      const expectedStart = this.resumeLastChunk ? this.progress.downloaded - this.resumeLastChunk.length : Number(this.chunkInfo.startByte)
+      if (!range || Number(range[1]) !== expectedStart || Number(range[2]) < expectedStart) throw new Error('Resume failed, invalid Content-Range')
+      offset = this.resumeLastChunk ? expectedStart : 0
+      this.progress.total = range[3] !== '*' ? Number(range[3]) : contentLength ? contentLength + offset : 0
     } else {
-      if (this.chunkInfo.startByte != '0') {
-        this.__handleError(new Error('The resource cannot be resumed download.'))
-        return
-      }
+      if (this.chunkInfo.startByte !== '0') throw new Error('The resource cannot be resumed download.')
+      // A 200 response ignored Range. Replace the partial file instead of appending it.
+      this.resumeLastChunk = null
+      this.progress.downloaded = 0
+      this.progress.total = contentLength
     }
-    this.progress.total += this.progress.downloaded
     this.statsEstimate.prevBytes = this.progress.downloaded
     if (!this.chunkInfo.path) {
-      this.__handleError(new Error('Chunk save Path is not set.'))
-      return
+      throw new Error('Chunk save Path is not set.')
     }
-    this.ws = fs.createWriteStream(this.chunkInfo.path, options)
+    this.ws = fs.createWriteStream(this.chunkInfo.path, { flags: this.resumeLastChunk ? 'a' : 'w' })
 
     this.ws.on('finish', () => {
       if (this.closeWaiting) return
@@ -228,32 +233,33 @@ class Task extends EventEmitter {
   }
 
   __handleComplete() {
-    if (this.status == STATUS.error) return
+    if (this.status !== STATUS.running) return
     this.__clearTimeout()
-    if (this.progress.progress <= 0) {
-      this.status = STATUS.error
-      this.emit('error', new Error('Progress is 0, download failed.'))
+    if (this.progress.downloaded <= 0 || this.resumeLastChunk) {
+      this.__handleError(new Error('Empty or incomplete download.'))
       return
     }
     void this.__closeWriteStream().then(() => {
+      if (this.status !== STATUS.running) return
+      if (!this.progress.total) this.progress.total = this.progress.downloaded
       if (this.progress.downloaded == this.progress.total) {
+        this.__calculateProgress(0)
         this.status = STATUS.completed
         this.emit('completed')
       } else {
         this.status = STATUS.stopped
         this.emit('stop')
       }
-    })
+    }).catch((error: Error) => { this.__handleError(error) })
     // console.log('end')
   }
 
   __handleError(error: Error) {
-    if (this.status == STATUS.error) return
+    if (this.status == STATUS.error || this.status == STATUS.stopped || this.status == STATUS.completed || this.status == STATUS.failed) return
     this.status = STATUS.error
     this.__clearTimeout()
     this.__closeRequest()
     void this.__closeWriteStream()
-    if (error.message == 'aborted') return
     this.emit('error', error)
   }
 
@@ -294,6 +300,7 @@ class Task extends EventEmitter {
       const result = this.__handleDiffChunk(chunk)
       if (result) chunk = result
       else {
+        this.status = STATUS.stopped
         void this.__handleStop().finally(() => {
           // this.__handleError(new Error('Resume failed, response chunk does not match.'))
           // Resume failed, response chunk does not match, remove file and restart download

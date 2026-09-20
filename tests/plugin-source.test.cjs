@@ -6,7 +6,7 @@ const { fork, execFile } = require('node:child_process')
 const { promisify } = require('node:util')
 const { runInNewContext } = require('node:vm')
 const { test } = require('node:test')
-const { packSource, unpackSource, readZip, writeZip, validPath } = require('../src/common/pluginSource')
+const { packSource, unpackSource, prepareSource, readZip, writeZip, validPath, MAX_SOURCE_FILES } = require('../src/common/pluginSource')
 
 const source = (id = 'source-example') => ({ id, version: '1.0.0', apiVersion: 3, entry: 'src/index.ts' })
 const minimal = () => new Map([['src/index.ts', Buffer.from('export default { components: {} }')]])
@@ -52,6 +52,19 @@ test('ZIP CRC, symlink metadata and duplicate entry names are checked before com
   const conflict = await readZip(bytes)
   conflict.set('plugin.json/extra.ts', Buffer.from('conflict'))
   await assert.rejects(readZip(await writeZip(conflict)), /conflict/)
+})
+
+test('uncompressed validation reserves the manifest path and includes it in the file limit', () => {
+  for (const name of ['Plugin.json', 'plugin.json/extra.ts']) {
+    const files = minimal()
+    files.set(name, Buffer.alloc(0))
+    assert.throws(() => prepareSource(source(), files), /Invalid source file/)
+  }
+  const files = minimal()
+  for (let i = 1; i < MAX_SOURCE_FILES - 1; i++) files.set(`src/file-${i}.txt`, Buffer.alloc(0))
+  assert.equal(prepareSource(source(), files).manifest.files.length, MAX_SOURCE_FILES - 1)
+  files.set('src/one-too-many.txt', Buffer.alloc(0))
+  assert.throws(() => prepareSource(source(), files), /size limit/)
 })
 
 test('the author tool packs the template and preserves nested vendor dependencies when repacking', async() => {

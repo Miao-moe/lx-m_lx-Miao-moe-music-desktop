@@ -1,5 +1,5 @@
 <template>
-  <button v-bind="$attrs" :class="$style.btn" :aria-label="$t('player__sound_effect')" @click="visible = true">
+  <button v-bind="$attrs" :class="$style.btn" :aria-label="$t('player__sound_effect')" :title="$t('player__sound_effect')" data-sound-effect-button @click="visible = true">
     <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="90%" viewBox="0 0 24 24" space="preserve">
       <use xlink:href="#icon-tune-variant" />
     </svg>
@@ -76,12 +76,12 @@ export default { inheritAttrs: false }
 
   svg {
     transition: opacity @transition-fast;
-    opacity: .6;
+    opacity: var(--player-control-opacity, .6);
     filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
   }
   &:hover {
     svg {
-      opacity: .9;
+      opacity: var(--player-control-opacity, .9);
     }
   }
   &:active {

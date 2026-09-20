@@ -3,8 +3,9 @@ const fs = require('node:fs/promises')
 const path = require('node:path')
 const { test } = require('node:test')
 const { packSource, unpackSource } = require('../src/common/pluginSource')
+const { unpackPlugin } = require('../src/common/pluginPackage')
 const { launch } = require('./helpers/motion-fixture.cjs')
-const { mockGitHub, openStore, label, install } = require('./helpers/plugin-fixture.cjs')
+const { mockGitHub, openStore, label } = require('./helpers/plugin-fixture.cjs')
 
 const id = 'source-ui-test'
 const sourcePackage = (version, broken = false) => packSource({ id, version, apiVersion: 3, entry: 'src/index.ts', name: '源码编译测试' }, new Map([
@@ -72,7 +73,9 @@ test('source ZIP import compiles Vue offline, exports only source, rolls back er
       await choose(app, { destination: exported })
       await click(page, 'setting__plugins_export', card())
       await idle(page)
-      assert.deepEqual(await fs.readFile(exported), await fs.readFile(filename))
+      // Different Electron versions ship different zlib versions. Compare ZIP
+      // contents, since recompression need not produce identical archive bytes.
+      assert.deepEqual(await unpackSource(await fs.readFile(exported)), await unpackSource(await fs.readFile(filename)))
       const source = await unpackSource(await fs.readFile(exported))
       assert.ok(source.files.has('src/Settings.vue'))
       assert.equal(source.files.has('renderer.js'), false)
@@ -125,20 +128,22 @@ test('source ZIP import compiles Vue offline, exports only source, rolls back er
   } finally { if (fixture) await fixture.app.close() }
 })
 
-test('an installation without its source record requires reinstall and then exports ZIP', { timeout: 45000 }, async() => {
+test('a legacy source installation without its source record is repaired with LXPlugin', { timeout: 45000 }, async() => {
   const fixture = await launch({ rendererPath: path.resolve('dist/index.html') })
   const { app, page } = fixture
   const catalog = require('../plugins/store/catalog.json')
-  const official = catalog.plugins.find(plugin => plugin.id === 'audio-tag-editor')
+  const official = catalog.plugins.find(plugin => plugin.id === 'audio-visualizer')
   const card = page.locator(`[data-plugin-id="${official.id}"]`)
-  const destination = path.join(fixture.output, 'official-source.zip')
+  const destination = path.join(fixture.output, 'official.lxplugin')
   try {
     page.setDefaultTimeout(15000)
     await mockGitHub(app)
     await dialogs(app)
     await openStore(page)
-    await card.getByRole('combobox').selectOption('zip')
-    await install(page, official.id)
+    // Seed an official source installation created before the store used LXPlugin only.
+    await page.evaluate(id => require('electron').ipcRenderer.invoke('optional_plugins:install', id, 'zip'), official.id)
+    await click(page, 'setting__plugins_refresh')
+    await card.getByRole('button', { name: await label(page, 'setting__plugins_settings'), exact: true }).waitFor()
     const installedPaths = await app.evaluate(async(_electron, id) => {
       const fs = process.mainModule.require('node:fs/promises')
       const path = process.mainModule.require('node:path')
@@ -163,15 +168,18 @@ test('an installation without its source record requires reinstall and then expo
     await click(page, 'setting__plugins_refresh')
     const reinstall = card.getByRole('button', { name: await label(page, 'setting__plugins_reinstall'), exact: true })
     await reinstall.click()
-    await page.getByText(await label(page, 'setting__plugins_compiling'), { exact: true }).waitFor()
     await reinstall.waitFor({ state: 'detached' })
+    await card.getByRole('button', { name: await label(page, 'setting__plugins_settings'), exact: true }).waitFor()
+    const repaired = await page.evaluate(async id => (await require('electron').ipcRenderer.invoke('optional_plugins:list')).installed[id], official.id)
+    assert.equal(repaired.format, 'lxplugin')
+    assert.equal((await fs.readdir(repaired.directory)).includes('.source'), false)
     await choose(app, { destination })
     await click(page, 'setting__plugins_export', card)
     await idle(page)
     const exported = await fs.readFile(destination)
-    assert.deepEqual(exported, await fs.readFile(path.join('plugins/store', official.path)))
-    assert.equal((await unpackSource(exported)).manifest.version, official.version)
-    assert.deepEqual(await app.evaluate(() => global.__sourceTransfer.save.filters[0].extensions), ['zip'])
+    assert.deepEqual(unpackPlugin(exported), unpackPlugin(await fs.readFile(path.join('plugins/store', official.packages.lxplugin.path))))
+    assert.equal(unpackPlugin(exported).manifest.version, official.version)
+    assert.deepEqual(await app.evaluate(() => global.__sourceTransfer.save.filters[0].extensions), ['lxplugin'])
     assert.deepEqual(fixture.errors, [])
   } finally { await app.close() }
 })

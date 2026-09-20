@@ -2,6 +2,7 @@ import { getLocalMusicFileLyric, getLocalMusicFilePic } from '@renderer/utils/mu
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { checkPath } from '@common/utils/nodejs'
 
 const getTempDir = async() => {
@@ -19,7 +20,10 @@ export const getMusicFilePic = async(filePath: string) => {
   if (picture.data.length > 400_000) {
     try {
       const tempDir = await getTempDir()
-      const tempFile = path.join(tempDir, path.basename(filePath) + '.' + picture.format.split('/')[1])
+      const stats = await fs.stat(filePath)
+      const key = createHash('sha256').update(JSON.stringify([path.resolve(filePath), stats.size, stats.mtimeMs, stats.ctimeMs])).update(picture.data).digest('hex')
+      const extension = picture.format.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'img'
+      const tempFile = path.join(tempDir, `${key}.${extension}`)
       await fs.writeFile(tempFile, picture.data)
       return tempFile
     } catch (err) {

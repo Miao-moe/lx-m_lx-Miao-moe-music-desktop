@@ -1,7 +1,6 @@
 import { checkPath, joinPath, extname, basename, readFile, getFileStats } from '@common/utils/nodejs'
 import { formatPlayTime } from '@common/utils/common'
 import { decodeKrc } from '@common/utils/lyricUtils/kg'
-import { type IAudioMetadata } from 'music-metadata'
 
 export const checkDownloadFileAvailable = async(musicInfo: LX.Download.ListItem, savePath: string): Promise<boolean> => {
   return musicInfo.isComplate && !/\.ape$/.test(musicInfo.metadata.fileName) &&
@@ -103,14 +102,20 @@ let prevFileInfo: {
   promise: Promise.resolve(null),
 }
 const getFileMetadata = async(path: string) => {
-  if (prevFileInfo.path == path) return prevFileInfo.promise
-  prevFileInfo.path = path
-  return prevFileInfo.promise = checkPath(path).then(async(isExist) => {
-    return isExist ? import('music-metadata').then(async({ parseFile }) => parseFile(path)).catch(err => {
+  const stats = await getFileStats(path)
+  if (!stats?.isFile()) return null
+  const key = JSON.stringify([path, stats.size, stats.mtimeMs, stats.ctimeMs])
+  if (prevFileInfo.path == key) return prevFileInfo.promise
+  const info = {
+    path: key,
+    promise: import('music-metadata').then(async({ parseFile }) => parseFile(path)).catch(err => {
+      if (prevFileInfo === info) prevFileInfo.path = ''
       console.log(err)
       return null
-    }) : null
-  })
+    }),
+  }
+  prevFileInfo = info
+  return info.promise
 }
 /**
  * 获取歌曲文件封面图片
@@ -164,7 +169,10 @@ export const getLocalMusicFilePic = async(path: string) => {
 //   return lyricInfo
 // }
 
-type IComment = NonNullable<IAudioMetadata['common']['comment']> extends Array<infer U> ? U : never
+export const getEmbeddedLyricText = (value: unknown): string | undefined => {
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object' && 'text' in value && typeof value.text === 'string') return value.text
+}
 
 /**
  * 获取歌曲文件歌词
@@ -224,14 +232,10 @@ export const getLocalMusicFileLyric = async(path: string): Promise<LX.Music.Lyri
   for (const info of Object.values(metadata.native)) {
     for (const ust of info) {
       switch (ust.id) {
-        case 'LYRICS': {
-          const value = typeof ust.value == 'string' ? ust.value : (ust as IComment).text
-          if (value && value.length > 10) return { lyric: value }
-          break
-        }
+        case 'LYRICS':
         case 'USLT': {
-          const value = ust.value as IComment
-          if (value.text && value.text.length > 10) return { lyric: value.text }
+          const value = getEmbeddedLyricText(ust.value)
+          if (value && value.length > 10) return { lyric: value }
           break
         }
       }

@@ -1,0 +1,158 @@
+const assert = require('node:assert/strict')
+const path = require('node:path')
+const { test } = require('node:test')
+const { launch, route, settled } = require('./helpers/motion-fixture.cjs')
+const { mockGitHub, openStore, install } = require('./helpers/plugin-fixture.cjs')
+
+test('settings remember navigation for the running session and reset after restarting', { timeout: 120000 }, async t => {
+  let fixture = await launch({ rendererPath: path.resolve('dist/index.html') })
+  let { app, page } = fixture
+  const profilePath = fixture.output
+  const content = () => page.locator('[data-setting-content]')
+  const navigation = () => page.locator('[data-setting-navigation]')
+  const search = () => page.locator('#view input[autocomplete="off"][aria-label]')
+  const tab = id => page.locator(`[data-setting-tab="${id}"]`)
+  const selected = () => page.locator('[data-setting-tab][aria-selected="true"]').getAttribute('data-setting-tab')
+  const enter = async() => {
+    await page.locator('[data-sidebar-nav="Setting"] a').click()
+    await content().waitFor()
+    await settled(page)
+  }
+  const leave = async() => {
+    await page.locator('[data-sidebar-nav="List"] a').click()
+    await content().waitFor({ state: 'detached' })
+    await settled(page)
+  }
+  const select = async id => { await tab(id).click(); await settled(page) }
+  const scroll = async top => {
+    const actual = await content().evaluate((element, top) => { element.scrollTop = top; return element.scrollTop }, top)
+    assert(actual > 0, 'fixture has enough settings to scroll')
+    return actual
+  }
+  const at = async top => page.waitForFunction(top => Math.abs(document.querySelector('[data-setting-content]').scrollTop - top) < 1, top)
+  let basicTop
+  let advancedTop
+  let sidebarTop
+  try {
+    page.setDefaultTimeout(8000)
+    await page.setViewportSize({ width: 828, height: 540 })
+    await t.test('the first visit starts at basic settings', async() => {
+      await enter()
+      assert.equal(await selected(), 'SettingBasic')
+      await at(0)
+    })
+    await t.test('leaving and reopening restores the category and both scroll areas', async() => {
+      await select('SettingAdvanced')
+      advancedTop = await scroll(230)
+      sidebarTop = await navigation().evaluate(element => { element.scrollTop = element.scrollHeight; return element.scrollTop })
+      assert(sidebarTop > 0)
+      await leave()
+      await enter()
+      assert.equal(await selected(), 'SettingAdvanced')
+      await at(advancedTop)
+      assert.equal(await navigation().evaluate(element => element.scrollTop), sidebarTop)
+    })
+    await t.test('categories have independent positions, including keyboard and rapid switching', async() => {
+      await select('SettingBasic')
+      await at(0)
+      basicTop = await scroll(360)
+      await select('SettingPlay')
+      await at(0)
+      await scroll(90)
+      await select('SettingAdvanced')
+      await at(advancedTop)
+      await select('SettingBasic')
+      await at(basicTop)
+      await tab('SettingBasic').focus()
+      await page.keyboard.press('Alt+ArrowRight')
+      await at(90)
+      await page.keyboard.press('Alt+ArrowLeft')
+      await at(basicTop)
+      await page.evaluate(() => {
+        for (const id of ['SettingPlay', 'SettingAdvanced', 'SettingBasic']) document.querySelector(`[data-setting-tab="${id}"]`).click()
+      })
+      await at(basicTop)
+      assert.equal(await selected(), 'SettingBasic')
+    })
+    await t.test('search results resume with their position and clearing restores the original category', async() => {
+      await search().fill('播放')
+      await select('SettingPlay')
+      const filteredTop = await scroll(150)
+      await leave()
+      await enter()
+      assert.equal(await search().inputValue(), '播放')
+      assert.equal(await selected(), 'SettingPlay')
+      await at(filteredTop)
+      await search().press('Escape')
+      assert.equal(await selected(), 'SettingBasic')
+      await at(basicTop)
+      await search().fill('xyz不存在的设置987654')
+      await leave()
+      await enter()
+      assert.equal(await search().inputValue(), 'xyz不存在的设置987654')
+      assert.equal(await page.locator('[data-setting-tab]').count(), 0)
+      await search().press('Escape')
+      await at(basicTop)
+    })
+    await t.test('explicit links take priority over remembered search and scroll', async() => {
+      await search().fill('播放')
+      await leave()
+      await route(page, '/setting?name=SettingDesktopLyric')
+      await settled(page)
+      assert.equal(await selected(), 'SettingDesktopLyric')
+      assert.equal(await search().inputValue(), '')
+      await at(0)
+      await route(page, '/setting?name=SettingNetwork')
+      await settled(page)
+      assert.equal(await selected(), 'SettingNetwork')
+      await at(0)
+      await leave()
+      await enter()
+      assert.equal(await selected(), 'SettingNetwork')
+    })
+    await t.test('delayed content restores when ready and user scrolling cancels the pending restore', async() => {
+      await select('SettingBasic')
+      await at(basicTop)
+      for (const cancel of [false, true]) {
+        await leave()
+        const delayed = await page.addStyleTag({ content: '[data-setting-content] > dl { height: 120px !important; overflow: hidden !important; }' })
+        await enter()
+        assert.equal(await content().evaluate(element => element.scrollTop), 0)
+        if (cancel) {
+          await content().hover()
+          await page.mouse.wheel(0, -100)
+          await page.waitForTimeout(100)
+        }
+        await delayed.evaluate(element => element.remove())
+        await at(cancel ? 0 : basicTop)
+      }
+    })
+    await t.test('an uninstalled remembered plugin falls back to the store', async() => {
+      await mockGitHub(app)
+      await openStore(page)
+      await install(page, 'audio-visualizer')
+      await select('SettingPlugin_audio-visualizer')
+      await leave()
+      await page.evaluate(() => require('electron').ipcRenderer.invoke('optional_plugins:uninstall', 'audio-visualizer'))
+      await enter()
+      assert.equal(await selected(), 'SettingPluginStore')
+      await page.locator('#plugin_store').waitFor()
+    })
+    await t.test('a new process starts fresh with the same user profile', async() => {
+      await select('SettingAdvanced')
+      await scroll(230)
+      await search().fill('播放')
+      await leave()
+      assert.deepEqual(fixture.errors, [])
+      await app.close()
+      fixture = await launch({ profilePath, rendererPath: path.resolve('dist/index.html') })
+      app = fixture.app; page = fixture.page
+      await enter()
+      assert.equal(await selected(), 'SettingBasic')
+      assert.equal(await search().inputValue(), '')
+      await at(0)
+      assert.equal(await navigation().evaluate(element => element.scrollTop), 0)
+    })
+    assert.deepEqual(fixture.errors, [])
+  } finally { await app.close() }
+})

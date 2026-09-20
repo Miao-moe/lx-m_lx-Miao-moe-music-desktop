@@ -27,6 +27,8 @@ export const PLAY_QUEUE_LIST_ID = '@play_queue'
  * 之后播放器的一切播放切换逻辑都遵循该队列，不再依赖原列表的变动
  */
 export const playQueueList = window.lxData.playQueueList = shallowReactive<LX.Player.PlayMusicInfo[]>([])
+// Increment once per completed queue edit, including replacement with the same length.
+export const playQueueRevision = ref(0)
 
 export const musicInfo = window.lxData.musicInfo = reactive<PlayerMusicInfo>({
   id: null,

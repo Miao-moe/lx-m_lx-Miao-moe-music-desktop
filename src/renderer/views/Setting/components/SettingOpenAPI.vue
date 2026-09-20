@@ -4,19 +4,20 @@ dd.gap-top
   div
     .p
       base-checkbox(id="setting_open_api_enable" :model-value="appSetting['openAPI.enable']" :label="$t('setting__open_api_enable')" @update:model-value="updateSetting({ 'openAPI.enable': $event })")
-    .p.gap-top
-      base-checkbox(id="setting_open_api_bind_lan" :model-value="appSetting['openAPI.bindLan']" :label="$t('setting__open_api_bind_lan')" @update:model-value="updateSetting({ 'openAPI.bindLan': $event })")
-    .p.gap-top.small
-      | {{ $t('setting__open_api_address') }}
-      span.select {{ openAPI.address }}
-    .p.gap-top.small(v-if="openAPI.token")
-      | {{ $t('setting__open_api_token') }}
-      span.select {{ openAPI.token }}
-    .p.small(v-if="openAPI.message") {{ openAPI.message }}
-    .p
-      .p.small {{ $t('setting__open_api_port') }}
-      div
-        base-input.gap-left(:class="$style.portInput" :model-value="appSetting['openAPI.port']" type="number" :placeholder="$t('setting__open_api_port_tip')" @update:model-value="setPort")
+    common-setting-reveal(:show="appSetting['openAPI.enable']" depends="setting_open_api_enable")
+      .p.gap-top
+        base-checkbox(id="setting_open_api_bind_lan" :model-value="appSetting['openAPI.bindLan']" :label="$t('setting__open_api_bind_lan')" @update:model-value="updateSetting({ 'openAPI.bindLan': $event })")
+      .p.gap-top.small
+        | {{ $t('setting__open_api_address') }}
+        span.select {{ openAPI.address }}
+      .p.gap-top.small(v-if="openAPI.token")
+        | {{ $t('setting__open_api_token') }}
+        span.select {{ openAPI.token }}
+      .p.small(v-if="openAPI.message") {{ openAPI.message }}
+      .p
+        .p.small {{ $t('setting__open_api_port') }}
+        div
+          base-input.gap-left(:class="$style.portInput" :model-value="appSetting['openAPI.port']" type="number" :placeholder="$t('setting__open_api_port_tip')" @update:model-value="setPort")
 
 dd.gap-top
   div

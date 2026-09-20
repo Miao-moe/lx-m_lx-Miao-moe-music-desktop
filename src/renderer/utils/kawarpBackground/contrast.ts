@@ -139,6 +139,7 @@ export const createAdaptivePalette = (backgrounds: RGB[], artwork: RGB, previous
   assign(rgb(secondary), ['color-font-label', 'color-text-muted', 'color-text-secondary', 'color-200', 'color-300', 'color-400', 'color-450', 'color-500', 'color-550', 'color-650', 'color-700'])
   assign(rgb(onAccent), ['color-000', 'adaptive-selection-text'])
   assign(rgb(accent), ['adaptive-selection-background'])
+  assign(rgb(contrastColor(artwork, range, darkText, 10, true)), ['ambient-lyric-accent'])
   assign(rgb(surface), ['color-content-background', 'color-surface-elevated', 'color-button-background', 'color-primary-background', 'color-primary-light-600-alpha-100', 'color-primary-light-900-alpha-200'])
   assign(rgb(hover), [
     'color-hover', 'color-button-background-hover', 'color-primary-background-hover', 'color-primary-light-100-alpha-100',
@@ -176,8 +177,9 @@ export const controlRegions = (pixels: RGB[], width: number, height: number): RG
 export const createControlColors = (backgrounds: RGB[], artwork: RGB, palette: ReturnType<typeof createAdaptivePalette>) => {
   const range = bounds([...backgrounds, palette.surface, palette.hover, palette.active])
   const accent = contrastColor(artwork, range, palette.darkText, 5.2, true)
+  const lyricAccent = contrastColor(artwork, range, palette.darkText, 10, true)
   const white: RGB = [255, 255, 255]
   const black: RGB = [0, 0, 0]
   const onAccent = contrastRatio(accent, white) >= contrastRatio(accent, black) ? white : black
-  return { accent, onAccent }
+  return { accent, onAccent, lyricAccent }
 }

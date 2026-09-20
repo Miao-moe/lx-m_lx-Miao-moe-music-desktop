@@ -37,7 +37,7 @@
     >
       <span v-if="isMessage(props.listInfo.noItemLabel, 'list__loading')" class="ui-spinner" />
       <p v-text="props.listInfo.noItemLabel" />
-      <base-btn v-if="isMessage(props.listInfo.noItemLabel, 'list__load_failed')" class="ui-state-retry" min @click="emit('retry')">{{ $t('reload') }}</base-btn>
+      <base-btn v-if="!props.hideRetry && isMessage(props.listInfo.noItemLabel, 'list__load_failed')" class="ui-state-retry" min @click="emit('retry')">{{ $t('reload') }}</base-btn>
     </div>
   </common-list-loading>
 </template>
@@ -52,10 +52,12 @@ import { useRoute, useRouter } from '@common/utils/vueRouter'
 const props = withDefaults(defineProps<{
   listInfo: ListInfo
   visibleSource?: boolean
+  hideRetry?: boolean
   searchOnClick?: boolean
   searchResultType?: 'singer' | 'album'
 }>(), {
   visibleSource: false,
+  hideRetry: false,
   searchOnClick: false,
   searchResultType: 'singer',
 })

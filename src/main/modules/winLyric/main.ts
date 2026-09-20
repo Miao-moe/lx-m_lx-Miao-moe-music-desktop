@@ -1,25 +1,55 @@
 import path from 'node:path'
 import { BrowserWindow } from 'electron'
-import { debounce, getPlatform, isLinux, isWin } from '@common/utils'
-import { initWindowSize, minHeight, minWidth } from './utils'
+import { getPlatform, isWin } from '@common/utils'
+import { initWindowSize, getMinimumSize, getLyricWindowBounds } from './utils'
 import { mainSend } from '@common/mainIpc'
 import { encodePath } from '@common/utils/electron'
+import { createLockControls } from './lockControls'
+import { WIN_LYRIC_RENDERER_EVENT_NAME } from '@common/ipcNames'
 
 // require('./event')
 // require('./rendererEvent')
 
 let browserWindow: Electron.BrowserWindow | null = null
+let lockControls: ReturnType<typeof createLockControls> | null = null
 let isWinBoundsUpdateing = false
 let lastSetBoundsTime = 0
 const SET_BOUNDS_GRACE_MS = 800
 
-const saveBoundsConfig = debounce((config: Partial<LX.AppSetting>) => {
-  global.lx.event_app.update_config(config)
-  if (isWinBoundsUpdateing) isWinBoundsUpdateing = false
-}, 500)
-
 const winEvent = () => {
   if (!browserWindow) return
+  const window = browserWindow
+  let isResizing = false
+  let isCorrectingPosition = false
+  // Keep the requested size separate from position-dependent DIP rounding.
+  let windowSize = {
+    width: global.lx.appSetting['desktopLyric.width'],
+    height: global.lx.appSetting['desktopLyric.height'],
+  }
+  const updateWindowSize = () => {
+    if (isCorrectingPosition) return
+    const { width, height } = window.getBounds()
+    windowSize = { width, height }
+  }
+  let saveBoundsTimer: NodeJS.Timeout | null = null
+  const saveBoundsConfig = () => {
+    if (saveBoundsTimer) {
+      clearTimeout(saveBoundsTimer)
+      saveBoundsTimer = null
+    }
+    const bounds = window.getBounds()
+    global.lx.event_app.update_config({
+      'desktopLyric.x': bounds.x,
+      'desktopLyric.y': bounds.y,
+      'desktopLyric.width': windowSize.width,
+      'desktopLyric.height': windowSize.height,
+    })
+    isWinBoundsUpdateing = false
+  }
+  const scheduleBoundsSave = () => {
+    if (saveBoundsTimer) clearTimeout(saveBoundsTimer)
+    saveBoundsTimer = setTimeout(saveBoundsConfig, 500)
+  }
 
   // browserWindow.on('close', () => {
   //   if (global.lx.appSetting['desktopLyric.enable'] && !global.lx.mainWindowClosed) {
@@ -28,21 +58,67 @@ const winEvent = () => {
   //   }
   // })
 
-  browserWindow.on('closed', () => {
-    browserWindow = null
+  window.on('close', () => {
+    if (saveBoundsTimer != null || isResizing) saveBoundsConfig()
+  })
+  window.on('closed', () => {
+    if (saveBoundsTimer) clearTimeout(saveBoundsTimer)
+    if (browserWindow === window) {
+      browserWindow = null
+      lockControls = null
+    }
+  })
+
+  window.on('will-resize', event => {
+    if (global.lx.appSetting['desktopLyric.isLock']) {
+      event.preventDefault()
+      return
+    }
+    // Resizing an edge may emit move before resize. Keep the entire gesture
+    // authorized even if the user pauses long enough for a debounced save.
+    isResizing = true
+    isWinBoundsUpdateing = true
+    lastSetBoundsTime = Date.now()
+  })
+  window.on('resized', () => {
+    isResizing = false
+    updateWindowSize()
+    lastSetBoundsTime = Date.now()
+    saveBoundsConfig()
+  })
+
+  browserWindow.on('will-move', (event, bounds) => {
+    if (global.lx.appSetting['desktopLyric.isLock']) {
+      event.preventDefault()
+      return
+    }
+    // Native dragging is intentional movement, just like setBounds below.
+    isWinBoundsUpdateing = true
+    lastSetBoundsTime = Date.now()
+    if (!isWin || !global.lx.appSetting['desktopLyric.isLockScreen']) return
+    const limited = getLyricWindowBounds(bounds, { x: 0, y: 0, w: windowSize.width, h: windowSize.height })
+    if (limited.x === bounds.x && limited.y === bounds.y) return
+    event.preventDefault()
+    const current = window.getBounds()
+    if (current.x !== limited.x || current.y !== limited.y) {
+      // setPosition reuses the rounded getBounds size and can enlarge a window
+      // on every step along an edge at fractional display scales. Pin its size
+      // explicitly and don't learn a new size from this correction's resize event.
+      isCorrectingPosition = true
+      try {
+        window.setBounds(limited)
+      } finally {
+        isCorrectingPosition = false
+      }
+    }
+    scheduleBoundsSave()
   })
 
   browserWindow.on('move', () => {
     // bounds = browserWindow.getBounds()
     // console.log('move', isWinBoundsUpdateing)
-    if (isWinBoundsUpdateing || Date.now() - lastSetBoundsTime < SET_BOUNDS_GRACE_MS) {
-      const bounds = browserWindow!.getBounds()
-      saveBoundsConfig({
-        'desktopLyric.x': bounds.x,
-        'desktopLyric.y': bounds.y,
-        'desktopLyric.width': bounds.width,
-        'desktopLyric.height': bounds.height,
-      })
+    if (isResizing || isWinBoundsUpdateing || Date.now() - lastSetBoundsTime < SET_BOUNDS_GRACE_MS) {
+      scheduleBoundsSave()
     } else if (isWin) { // Linux 不允许将窗口设置出屏幕之外，MacOS未知，故只在Windows下执行强制设置
       // 非主动调整窗口触发的窗口位置变化将重置回设置值
       browserWindow!.setBounds({
@@ -55,16 +131,12 @@ const winEvent = () => {
   })
 
   browserWindow.on('resize', () => {
+    updateWindowSize()
     // bounds = browserWindow.getBounds()
     // console.log(bounds)
     isWinBoundsUpdateing = true
-    const bounds = browserWindow!.getBounds()
-    saveBoundsConfig({
-      'desktopLyric.x': bounds.x,
-      'desktopLyric.y': bounds.y,
-      'desktopLyric.width': bounds.width,
-      'desktopLyric.height': bounds.height,
-    })
+    lastSetBoundsTime = Date.now()
+    scheduleBoundsSave()
   })
 
   // browserWindow.on('restore', () => {
@@ -76,9 +148,7 @@ const winEvent = () => {
 
   browserWindow.once('ready-to-show', () => {
     showWindow()
-    if (global.lx.appSetting['desktopLyric.isLock']) {
-      browserWindow!.setIgnoreMouseEvents(true, { forward: !isLinux && global.lx.appSetting['desktopLyric.isHoverHide'] })
-    }
+    updateMouseLock()
     // linux下每次重开时貌似要重新设置置顶
     // if (isLinux && global.lx.appSetting['desktopLyric.isAlwaysOnTop']) {
     //   browserWindow!.setAlwaysOnTop(global.lx.appSetting['desktopLyric.isAlwaysOnTop'], 'screen-saver')
@@ -90,6 +160,8 @@ const winEvent = () => {
 
 export const createWindow = () => {
   closeWindow()
+  isWinBoundsUpdateing = false
+  lastSetBoundsTime = 0
   if (!global.envParams.workAreaSize) return
   let x = global.lx.appSetting['desktopLyric.x']
   let y = global.lx.appSetting['desktopLyric.y']
@@ -117,8 +189,7 @@ export const createWindow = () => {
     width: winSize.width,
     x: winSize.x,
     y: winSize.y,
-    minWidth,
-    minHeight,
+    ...getMinimumSize(),
     useContentSize: true,
     frame: false,
     transparent: true,
@@ -144,6 +215,7 @@ export const createWindow = () => {
       backgroundThrottling: false,
     },
   })
+  lockControls = createLockControls(browserWindow, point => { sendEvent(WIN_LYRIC_RENDERER_EVENT_NAME.pointer_position, point) })
 
   const winURL = process.env.NODE_ENV !== 'production' ? 'http://localhost:9081/lyric.html' : `file://${path.join(encodePath(__dirname), 'lyric.html')}`
   void browserWindow.loadURL(winURL + `?os=${getPlatform()}&dark=${shouldUseDarkColors}&theme=${encodeURIComponent(JSON.stringify(theme))}`)
@@ -179,6 +251,16 @@ export const getBounds = (): Electron.Rectangle | null => {
   return browserWindow.getBounds()
 }
 
+export const updateMinimumSize = () => {
+  if (!browserWindow) return
+  const { minWidth, minHeight } = getMinimumSize()
+  browserWindow.setMinimumSize(minWidth, minHeight)
+  const bounds = browserWindow.getBounds()
+  if (bounds.width < minWidth || bounds.height < minHeight) {
+    setBounds({ ...bounds, width: Math.max(minWidth, bounds.width), height: Math.max(minHeight, bounds.height) })
+  }
+}
+
 export const setBounds = (bounds: Electron.Rectangle) => {
   if (!browserWindow) return
   isWinBoundsUpdateing = true
@@ -187,10 +269,7 @@ export const setBounds = (bounds: Electron.Rectangle) => {
 }
 
 
-export const setIgnoreMouseEvents = (ignore: boolean, options?: Electron.IgnoreMouseEventsOptions) => {
-  if (!browserWindow) return
-  browserWindow.setIgnoreMouseEvents(ignore, options)
-}
+export const updateMouseLock = () => { lockControls?.update() }
 
 export const setSkipTaskbar = (skip: boolean) => {
   if (!browserWindow) return

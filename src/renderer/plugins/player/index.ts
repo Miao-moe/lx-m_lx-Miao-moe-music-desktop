@@ -1,13 +1,121 @@
 interface HTMLAudioElementChrome extends HTMLAudioElement {
   setSinkId: (id: string) => Promise<void>
 }
+interface AudioContextWithSink extends AudioContext {
+  setSinkId?: (id: string) => Promise<void>
+}
+interface NormalizationState { energy: number, gainDb: number }
+interface AudioChannel {
+  audio: HTMLAudioElement
+  volume: number
+  source?: MediaElementAudioSourceNode
+  fader?: GainNode
+  normalizer?: AudioWorkletNode
+  track: string
+  generation: number
+  dispose: () => void
+}
 let audio: HTMLAudioElementChrome | null = null
-let audioContext: AudioContext
-let mediaSource: MediaElementAudioSourceNode
+let audioContext: AudioContextWithSink
 let gainNode: GainNode
 let defaultChannelCount = 2
 let processor: { input: AudioNode, output: AudioNode } | null = null
 const workletModules = new Map<string, Promise<void>>()
+const channels = new Map<HTMLAudioElement, AudioChannel>()
+const normalizationCache = new Map<string, NormalizationState>()
+let outputVolume = 1
+let outputDeviceId = 'default'
+let outputBridge: { audio: HTMLAudioElementChrome, destination: MediaStreamAudioDestinationNode } | null = null
+let usesOutputBridge = false
+let deviceChange: Promise<void> = Promise.resolve()
+let normalizationEnabled = false
+let normalizationReady = false
+let normalizationRequest = 0
+let normalizationError: ((error: unknown) => void) | undefined
+
+const resetNormalization = (channel: AudioChannel) => {
+  channel.track = channel.audio.getAttribute('src') ? channel.audio.src : ''
+  channel.generation++
+  channel.normalizer?.port.postMessage({ type: 'reset', generation: channel.generation, state: normalizationCache.get(channel.track) })
+}
+
+const attachNormalizer = (channel: AudioChannel) => {
+  if (!normalizationReady || channel.normalizer != null || !channel.source || !channel.fader) return
+  const node = new AudioWorkletNode(audioContext, 'lx-volume-normalizer', { parameterData: { enabled: normalizationEnabled ? 1 : 0 } })
+  channel.normalizer = node
+  node.port.onmessage = ({ data }: MessageEvent<NormalizationState & { generation: number }>) => {
+    if (data.generation !== channel.generation || !channel.track || !Number.isFinite(data.energy) || !Number.isFinite(data.gainDb)) return
+    normalizationCache.delete(channel.track)
+    normalizationCache.set(channel.track, { energy: data.energy, gainDb: data.gainDb })
+    if (normalizationCache.size > 64) normalizationCache.delete(normalizationCache.keys().next().value!)
+  }
+  node.onprocessorerror = () => {
+    // A failed worklet must never leave either the current or overlapping song silent.
+    normalizationEnabled = false
+    for (const current of channels.values()) {
+      current.source?.disconnect()
+      current.source?.connect(current.fader!)
+      current.normalizer?.disconnect()
+      current.normalizer?.port.close()
+      current.normalizer = undefined
+    }
+    normalizationError?.(new Error('Volume normalization processor failed'))
+  }
+  resetNormalization(channel)
+  channel.source.disconnect()
+  channel.source.connect(node)
+  node.connect(channel.fader)
+}
+
+const connectChannel = (channel: AudioChannel) => {
+  if (!audioContext || channel.source) return
+  channel.source = audioContext.createMediaElementSource(channel.audio)
+  channel.fader = audioContext.createGain()
+  channel.fader.gain.value = channel.volume
+  channel.audio.volume = 1
+  channel.source.connect(channel.fader)
+  channel.fader.connect(processor?.input ?? gainNode)
+  attachNormalizer(channel)
+}
+
+const registerChannel = (element: HTMLAudioElement, volume: number) => {
+  const channel: AudioChannel = { audio: element, volume, track: '', generation: 0, dispose: () => {} }
+  const reset = () => { resetNormalization(channel) }
+  const resume = () => {
+    if (audioContext?.state === 'suspended') void audioContext.resume().catch(console.error)
+  }
+  element.addEventListener('loadstart', reset)
+  element.addEventListener('emptied', reset)
+  element.addEventListener('playing', resume)
+  channel.dispose = () => {
+    element.removeEventListener('loadstart', reset)
+    element.removeEventListener('emptied', reset)
+    element.removeEventListener('playing', resume)
+    channel.normalizer?.port.postMessage({ type: 'dispose' })
+    channel.normalizer?.port.close()
+    channel.normalizer?.disconnect()
+    channel.source?.disconnect()
+    channel.fader?.disconnect()
+    channels.delete(element)
+  }
+  channels.set(element, channel)
+  connectChannel(channel)
+  return channel
+}
+
+// Crossfades change this envelope, never the signal measured by the normalizer.
+export const gaplessAudioOutput = {
+  attach(element: HTMLAudioElement) { return registerChannel(element, 0).dispose },
+  getVolume(element: HTMLAudioElement) { return channels.get(element)?.volume ?? 1 },
+  setVolume(element: HTMLAudioElement, volume: number) {
+    const channel = channels.get(element)
+    if (!channel) return
+    channel.volume = Math.max(0, Math.min(1, volume))
+    if (channel.fader) channel.fader.gain.value = channel.volume
+    else element.volume = Math.min(1, outputVolume) * channel.volume
+  },
+  getTargetVolume() { return 1 },
+}
 
 export const createAudio = () => {
   if (audio) return
@@ -17,15 +125,7 @@ export const createAudio = () => {
   audio.preload = 'auto'
   audio.crossOrigin = 'anonymous'
 
-  // https://developer.chrome.com/blog/autoplay
-  audio.addEventListener('playing', () => {
-    if (audioContext?.state == 'suspended') {
-      void audioContext.resume().catch((err) => {
-        console.error('Resume audio context failed:', err)
-        throw err
-      })
-    }
-  })
+  registerChannel(audio, 1)
 }
 
 export const getAudioElement = (): HTMLAudioElement => {
@@ -34,19 +134,31 @@ export const getAudioElement = (): HTMLAudioElement => {
 }
 
 const reconnectSource = () => {
-  mediaSource.disconnect()
-  mediaSource.connect(processor?.input ?? gainNode)
+  for (const channel of channels.values()) {
+    channel.fader?.disconnect()
+    channel.fader?.connect(processor?.input ?? gainNode)
+  }
 }
+export const supportsAudioOutputDeviceSelection = () => typeof (window.AudioContext.prototype as AudioContextWithSink).setSinkId === 'function' ||
+  (typeof HTMLMediaElement.prototype.setSinkId === 'function' && typeof window.AudioContext.prototype.createMediaStreamDestination === 'function')
 const initAdvancedAudioFeatures = () => {
   if (audioContext) return
   if (!audio) throw new Error('audio not defined')
-  audioContext = new window.AudioContext({ latencyHint: 'playback' })
+  if (outputDeviceId !== 'default' && !supportsAudioOutputDeviceSelection()) throw new Error('The selected output device does not support audio processing')
+  const options: AudioContextOptions & { sinkId: string } = { latencyHint: 'playback', sinkId: outputDeviceId }
+  audioContext = new window.AudioContext(options)
   defaultChannelCount = audioContext.destination.channelCount
-  mediaSource = audioContext.createMediaElementSource(audio)
   gainNode = audioContext.createGain()
+  gainNode.gain.value = outputVolume
   gainNode.connect(audioContext.destination)
-  reconnectSource()
+  for (const channel of channels.values()) connectChannel(channel)
   window.app_event.on('playerDeviceChanged', reconnectSource)
+  if (!audioContext.setSinkId && outputDeviceId !== 'default') {
+    void setMediaDeviceId(outputDeviceId).catch(error => {
+      console.error('Audio output device unavailable:', error)
+      void setMediaDeviceId('default').catch(console.error)
+    })
+  }
 }
 export const getAudioContext = () => {
   initAdvancedAudioFeatures()
@@ -96,6 +208,20 @@ export const loadAudioWorklet = async(name: string, url: string) => {
   return promise
 }
 
+export const setVolumeNormalization = async(enabled: boolean, onError?: (error: unknown) => void) => {
+  const request = ++normalizationRequest
+  normalizationEnabled = enabled
+  normalizationError = onError
+  if (enabled) {
+    await loadAudioWorklet('lx-volume-normalizer', new URL('./volume-normalizer.worklet.js', import.meta.url).href)
+    if (request !== normalizationRequest) return
+    normalizationReady = true
+    for (const channel of channels.values()) attachNormalizer(channel)
+  }
+  if (request !== normalizationRequest) return
+  for (const channel of channels.values()) channel.normalizer?.parameters.get('enabled')?.setValueAtTime(enabled ? 1 : 0, audioContext.currentTime)
+}
+
 let unsubMediaListChangeEvent: (() => void) | null = null
 export const setMaxOutputChannelCount = (enable: boolean) => {
   if (enable) {
@@ -121,12 +247,16 @@ export const setMaxOutputChannelCount = (enable: boolean) => {
       audioContext.destination.channelCountMode = 'explicit'
     }
   }
+  if (outputBridge) outputBridge.destination.channelCount = audioContext.destination.channelCount
 }
 
 export const hasInitedAdvancedAudioFeatures = (): boolean => audioContext != null
 
 export const setResource = (src: string) => {
-  if (audio) audio.src = src
+  if (audio) {
+    audio.src = src
+    resetNormalization(channels.get(audio)!)
+  }
 }
 
 export const setPlay = () => {
@@ -182,20 +312,60 @@ export const setCurrentTime = (time: number) => {
   if (audio) audio.currentTime = time
 }
 
-export const setMediaDeviceId = async(mediaDeviceId: string): Promise<void> => {
+const changeMediaDeviceId = async(mediaDeviceId: string): Promise<void> => {
   if (!audio) return
-  return audio.setSinkId(mediaDeviceId)
+  if (audioContext?.setSinkId) await audioContext.setSinkId(mediaDeviceId)
+  else if (audioContext) {
+    if (mediaDeviceId === 'default' || !mediaDeviceId) {
+      if (usesOutputBridge && outputBridge) {
+        gainNode.disconnect(outputBridge.destination)
+        gainNode.connect(audioContext.destination)
+        outputBridge.audio.pause()
+        usesOutputBridge = false
+      }
+    } else {
+      if (!supportsAudioOutputDeviceSelection()) throw new Error('Output device switching is unavailable')
+      if (!outputBridge) {
+        const destination = audioContext.createMediaStreamDestination()
+        destination.channelCount = audioContext.destination.channelCount
+        const element = new window.Audio() as HTMLAudioElementChrome
+        element.srcObject = destination.stream
+        outputBridge = { audio: element, destination }
+      }
+      // Chromium 108 can route an HTML audio element to a device, but cannot
+      // route AudioContext directly. Keep effects/normalization upstream and
+      // switch the final output only after the new device is ready.
+      await outputBridge.audio.setSinkId(mediaDeviceId)
+      await outputBridge.audio.play()
+      if (!usesOutputBridge) {
+        gainNode.disconnect(audioContext.destination)
+        gainNode.connect(outputBridge.destination)
+        usesOutputBridge = true
+      }
+    }
+  } else {
+    await Promise.all(Array.from(channels.values(), async channel => {
+      if ('setSinkId' in channel.audio) await (channel.audio as HTMLAudioElementChrome).setSinkId(mediaDeviceId)
+    }))
+  }
+  outputDeviceId = mediaDeviceId
+}
+
+export const setMediaDeviceId = async(mediaDeviceId: string): Promise<void> => {
+  const change = deviceChange.catch(() => {}).then(async() => changeMediaDeviceId(mediaDeviceId))
+  deviceChange = change
+  return change
 }
 
 export const setVolume = (volume: number) => {
+  outputVolume = volume
   if (audio && volume > 1 && !gainNode) {
     initAdvancedAudioFeatures()
   }
   if (gainNode) {
-    if (audio) audio.volume = 1
     gainNode.gain.value = volume
-  } else if (audio) {
-    audio.volume = volume
+  } else {
+    for (const channel of channels.values()) channel.audio.volume = Math.min(1, volume) * channel.volume
   }
 }
 

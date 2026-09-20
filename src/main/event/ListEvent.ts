@@ -62,9 +62,11 @@ export class Event extends EventEmitter {
    * @param isRemote 是否属于远程操作
    */
   async list_remove(ids: string[], isRemote: boolean = false) {
-    await global.lx.worker.dbService.removeUserLists(ids)
+    const entries = await global.lx.worker.dbService.removeUserLists(ids, !isRemote)
     this.emit('list_remove', ids, isRemote)
     this.list_changed()
+    if (entries.length) this.list_trash_changed()
+    return entries
   }
 
   /**
@@ -137,9 +139,11 @@ export class Event extends EventEmitter {
    * @param isRemote 是否属于远程操作
    */
   async list_music_remove(listId: string, ids: string[], isRemote: boolean = false) {
-    await global.lx.worker.dbService.musicsRemove(listId, ids)
+    const entries = await global.lx.worker.dbService.musicsRemove(listId, ids, !isRemote)
     this.emit('list_music_remove', listId, ids, isRemote)
     this.list_changed()
+    if (entries.length) this.list_trash_changed()
+    return entries
   }
 
   /**
@@ -159,9 +163,25 @@ export class Event extends EventEmitter {
    * @param isRemote 是否属于远程操作
    */
   async list_music_clear(ids: string[], isRemote: boolean = false) {
-    await global.lx.worker.dbService.musicsClear(ids)
+    const entries = await global.lx.worker.dbService.musicsClear(ids, !isRemote)
     this.emit('list_music_clear', ids, isRemote)
     this.list_changed()
+    if (entries.length) this.list_trash_changed()
+    return entries
+  }
+
+  list_trash_changed() {
+    this.emit('list_trash_changed')
+  }
+
+  async list_trash_restore(ids: string[]) {
+    const result = await global.lx.worker.dbService.restoreListTrash(ids)
+    // Broadcast the committed changes through the same channels used by caches and sync.
+    for (const { position, listInfo } of result.createdLists) this.emit('list_create', position, [listInfo], false)
+    for (const { listId, musicInfos } of result.musicLists) this.emit('list_music_overwrite', listId, musicInfos, false)
+    if (result.restoredIds.length) this.list_changed()
+    this.list_trash_changed()
+    return result.restoredIds
   }
 
   /**
@@ -181,8 +201,8 @@ export class Event extends EventEmitter {
 
 type EventMethods = Omit<EventType, keyof EventEmitter>
 declare class EventType extends Event {
-  on<K extends keyof EventMethods>(event: K, listener: EventMethods[K]): this
-  once<K extends keyof EventMethods>(event: K, listener: EventMethods[K]): this
-  off<K extends keyof EventMethods>(event: K, listener: EventMethods[K]): this
+  on<K extends keyof EventMethods>(event: K, listener: (...args: Parameters<EventMethods[K]>) => void): this
+  once<K extends keyof EventMethods>(event: K, listener: (...args: Parameters<EventMethods[K]>) => void): this
+  off<K extends keyof EventMethods>(event: K, listener: (...args: Parameters<EventMethods[K]>) => void): this
 }
 export type Type = Omit<EventType, keyof Omit<EventEmitter, 'on' | 'off' | 'once'>>

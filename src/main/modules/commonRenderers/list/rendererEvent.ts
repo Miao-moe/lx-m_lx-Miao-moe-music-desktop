@@ -12,8 +12,8 @@ export default () => {
   mainHandle<LX.List.ListActionAdd>(PLAYER_EVENT_NAME.list_add, async({ params: { position, listInfos } }) => {
     await global.lx.event_list.list_create(position, listInfos, false)
   })
-  mainHandle<LX.List.ListActionRemove>(PLAYER_EVENT_NAME.list_remove, async({ params: ids }) => {
-    await global.lx.event_list.list_remove(ids, false)
+  mainHandle<LX.List.ListActionRemove, LX.List.TrashEntry[]>(PLAYER_EVENT_NAME.list_remove, async({ params: ids }) => {
+    return global.lx.event_list.list_remove(ids, false)
   })
   mainHandle<LX.List.ListActionUpdate>(PLAYER_EVENT_NAME.list_update, async({ params: listInfos }) => {
     await global.lx.event_list.list_update(listInfos, false)
@@ -30,8 +30,8 @@ export default () => {
   mainHandle<LX.List.ListActionMusicMove>(PLAYER_EVENT_NAME.list_music_move, async({ params: { fromId, toId, musicInfos, addMusicLocationType } }) => {
     await global.lx.event_list.list_music_move(fromId, toId, musicInfos, addMusicLocationType, false)
   })
-  mainHandle<LX.List.ListActionMusicRemove>(PLAYER_EVENT_NAME.list_music_remove, async({ params: { listId, ids } }) => {
-    await global.lx.event_list.list_music_remove(listId, ids, false)
+  mainHandle<LX.List.ListActionMusicRemove, LX.List.TrashEntry[]>(PLAYER_EVENT_NAME.list_music_remove, async({ params: { listId, ids } }) => {
+    return global.lx.event_list.list_music_remove(listId, ids, false)
   })
   mainHandle<LX.List.ListActionMusicUpdate>(PLAYER_EVENT_NAME.list_music_update, async({ params: musicInfos }) => {
     await global.lx.event_list.list_music_update(musicInfos, false)
@@ -42,8 +42,14 @@ export default () => {
   mainHandle<LX.List.ListActionMusicOverwrite>(PLAYER_EVENT_NAME.list_music_overwrite, async({ params: { listId, musicInfos } }) => {
     await global.lx.event_list.list_music_overwrite(listId, musicInfos, false)
   })
-  mainHandle<LX.List.ListActionMusicClear>(PLAYER_EVENT_NAME.list_music_clear, async({ params: listId }) => {
-    await global.lx.event_list.list_music_clear(listId, false)
+  mainHandle<LX.List.ListActionMusicClear, LX.List.TrashEntry[]>(PLAYER_EVENT_NAME.list_music_clear, async({ params: listId }) => {
+    return global.lx.event_list.list_music_clear(listId, false)
+  })
+  mainHandle<LX.List.TrashEntry[]>(PLAYER_EVENT_NAME.list_trash_get, async() => global.lx.worker.dbService.getListTrash())
+  mainHandle<string[], string[]>(PLAYER_EVENT_NAME.list_trash_restore, async({ params: ids }) => global.lx.event_list.list_trash_restore(ids))
+  mainHandle<string[]>(PLAYER_EVENT_NAME.list_trash_delete, async({ params: ids }) => {
+    await global.lx.worker.dbService.deleteListTrash(ids)
+    global.lx.event_list.list_trash_changed()
   })
   mainHandle<LX.List.ListActionCheckMusicExistList, boolean>(PLAYER_EVENT_NAME.list_music_check_exist, async({ params: { listId, musicInfoId } }) => {
     return global.lx.worker.dbService.checkListExistMusic(listId, musicInfoId)

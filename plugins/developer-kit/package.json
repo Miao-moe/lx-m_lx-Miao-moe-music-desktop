@@ -1,0 +1,8 @@
+{
+  "name": "lx-m-plugin-devkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LX-M 独立插件开发工具包",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" }
+}

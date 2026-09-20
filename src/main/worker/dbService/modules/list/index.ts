@@ -1,5 +1,6 @@
 import { LIST_IDS } from '@common/constants'
 import { arrPush, arrPushByPosition, arrUnshift } from '@common/utils/common'
+import { archiveListDeletion, restoreListTrashData } from './recycleBin'
 import {
   deleteUserLists,
   insertUserLists,
@@ -20,6 +21,8 @@ import {
   updateUserLists as updateUserListsFromDB,
   getMusicInfoOrder,
 } from './dbHelper'
+
+export { getListTrash, deleteListTrash } from './recycleBin'
 
 let userLists: LX.DBService.UserListInfo[]
 let musicLists = new Map<string, LX.Music.MusicInfo[]>()
@@ -97,9 +100,20 @@ export const createUserLists = (position: number, lists: LX.List.UserListInfo[])
  * 批量删除列表
  * @param ids 列表ids
  */
-export const removeUserLists = (ids: string[]) => {
-  deleteUserLists(ids)
+export const removeUserLists = (ids: string[], recycle = false): LX.List.TrashEntry[] => {
+  ids = ids.filter(id => id !== LIST_IDS.DEFAULT && id !== LIST_IDS.LOVE && id !== LIST_IDS.TEMP)
+  const remove = () => { deleteUserLists(ids) }
+  const entries = recycle ? archiveListDeletion('list', ids, undefined, remove) : (remove(), [])
   userLists &&= queryAllUserList()
+  for (const id of ids) musicLists.delete(id)
+  return entries
+}
+
+export const restoreListTrash = (ids: string[]) => {
+  const result = restoreListTrashData(ids)
+  userLists = queryAllUserList()
+  for (const { listId, musicInfos } of result.musicLists) musicLists.set(listId, musicInfos)
+  return result
 }
 
 /**
@@ -227,12 +241,14 @@ export const musicsAdd = (listId: string, musicInfos: LX.Music.MusicInfo[], addM
  * @param listId 列表Id
  * @param ids 要删除歌曲的id
  */
-export const musicsRemove = (listId: string, ids: string[]) => {
+export const musicsRemove = (listId: string, ids: string[], recycle = false): LX.List.TrashEntry[] => {
   let targetList = getListMusics(listId)
-  if (!targetList.length) return
-  removeMusicInfos(listId, ids)
+  if (!targetList.length) return []
+  const remove = () => { removeMusicInfos(listId, ids) }
+  const entries = recycle ? archiveListDeletion('songs', [listId], ids, remove) : (remove(), [])
   const idsSet = new Set<string>(ids)
   musicLists.set(listId, targetList.filter(mInfo => !idsSet.has(mInfo.id)))
+  return entries
 }
 
 /**
@@ -304,13 +320,15 @@ export const musicsUpdate = (musicInfos: LX.List.ListActionMusicUpdate) => {
  * 清空列表内的歌曲
  * @param listId 列表Id
  */
-export const musicsClear = (ids: string[]) => {
-  removeMusicInfoByListId(ids)
+export const musicsClear = (ids: string[], recycle = false): LX.List.TrashEntry[] => {
+  const remove = () => { removeMusicInfoByListId(ids) }
+  const entries = recycle ? archiveListDeletion('songs', ids, undefined, remove) : (remove(), [])
   for (const id of ids) {
     const targetList = musicLists.get(id)
     if (!targetList) continue
     targetList.splice(0, targetList.length)
   }
+  return entries
 }
 
 /**

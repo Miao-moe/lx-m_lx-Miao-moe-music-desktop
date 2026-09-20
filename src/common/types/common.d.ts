@@ -108,12 +108,13 @@ declare namespace LX {
     prev: boolean
   }
 
-  type UpdateStatus = 'downloaded' | 'downloading' | 'error' | 'checking' | 'idle'
+  type UpdateStatus = 'downloaded' | 'downloading' | 'verifying' | 'installing' | 'error' | 'checking' | 'idle'
   interface VersionInfo {
     version: string
     desc: string
   }
   interface UpdateProgressInfo {
+    phase?: 'downloading' | 'verifying' | 'installing'
     progress: number
     transferred: number
     total: number
@@ -125,5 +126,6 @@ declare namespace LX {
     fileName: string
     size: number
     digest: string
+    installAfterDownload?: boolean
   }
 }

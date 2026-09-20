@@ -336,7 +336,9 @@ const randomNextMusicInfo = {
   info: null as LX.Player.PlayMusicInfo | null,
   // index: -1,
 }
+let nextMusicRequestId = 0
 export const resetRandomNextMusicInfo = () => {
+  nextMusicRequestId++
   if (randomNextMusicInfo.info) {
     randomNextMusicInfo.info = null
     // randomNextMusicInfo.index = -1
@@ -345,6 +347,7 @@ export const resetRandomNextMusicInfo = () => {
 
 export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | null> => {
   if (playMusicInfo.musicInfo == null) return null
+  const requestId = nextMusicRequestId
 
   if (randomNextMusicInfo.info) return randomNextMusicInfo.info
 
@@ -384,6 +387,8 @@ export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | n
     isNext: true,
   })
 
+  // A queue change must also invalidate an in-flight random candidate lookup.
+  if (requestId !== nextMusicRequestId) return null
   if (!filteredList.length) return null
   // let currentIndex: number = filteredList.indexOf(currentList[playInfo.playerPlayIndex])
   if (playerIndex == -1 && filteredList.length) playerIndex = 0
@@ -431,7 +436,7 @@ const handlePlayNext = (playMusicInfo: LX.Player.PlayMusicInfo, preloadedUrl?: s
 }
 
 export const playPreloadedNext = (nextPlayMusicInfo: LX.Player.PlayMusicInfo, url: string): boolean => {
-  if (!playMusicInfo.musicInfo || !url) return false
+  if (window.lx.isPlayedStop || !playMusicInfo.musicInfo || !url) return false
   handlePlayNext(nextPlayMusicInfo, url)
   return true
 }

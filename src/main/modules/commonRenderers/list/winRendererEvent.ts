@@ -37,8 +37,10 @@ export const registerRendererEvents = (sendEvent: <T = any>(name: string, params
     sendEvent<LX.List.ListActionMusicOverwrite>(PLAYER_EVENT_NAME.list_music_overwrite, { listId, musicInfos })
   }
   const list_music_clear = async(ids: string[]) => {
-    sendEvent<LX.List.ListActionMusicClear>(PLAYER_EVENT_NAME.list_data_overwire, ids)
+    sendEvent<LX.List.ListActionMusicClear>(PLAYER_EVENT_NAME.list_music_clear, ids)
   }
+  const list_trash_changed = () => { sendEvent(PLAYER_EVENT_NAME.list_trash_changed) }
+  global.lx.event_list.on('list_trash_changed', list_trash_changed)
   global.lx.event_list.on('list_data_overwrite', list_data_overwrite)
   global.lx.event_list.on('list_create', list_create)
   global.lx.event_list.on('list_remove', list_remove)
@@ -53,6 +55,7 @@ export const registerRendererEvents = (sendEvent: <T = any>(name: string, params
   global.lx.event_list.on('list_music_clear', list_music_clear)
 
   return () => {
+    global.lx.event_list.off('list_trash_changed', list_trash_changed)
     global.lx.event_list.off('list_data_overwrite', list_data_overwrite)
     global.lx.event_list.off('list_create', list_create)
     global.lx.event_list.off('list_remove', list_remove)

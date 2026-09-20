@@ -8,7 +8,7 @@ dd
 
 dd
   h3#other_tray_theme {{ $t('setting__other_tray_theme') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       v-for="item in trayThemeList" :id="'setting_tray_theme_' + item.id" :key="item.id" :model-value="appSetting['tray.themeId']" name="setting_tray_theme"
       need :label="item.label" :value="item.id" @update:model-value="updateSetting({'tray.themeId': $event})")
@@ -35,7 +35,7 @@ dd
     .p
       | {{ $t('setting__other_lyric_raw_label') }}
       span.auto-hidden {{ lyricRawCount }}
-    .p
+    .p.setting-actions
       base-btn.btn(min :disabled="isDisabledOtherSourceCacheClear" @click="handleClearOtherSourceCache") {{ $t('setting__other_other_source_clear_btn') }}
       base-btn.btn(min :disabled="isDisabledMusicUrlCacheClear" @click="handleClearMusicUrlCache") {{ $t('setting__other_music_url_clear_btn') }}
       base-btn.btn(min :disabled="isDisabledLyricRawCacheClear" @click="handleClearLyricRawCache") {{ $t('setting__other_lyric_raw_clear_btn') }}

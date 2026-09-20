@@ -457,8 +457,10 @@ export default {
 
   search(text, page, limit = 20) {
     return httpFetch(`http://search.kuwo.cn/r.s?all=${encodeURIComponent(text)}&pn=${page - 1}&rn=${limit}&rformat=json&encoding=utf8&ver=mbox&vipver=MUSIC_8.7.7.0_BCS37&plat=pc&devid=28156413&ft=playlist&pay=0&needliveshow=0`)
-      .promise.then(({ body }) => {
-        body = objStr2JSON(body)
+      .promise.then(({ statusCode, body }) => {
+        if (statusCode !== 200) throw new Error('Search failed')
+        if (typeof body === 'string') body = objStr2JSON(body)
+        if (!Array.isArray(body?.abslist)) throw new Error('Invalid search response')
         // console.log(body)
         return {
           list: body.abslist.map(item => {

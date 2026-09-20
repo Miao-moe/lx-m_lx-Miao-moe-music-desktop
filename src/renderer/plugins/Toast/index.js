@@ -6,12 +6,25 @@ let currentToast = null
 /**
  * 在屏幕中间显示一个短暂的提示（Toast）
  * @param message 提示内容
- * @param autoCloseTime 自动关闭时间（毫秒）
+ * @param {{ autoCloseTime?: number, actionText?: string, onAction?: (() => void | Promise<void>) | null }} options
  */
-export default (message, { autoCloseTime = 1500 } = {}) => {
+export default (message, { autoCloseTime = 1500, actionText = '', onAction = null } = {}) => {
   if (currentToast) currentToast.cancel()
 
+  let timer = null
+  const pause = () => { clearTimeout(timer) }
+  const resume = () => {
+    pause()
+    timer = setTimeout(() => { toast.cancel() }, autoCloseTime)
+  }
   let app = createApp(Toast, {
+    actionText,
+    onAction: async() => {
+      pause()
+      try { await onAction?.() } finally { toast.cancel() }
+    },
+    pause,
+    resume,
     afterLeave() {
       app.unmount()
       app = null
@@ -24,7 +37,6 @@ export default (message, { autoCloseTime = 1500 } = {}) => {
 
   document.body.appendChild(instance.$el)
 
-  let timer = null
   const toast = {
     cancel() {
       if (currentToast !== toast) return
@@ -34,9 +46,7 @@ export default (message, { autoCloseTime = 1500 } = {}) => {
     },
   }
   currentToast = toast
-  timer = setTimeout(() => {
-    toast.cancel()
-  }, autoCloseTime)
+  resume()
 
   return toast
 }

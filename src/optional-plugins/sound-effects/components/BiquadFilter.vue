@@ -164,7 +164,7 @@ onMounted(() => {
   display: flex;
   flex-flow: row wrap;
   margin-top: 10px;
-  gap: 10px;
+  gap: 8px;
 }
 
 </style>

@@ -11,17 +11,40 @@ const mockGitHub = async(app, offline = false) => {
     global.__pluginCatalogOverride = null
     global.__pluginPackageOverrides = {}
     const root = 'https://raw.githubusercontent.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/master/plugins/store/'
-    session.fromPartition('persist:win-main').protocol.handle('https', request => {
-      if (!request.url.startsWith(root)) return net.fetch(request, { bypassCustomProtocolHandlers: true })
-      global.__pluginRequests.push(request.url)
-      if (global.__pluginOffline) return new Response('Unavailable', { status: 503 })
-      const relative = decodeURIComponent(request.url.slice(root.length))
-      if (relative === 'catalog.json' && global.__pluginCatalogOverride) return new Response(JSON.stringify(global.__pluginCatalogOverride), { headers: { 'content-type': 'application/json' } })
-      if (global.__pluginPackageOverrides[relative]) return new Response(Buffer.from(global.__pluginPackageOverrides[relative], 'base64'), { headers: { 'content-type': 'application/octet-stream' } })
+    const resolve = url => {
+      if (!url.startsWith(root)) return null
+      global.__pluginRequests.push(url)
+      if (global.__pluginOffline) return { data: Buffer.from('Unavailable'), statusCode: 503 }
+      const relative = decodeURIComponent(url.slice(root.length))
+      if (relative === 'catalog.json' && global.__pluginCatalogOverride) return { data: Buffer.from(JSON.stringify(global.__pluginCatalogOverride)), mimeType: 'application/json' }
+      if (global.__pluginPackageOverrides[relative]) return { data: Buffer.from(global.__pluginPackageOverrides[relative], 'base64'), mimeType: 'application/octet-stream' }
       const filename = path.resolve(catalogRoot, relative)
-      if (!filename.startsWith(catalogRoot + path.sep)) return new Response('', { status: 400 })
-      return new Response(fs.readFileSync(filename), { headers: { 'content-type': relative.endsWith('.json') ? 'application/json' : 'application/octet-stream' } })
-    })
+      if (!filename.startsWith(catalogRoot + path.sep)) return { data: Buffer.alloc(0), statusCode: 400 }
+      return { data: fs.readFileSync(filename), mimeType: relative.endsWith('.json') ? 'application/json' : 'application/octet-stream' }
+    }
+    const protocol = session.fromPartition('persist:win-main').protocol
+    if (typeof protocol.handle === 'function') {
+      protocol.handle('https', request => {
+        const response = resolve(request.url)
+        return response ? new Response(response.data, { status: response.statusCode ?? 200, headers: { 'content-type': response.mimeType ?? 'text/plain' } })
+          : net.fetch(request, { bypassCustomProtocolHandlers: true })
+      })
+    } else {
+      // Electron 22 has the callback protocol API and no net.fetch/Response.
+      protocol.interceptBufferProtocol('https', (request, callback) => {
+        const response = resolve(request.url)
+        if (response) return callback(response)
+        const upstream = net.request({ url: request.url, method: request.method, session: session.defaultSession })
+        upstream.on('response', incoming => {
+          const chunks = []
+          incoming.on('data', chunk => chunks.push(chunk))
+          incoming.on('end', () => callback({ data: Buffer.concat(chunks), statusCode: incoming.statusCode, headers: incoming.headers }))
+          incoming.on('error', () => callback({ error: -2 }))
+        })
+        upstream.on('error', () => callback({ error: -2 }))
+        upstream.end()
+      })
+    }
   }, { catalogRoot, offline })
 }
 const openStore = async page => {

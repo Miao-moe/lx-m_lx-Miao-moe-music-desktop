@@ -1,10 +1,9 @@
 <template lang="pug">
 div(:class="$style.footerLeftControlBtns")
   button(:class="[$style.footerLeftControlBtn, $style.lrcBtn]" :aria-label="toggleDesktopLyricBtnTitle" @click="toggleDesktopLyric" @contextmenu="toggleLockDesktopLyric")
-    svg(v-show="appSetting['desktopLyric.enable']" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="125%" viewBox="0 0 512 512" space="preserve")
-      use(xlink:href="#icon-desktop-lyric-on")
-    svg(v-show="!appSetting['desktopLyric.enable']" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="125%" viewBox="0 0 512 512" space="preserve")
-      use(xlink:href="#icon-desktop-lyric-off")
+    svg(xmlns="http://www.w3.org/2000/svg" height="100%" viewBox="0 0 24 24" :style="{ opacity: appSetting['desktopLyric.enable'] ? 1 : 'var(--player-control-opacity, .7)' }")
+      use(xlink:href="#icon-mini-player")
+  common-sound-effect-btn
   common-visualization-toggle(:class="$style.footerLeftControlBtn")
   common-plugin-contributions(name="playDetailControls" :class="$style.footerLeftControlBtn")
   button(:class="[$style.footerLeftControlBtn, { [$style.active]: isShowLrcSelectContent }]" :aria-label="$t('lyric__select')" @click="toggleVisibleLrc")
@@ -13,7 +12,6 @@ div(:class="$style.footerLeftControlBtns")
   button(:class="[$style.footerLeftControlBtn, {[$style.active]: isShowPlayComment}]" :aria-label="$t('comment__show')" @click="toggleVisibleComment")
     svg(version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="95%" viewBox="0 0 24 24" space="preserve")
       use(xlink:href="#icon-comment")
-  common-sound-effect-btn
   common-playback-rate-btn
   common-volume-btn
   common-toggle-play-mode-btn(:class="$style.playModeBtn")

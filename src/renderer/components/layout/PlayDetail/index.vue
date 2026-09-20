@@ -35,7 +35,7 @@
           </div>
         </div>
       </div>
-      <LyricPlayer v-if="visibled" data-detail-part="lyrics" />
+      <LyricPlayer v-if="visibled" data-detail-part="lyrics" :data-ambient-lyrics="appSetting['ui.ambientBackground'] && !pluginPlayDetail ? '' : null" />
       <music-comment v-if="visibled" :class="$style.comment" :show="isShowPlayComment" :music-info="playMusicInfo.musicInfo" @close="hideComment" />
     </div>
     <play-bar v-if="visibled" data-detail-part="controls" />
@@ -201,8 +201,6 @@ export default {
 }
 .ambientDetail {
   background-color: transparent;
-  --lyric-idle-color: var(--color-font);
-  --lyric-idle-opacity: .78;
   .bg { display: none; }
 }
 .bg {

@@ -210,6 +210,7 @@ function replacementFixture(initial, fail = false) {
   const cache = new Map([['list', initial]])
   const calls = []
   const load = require('./helpers/load-typescript.cjs')({
+    '../recycleBin': { deleteWithUndo: task => task() },
     '@common/utils/vueTools': { toRaw: require('vue').toRaw },
     '@common/rendererIpc': {
       rendererInvoke: async(channel, data) => {

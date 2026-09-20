@@ -8,6 +8,7 @@ interface EditorState {
   saved: boolean
   downloadId: string
   active: boolean
+  visible: boolean
 }
 
 export const editor = reactive<EditorState>({
@@ -18,4 +19,5 @@ export const editor = reactive<EditorState>({
   saved: false,
   downloadId: '',
   active: true,
+  visible: false,
 })

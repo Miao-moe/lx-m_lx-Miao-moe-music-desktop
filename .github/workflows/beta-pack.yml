@@ -118,22 +118,11 @@ jobs:
           NPM_CACHE: ${{ env.NPM_CACHE }}
         uses: ./.github/actions/setup
 
-      - name: Prepare win7 undici env
-        run: |
-          npm install undici@5
-          Set-Content -Path .\src\common\utils\request.ts -Value "export * from './request_node16'"
+      - name: Build isolated Win7 edition (Electron 22.3.27)
+        run: npm run build:win7
 
-      - name: Build src code
-        env:
-          BUILD_WIN7: true
-        run: |
-          git status --porcelain
-          npm run build
-
-      - name: Prepare win7 electron env
-        run: |
-          npm install electron@22
-          pip.exe install setuptools
+      - name: Verify Win7 runtime and core regressions
+        run: npm run test:win7 -- --core
 
       - name: Build Package win7 Setup x64
         run: npm run pack:win7:setup:x64
@@ -141,7 +130,15 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: lx-music-desktop-win7_x64-Setup
-          path: build/*win7_x64-Setup.exe
+          path: build/win7/artifacts/*win7_x64-Setup.exe
+
+      - name: Build Package win7 Setup x86
+        run: npm run pack:win7:setup:x86
+      - name: Upload Artifact win7 Setup x86
+        uses: actions/upload-artifact@v7
+        with:
+          name: lx-music-desktop-win7_x86-Setup
+          path: build/win7/artifacts/*win7_x86-Setup.exe
 
       - name: Build Package win7 7z x64
         run: npm run pack:win7:7z:x64
@@ -149,7 +146,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: lx-music-desktop-win7_x64-green
-          path: build/*win7_x64-green.7z
+          path: build/win7/artifacts/*win7_x64-green.7z
 
       - name: Build Package win7 7z x86
         run: npm run pack:win7:7z:x86
@@ -157,11 +154,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: lx-music-desktop-win7_x86-green
-          path: build/*win7_x86-green.7z
+          path: build/win7/artifacts/*win7_x86-green.7z
 
       - name: Generate file MD5
         run: |
-          cd build
+          cd build/win7/artifacts
           Get-FileHash *.exe,*.7z -Algorithm MD5 | Format-List
 
   Mac:

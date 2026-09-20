@@ -29,6 +29,7 @@ function fixture(read) {
     './action': actions,
     './state': { allMusicList: cache, userLists: [] },
     '../localMutationLock': { withLocalListLocks: async(_ids, task) => task() },
+    '../recycleBin': { deleteWithUndo: task => task() },
   }
   vm.runInNewContext(compiled, { exports, require: name => { assert.ok(name in modules, name); return modules[name] } })
   exports.registerListAction({ 'list.addMusicLocationType': 'bottom' })

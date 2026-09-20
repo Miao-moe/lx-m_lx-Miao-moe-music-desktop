@@ -32,7 +32,7 @@
             <div class="list-item-cell name" style="flex: 0 0 var(--music-column-name);" data-music-cell="name">
               <span class="select name" :aria-label="getName(item)">{{ getName(item) }}</span>
             </div>
-            <div class="list-item-cell" style="flex: 0 0 var(--music-column-progress);" data-music-cell="progress">{{ item.progress }}%<span v-if="item.status == downloadStatus.RUN && item.speed"> - {{ item.speed }}/s</span></div>
+            <div class="list-item-cell" style="flex: 0 0 var(--music-column-progress);" data-music-cell="progress">{{ item.total > 0 || item.isComplate ? `${Math.max(0, item.progress)}%` : $t('download__downloaded_size', { size: sizeFormate(item.downloaded) }) }}<span v-if="item.status == downloadStatus.RUN && item.speed"> - {{ item.speed }}/s</span></div>
             <div class="list-item-cell" style="flex: 0 0 var(--music-column-status);" :aria-label="item.statusText" data-music-cell="status">{{ item.statusText }}</div>
             <div class="list-item-cell" style="flex: 0 0 var(--music-column-quality);" data-music-cell="quality">{{ getTypeName(item.metadata.quality) }}</div>
             <div class="list-item-cell" style="flex: 0 0 var(--music-column-action); padding-left: 0; padding-right: 0;" data-music-cell="action">
@@ -56,6 +56,7 @@
     </common-list-loading>
     <common-list-add-modal v-model:show="isShowListAdd" :music-info="selectedAddMusicInfo" teleport="#view" />
     <common-list-add-multiple-modal v-model:show="isShowListAddMultiple" :music-list="selectedList" teleport="#view" @confirm="removeAllSelect" />
+    <TagEditorModal />
   </div>
 </template>
 
@@ -74,10 +75,12 @@ import { downloadStatus } from '@renderer/store/download/state'
 import { appSetting } from '@renderer/store/setting'
 import useMusicListColumns from '@renderer/utils/compositions/useMusicListColumns'
 import { isPlay } from '@renderer/store/player/state'
-import { formatMusicName } from '@renderer/utils'
+import { formatMusicName, sizeFormate } from '@renderer/utils'
+import TagEditorModal from './TagEditorModal.vue'
 
 export default {
   name: 'Download',
+  components: { TagEditorModal },
   setup() {
     const columnLayout = useMusicListColumns('download')
     const listRef = ref()
@@ -113,6 +116,7 @@ export default {
       handlePauseTask,
       handleRemoveTask,
       handleOpenFile,
+      handleRelocateFile,
     } = useTaskActions({ list, removeAllSelect, selectedList })
 
     const {
@@ -133,6 +137,7 @@ export default {
       handlePauseTask,
       handleRemoveTask,
       handleOpenFile,
+      handleRelocateFile,
       handlePlayMusic,
       handlePlayMusicLater,
       handleShowMusicAddModal,
@@ -254,6 +259,7 @@ export default {
 
       getName,
       getTypeName,
+      sizeFormate,
       isPlay,
       appSetting,
       isLoading,

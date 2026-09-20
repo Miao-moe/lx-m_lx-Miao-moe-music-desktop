@@ -105,7 +105,7 @@ const validateSourceManifest = (manifest, files) => {
     !Array.isArray(manifest.files) || manifest.files.length !== files.size || manifest.files.length > MAX_SOURCE_FILES) throw new Error('Invalid source manifest')
   const names = new Set()
   for (const file of manifest.files) {
-    if (!file || !validPath(file.path) || file.path === 'plugin.json' || names.has(file.path.toLowerCase()) || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || !/^[a-f0-9]{64}$/.test(file.sha256)) throw new Error('Invalid source file')
+    if (!file || !validPath(file.path) || /^plugin\.json(?:\/|$)/i.test(file.path) || names.has(file.path.toLowerCase()) || !Number.isSafeInteger(file.bytes) || file.bytes < 0 || !/^[a-f0-9]{64}$/.test(file.sha256)) throw new Error('Invalid source file')
     names.add(file.path.toLowerCase())
     const data = files.get(file.path)
     if (!data || data.length !== file.bytes || hash(data) !== file.sha256) throw new Error('Source checksum mismatch')
@@ -150,14 +150,24 @@ const unpackSource = async bytes => {
   return { manifest, files }
 }
 
-const packSource = async(manifest, files) => {
+const prepareSource = (manifest, files) => {
   const complete = { ...manifest, format: 'lx-m-plugin-source', formatVersion: 1, files: [...files].map(([path, data]) => ({ path, bytes: data.length, sha256: hash(data) })) }
   validateSourceManifest(complete, files)
+  const manifestBytes = Buffer.from(JSON.stringify(complete, null, 2) + '\n')
+  if (manifestBytes.length > 4 * 1024 * 1024) throw new Error('Source manifest is too large')
+  const total = complete.files.reduce((sum, file) => sum + file.bytes, manifestBytes.length)
+  if (files.size + 1 > MAX_SOURCE_FILES || total > MAX_SOURCE_UNPACKED) throw new Error('Source package exceeds its size limit')
+  return { manifest: complete, files, manifestBytes }
+}
+
+const packPreparedSource = async({ files, manifestBytes }) => {
   const archive = new Map(files)
-  archive.set('plugin.json', Buffer.from(JSON.stringify(complete, null, 2) + '\n'))
+  archive.set('plugin.json', manifestBytes)
   const bytes = await writeZip(archive)
   await unpackSource(bytes)
   return bytes
 }
 
-module.exports = { MAX_SOURCE_BYTES, MAX_SOURCE_UNPACKED, MAX_SOURCE_FILES, hash, validPath, readZip, writeZip, unpackSource, packSource }
+const packSource = async(manifest, files) => packPreparedSource(prepareSource(manifest, files))
+
+module.exports = { MAX_SOURCE_BYTES, MAX_SOURCE_UNPACKED, MAX_SOURCE_FILES, hash, validPath, readZip, writeZip, unpackSource, prepareSource, packPreparedSource, packSource }

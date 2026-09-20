@@ -18,17 +18,17 @@ dd
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_ui_smooth_anim_tip')")
 
-dd(data-setting-search="setting__advanced_ui_anim_speed" data-setting-search-depends="setting_advanced_ui_smooth_anim")
-    .p.gap-top
-      span(style="display: inline-block; width: 130px;") {{ $t('setting__advanced_ui_anim_speed') }}
+common-setting-reveal(tag="dd" :show="appSetting['ui.smoothAnimation']" data-setting-search="setting__advanced_ui_anim_speed" depends="setting_advanced_ui_smooth_anim")
+  .p.gap-top.setting-slider-row
+    .setting-label
+      span {{ $t('setting__advanced_ui_anim_speed') }}
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_ui_anim_speed_tip')")
-      span(style="margin-left: 8px; color: var(--color-500); font-size: 12px;") {{ appSetting['ui.animationSpeed'] }}x
-      base-slider-bar(
-        :value="appSetting['ui.animationSpeed']"
-        :min="0.5" :max="1.5" :step="0.1"
-        style="display: inline-block; width: 200px; vertical-align: middle; margin-left: 12px;"
-        @change="updateSetting({ 'ui.animationSpeed': $event })"
-      )
+    span.setting-value {{ appSetting['ui.animationSpeed'] }}x
+    base-slider-bar.setting-slider(
+      :value="appSetting['ui.animationSpeed']"
+      :min="0.5" :max="1.5" :step="0.1"
+      @change="updateSetting({ 'ui.animationSpeed': $event })"
+    )
 
 dd
   h3#advanced_background {{ $t('setting__advanced_background') }}
@@ -39,7 +39,7 @@ dd
       :label="$t('setting__advanced_background_enabled')"
       @update:model-value="updateSetting({ 'ui.ambientBackground': $event })"
     )
-  template(v-if="appSetting['ui.ambientBackground']")
+  common-setting-reveal(:show="appSetting['ui.ambientBackground']" depends="setting_advanced_background_enabled")
     .gap-top
       base-checkbox(
         id="setting_advanced_background_auto_contrast"
@@ -48,7 +48,7 @@ dd
         @update:model-value="updateSetting({ 'ui.ambientBackgroundAutoContrast': $event })"
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_background_auto_contrast_tip')")
-    .p.gap-top
+    .p.gap-top.setting-row
       label(for="setting_advanced_background_quality") {{ $t('setting__advanced_background_quality') }}
       select#setting_advanced_background_quality.gap-left(:value="appSetting['ui.ambientBackgroundQuality']" @change="updateSetting({ 'ui.ambientBackgroundQuality': $event.target.value })")
         option(value="static") {{ $t('setting__advanced_background_static') }}
@@ -66,25 +66,26 @@ dd
         @update:model-value="updateSetting({ 'player.gaplessPlayback': $event })"
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_gapless_tip')")
-    .gap-top
-      base-checkbox(
-        id="setting_advanced_play_fade"
-        :model-value="appSetting['player.fadeInFadeOut']"
-        :disabled="!appSetting['player.gaplessPlayback']"
-        :label="$t('setting__advanced_play_fade')"
-        @update:model-value="updateSetting({ 'player.fadeInFadeOut': $event })"
-      )
-      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_fade_tip')")
-    .p.gap-top(v-if="appSetting['player.gaplessPlayback'] && appSetting['player.fadeInFadeOut']")
-      span(style="display: inline-block; width: 130px;") {{ $t('setting__advanced_play_fade_duration') }}
-      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_fade_duration_tip')")
-      span(style="margin-left: 8px; color: var(--color-500); font-size: 12px;") {{ appSetting['player.fadeDuration'] }} ms
-      base-slider-bar(
-        :value="appSetting['player.fadeDuration']"
-        :min="100" :max="3000" :step="100"
-        style="display: inline-block; width: 200px; vertical-align: middle; margin-left: 12px;"
-        @change="updateSetting({ 'player.fadeDuration': $event })"
-      )
+    common-setting-reveal(:show="appSetting['player.gaplessPlayback']" depends="setting_advanced_play_gapless")
+      .gap-top
+        base-checkbox(
+          id="setting_advanced_play_fade"
+          :model-value="appSetting['player.fadeInFadeOut']"
+          :label="$t('setting__advanced_play_fade')"
+          @update:model-value="updateSetting({ 'player.fadeInFadeOut': $event })"
+        )
+        svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_fade_tip')")
+      common-setting-reveal(:show="appSetting['player.fadeInFadeOut']" depends="setting_advanced_play_fade")
+        .p.gap-top.setting-slider-row
+          .setting-label
+            span {{ $t('setting__advanced_play_fade_duration') }}
+            svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_fade_duration_tip')")
+          span.setting-value {{ appSetting['player.fadeDuration'] }} ms
+          base-slider-bar.setting-slider(
+            :value="appSetting['player.fadeDuration']"
+            :min="100" :max="3000" :step="100"
+            @change="updateSetting({ 'player.fadeDuration': $event })"
+          )
 
 </template>
 

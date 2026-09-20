@@ -73,7 +73,7 @@ export interface PluginStoreSnapshot {
   catalogError: string | null
 }
 
-export type PluginTransferErrorCode = 'invalid_package' | 'incompatible' | 'read_failed' | 'write_failed' | 'changed' | 'not_installed' | 'corrupt_installation' | 'invalid_destination' | 'busy' | 'compile_failed'
+export type PluginTransferErrorCode = 'invalid_package' | 'incompatible' | 'read_failed' | 'write_failed' | 'changed' | 'not_installed' | 'corrupt_installation' | 'invalid_destination' | 'busy' | 'compile_failed' | 'builtin'
 export type PluginTransferResult<T> = { status: 'success', value: T } | { status: 'cancelled' } | { status: 'error', code: PluginTransferErrorCode, detail?: string }
 export interface PluginTransferLabels {
   title: string

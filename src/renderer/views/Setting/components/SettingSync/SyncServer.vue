@@ -1,5 +1,5 @@
 <template lang="pug">
-dd(data-setting-search="setting__sync_server" data-setting-search-depends="setting_sync_enable setting_sync_mode_server")
+common-setting-reveal(tag="dd" :show="sync.mode == 'server'" data-setting-search="setting__sync_server" depends="setting_sync_enable setting_sync_mode_server")
   h3 {{ syncEnableServerTitle }}
   div
     .p.small {{ $t('setting__sync_server_auth_code', { code: sync.server.status.code || '' }) }}
@@ -10,7 +10,7 @@ dd(data-setting-search="setting__sync_server" data-setting-search-depends="setti
       div
         base-input.gap-left(:class="$style.portInput" :model-value="appSetting['sync.server.port']" :disabled="sync.enable" type="number" :placeholder="$t('setting__sync_server_port_tip')" @update:model-value="setSyncServerPort")
 
-    .p.gap-top
+    .p.gap-top.setting-actions
       base-btn.btn(min :disabled="!sync.server.status.status" @click="refreshSyncCode") {{ $t('setting__sync_server_refresh_code') }}
       base-btn.btn(min @click="isShowDeviceListModal = true") {{ $t('setting__sync_server_show_device_list') }}
   ServerDeviceListModal(v-model="isShowDeviceListModal")

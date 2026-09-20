@@ -12,6 +12,8 @@ import { setDesktopAnalyserProvider, getRawLyricLines } from '@renderer/core/lyr
 import { getUserSoundEffectConvolutionPresetList, getUserSoundEffectEQPresetList, saveUserSoundEffectConvolutionPresetList, saveUserSoundEffectEQPresetList } from '@renderer/utils/ipc'
 import * as downloadFiles from '@renderer/utils/downloadFiles'
 import { useI18n } from '@renderer/plugins/i18n'
+import { isBuiltinPlugin } from '@common/builtinPlugins'
+import { initBuiltinPlugins } from './builtinPlugins'
 
 export const pluginRuntime = createPluginRuntime({
   player,
@@ -42,7 +44,7 @@ export const refreshPlugins = async() => {
   try { await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.refresh)) } catch (error: any) { pluginStoreError.value = error.message }
 }
 export const changePluginInstallation = async(id: PluginId, install: boolean, format: PluginPackageFormat = 'lxplugin') => {
-  if (pluginBusy[id] || pluginTransferBusy.value) return
+  if (isBuiltinPlugin(id) || pluginBusy[id] || pluginTransferBusy.value) return
   pluginBusy[id] = true
   Reflect.deleteProperty(pluginOperationErrors, id)
   try {
@@ -58,7 +60,7 @@ export const changePluginInstallation = async(id: PluginId, install: boolean, fo
 }
 
 export const transferPlugin = async(id?: PluginId) => {
-  if (pluginTransferBusy.value || Object.values(pluginBusy).some(Boolean)) return
+  if ((id && isBuiltinPlugin(id)) || pluginTransferBusy.value || Object.values(pluginBusy).some(Boolean)) return
   pluginTransferBusy.value = true
   pluginTransferNotice.value = null
   const t = useI18n()
@@ -98,6 +100,7 @@ export const transferPlugin = async(id?: PluginId) => {
 }
 
 export const initOptionalPlugins = async() => {
+  initBuiltinPlugins(pluginRuntime)
   const onProgress = () => {
     pluginTransferNotice.value = { message: useI18n()('setting__plugins_compiling'), error: false }
   }

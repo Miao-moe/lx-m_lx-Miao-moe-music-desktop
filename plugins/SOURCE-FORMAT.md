@@ -55,7 +55,7 @@ my-plugin-1.0.0.zip
 | `assets` | 可选数组：`{ "from": "src/filters", "to": "filters" }`，复制静态资源到运行目录 |
 | `browser` | 可选，独立浏览器引擎，见下文 |
 
-Vue、播放器、设置和歌词接口由宿主提供，见 [插件接口说明](README.md#新增插件)。第三方包按 npm 的目录结构放在 `vendor/main/`；依赖的嵌套 `node_modules` 结构须保留。编译器不联网安装依赖，缺失依赖会报错。
+Vue、播放器、设置和歌词接口由宿主提供，见 [插件接口说明](developer-kit/API.md)。第三方包按 npm 的目录结构放在 `vendor/main/`；依赖的嵌套 `node_modules` 结构须保留。编译器不联网安装依赖，缺失依赖会报错。
 
 编译器桥接 `vue`、`@common/utils/vueTools`、`@renderer/plugins/player`、`@renderer/store/setting`、`@renderer/store/player/state`、`@renderer/store/player/lyric`、`@renderer/store/player/playProgress`、`@renderer/utils/ipc`、`@renderer/plugins/Dialog`、`@renderer/utils/downloadFiles`、`@renderer/core/lyric`、`@lyric/store/state` 和 `@lyric/core/mainWindowChannel` 到宿主实例。其余别名导入需要对应的 sdk 源码；新插件优先使用文档中的通用 PluginModule 接口。
 
@@ -95,13 +95,14 @@ npm run build:plugins -- audio-tag-editor
 
 构建同时输出 `plugins/store/<id>/<version>/<sha256>.zip` 和 `.lxplugin`。`catalog.json` 仍是 UTF-8 文字列表，使用 `schemaVersion: 2`；插件条目的 `path`、`bytes`、`sha256` 保留 ZIP 地址、大小和哈希，`packages.lxplugin` 提供预编译包的对应信息。新版默认安装 `.lxplugin`，可在卡片中选择 ZIP；只有 ZIP 的条目仍可安装。预编译包由该源码 ZIP 编译生成，ZIP 安装与本地导入使用同一编译流程。仓库 `plugins/official/` 下的旧包和旧目录文件继续保留。
 
-从 [最小模板](template) 开始，或修改已解压的源码包后，在仓库执行：
+第三方开发推荐使用 [独立开发工具包](developer-kit/README.md)，在工具包目录执行，无需主程序仓库：
 
 ```sh
-node build-config/plugins/pack-source.cjs ./plugins/template ./my-plugin.zip
+node lx-plugin.cjs init ../my-plugin
+node lx-plugin.cjs pack ../my-plugin ../my-plugin.zip
 ```
 
-输出 ZIP 应保存在源码目录之外。此命令只生成源码包及校验清单，不生成插件运行文件。
+输出 ZIP 应保存在源码目录之外。此命令只生成源码包及校验清单，不生成插件运行文件。修改已有 ZIP 时先用 `unpack <输入.zip> <新目录>` 解包，再 pack；不要用普通压缩工具代替更新校验清单。工具包写入 `devkit` 版本标记并统一文件排序和时间戳，相同项目可重复生成相同 ZIP。仓库旧命令 `node build-config/plugins/pack-source.cjs <目录> <输出.zip>` 仍可使用，并复用同一打包实现。
 
 ## 边界
 

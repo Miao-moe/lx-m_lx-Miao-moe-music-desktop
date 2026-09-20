@@ -98,8 +98,8 @@ export const quitUpdate = () => {
   rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.quit_update)
 }
 
-export const cancelDownloadUpdate = () => {
-  rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.update_download_update, null)
+export const cancelDownloadUpdate = async() => {
+  return rendererInvoke<boolean>(WIN_MAIN_RENDERER_EVENT_NAME.update_cancel_update)
 }
 
 export const onUpdateError = (listener: LX.IpcRendererEventListenerParams<string>): RemoveListener => {
@@ -116,7 +116,7 @@ export const onUpdateProgress = (listener: LX.IpcRendererEventListenerParams<LX.
   }
 }
 
-export const onUpdateDownloaded = (listener: LX.IpcRendererEventListenerParams<{ fileName: string }>): RemoveListener => {
+export const onUpdateDownloaded = (listener: LX.IpcRendererEventListenerParams<{ fileName: string, installAfterDownload?: boolean }>): RemoveListener => {
   rendererOn(WIN_MAIN_RENDERER_EVENT_NAME.update_downloaded, listener)
   return () => {
     rendererOff(WIN_MAIN_RENDERER_EVENT_NAME.update_downloaded, listener)

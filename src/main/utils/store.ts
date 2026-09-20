@@ -42,7 +42,7 @@ class Store {
       } else store = JSON.parse(fs.readFileSync(this.filePath, 'utf8'))
     } else store = {}
 
-    if (typeof store != 'object') {
+    if (store === null || typeof store != 'object' || Array.isArray(store)) {
       if (clearInvalidConfig) store = {}
       else throw new Error('parse data error: ' + String(store))
     }
@@ -63,6 +63,7 @@ class Store {
   }
 
   override(value: Record<string, any>) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('Config must be an object')
     this.store = value
     this.writeFile()
   }
@@ -100,7 +101,7 @@ export default (name: string, isIgnoredError = true, isShowErrorAlert = true): S
     }
 
 
-    store = new Store(storePath, true)
+    store = stores[name] = new Store(storePath, true)
   }
   return store
 }

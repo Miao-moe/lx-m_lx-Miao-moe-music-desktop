@@ -9,9 +9,11 @@
       >
         <div
           class="list-item" :class="[{ [$style.active]: playerInfo.isPlayList && playerInfo.playIndex === index }, { selected: selectedIndex == index || rightClickSelectedIndex == index }, { active: selectedList.includes(item) }, { disabled: !assertApiSupport(item.source) }]"
+          :data-song-id="item.id" :data-song-dragging="songDrag?.ids.has(item.id) || undefined"
+          @pointerdown="handleSongPointerDown($event, item)" @dragstart.prevent
           @click="handleListItemClick($event, index)" @contextmenu="handleListItemRightClick($event, index, item)"
         >
-          <div class="list-item-cell no-select" :class="$style.num" style="flex: 0 0 var(--music-column-index);" data-music-cell="index">
+          <div class="list-item-cell no-select" :class="$style.num" :aria-label="$t('list__drag_tip')" style="flex: 0 0 var(--music-column-index);" data-music-cell="index">
             <transition name="play-active">
               <div v-if="playerInfo.isPlayList && playerInfo.playIndex === index" :class="$style.playIcon">
                 <span class="playing-equalizer" :class="{ paused: !playerInfo.isPlay }" aria-hidden="true"><span /><span /><span /></span>
@@ -61,9 +63,11 @@
         <div
           class="list-item"
           :class="[{ [$style.active]: playerInfo.isPlayList && playerInfo.playIndex === index }, { selected: selectedIndex == index || rightClickSelectedIndex == index }, { active: selectedList.includes(item) }, { disabled: !assertApiSupport(item.source) }]"
+          :data-song-id="item.id" :data-song-dragging="songDrag?.ids.has(item.id) || undefined"
+          @pointerdown="handleSongPointerDown($event, item)" @dragstart.prevent
           @click="handleListItemClick($event, index)" @contextmenu="handleListItemRightClick($event, index, item)"
         >
-          <div class="list-item-cell no-select" :class="$style.num" style="flex: 0 0 var(--music-column-index);" data-music-cell="index">
+          <div class="list-item-cell no-select" :class="$style.num" :aria-label="$t('list__drag_tip')" style="flex: 0 0 var(--music-column-index);" data-music-cell="index">
             <transition name="play-active">
               <div v-if="playerInfo.isPlayList && playerInfo.playIndex === index" :class="$style.playIcon">
                 <span class="playing-equalizer" :class="{ paused: !playerInfo.isPlay }" aria-hidden="true"><span /><span /><span /></span>
@@ -102,6 +106,13 @@
           <div class="list-item-cell" style="flex: 0 0 var(--music-column-time);" data-music-cell="time"><span class="no-select">{{ item.interval || '--/--' }}</span></div>
         </div>
       </base-virtualized-list>
+      <div v-if="songDrag" :class="$style.dragOverlay" data-song-drag-preview>
+        <div v-if="songDrag.showLine" :class="$style.dropLine" :style="{ top: `${songDrag.lineTop}px` }" data-song-drop-line />
+        <div :class="[$style.dragCard, { [$style.invalidDrop]: !songDrag.valid }]" :style="{ transform: `translateY(${songDrag.top}px)` }" role="status">
+          <strong>{{ songDrag.name }}</strong>
+          <span>{{ $t('list__drag_status', { count: songDrag.ids.size }) }}</span>
+        </div>
+      </div>
     </div>
     <div v-show="!list.length" :class="[$style.noItem, 'ui-state', { 'ui-state-error': loadError }]" role="status">
       <p>{{ $t(loadError ? 'list__load_failed' : 'no_item') }}</p>
@@ -118,7 +129,6 @@
     <common-download-modal v-model:show="isShowDownload" :music-info="selectedDownloadMusicInfo" teleport="#view" :list-id="listId" />
     <common-download-multiple-modal v-model:show="isShowDownloadMultiple" :list="selectedList" teleport="#view" :list-id="listId" @confirm="removeAllSelect" />
     <search-list :list="list" :visible="isShowSearchBar" @action="handleMusicSearchAction" />
-    <music-sort-modal v-model:show="isShowMusicSortModal" :music-info="selectedSortMusicInfo" :selected-num="selectedNum" @confirm="sortMusic" />
     <music-toggle-modal v-model:show="isShowMusicToggleModal" :music-info="selectedToggleMusicInfo" :preferred-source="selectedToggleSource" @toggle="toggleSource" />
     <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
   </common-list-loading>
@@ -130,7 +140,6 @@ import { clipboardWriteText } from '@common/utils/electron'
 import { assertApiSupport } from '@renderer/store/utils'
 import { getCoverKey } from '@renderer/utils/musicCover'
 import SearchList from './components/SearchList.vue'
-import MusicSortModal from './components/MusicSortModal.vue'
 import MusicToggleModal from './components/MusicToggleModal.vue'
 import useListInfo from './useListInfo'
 import useList from './useList'
@@ -138,7 +147,7 @@ import useMenu from './useMenu'
 import usePlay from './usePlay'
 import useMusicDownload from './useMusicDownload'
 import useMusicAdd from './useMusicAdd'
-import useSort from './useSort'
+import useSongDrag from './useSongDrag'
 import useMusicActions from './useMusicActions'
 import useSearch from './useSearch'
 import useListScroll from './useListScroll'
@@ -150,7 +159,6 @@ export default {
   name: 'MusicList',
   components: {
     SearchList,
-    MusicSortModal,
     MusicToggleModal,
   },
   props: {
@@ -229,14 +237,6 @@ export default {
     } = useMusicDownload({ selectedList, list })
 
     const {
-      isShowMusicSortModal,
-      selectedNum,
-      selectedSortMusicInfo,
-      handleShowSortModal,
-      sortMusic,
-    } = useSort({ props, list, selectedList, removeAllSelect })
-
-    const {
       handleShowMusicToggleModal,
       isShowMusicToggleModal,
       selectedToggleMusicInfo,
@@ -269,7 +269,6 @@ export default {
       handleSearch,
       handleShowMusicAddModal,
       handleShowMusicMoveModal,
-      handleShowSortModal,
       handleOpenMusicDetail,
       handleCopyName,
       handleDislikeMusic,
@@ -288,6 +287,18 @@ export default {
 
     const { saveListPosition, restoreScroll } = useListScroll({ props, listRef, list, handleRestoreScroll })
 
+    const { songDrag, handleSongPointerDown } = useSongDrag({
+      props,
+      list,
+      listRef,
+      listItemHeight,
+      selectedList,
+      onStart: () => { handleMenuClick(null) },
+      onSaved: () => {
+        removeAllSelect()
+        setSelectedIndex(-1)
+      },
+    })
 
     const handleListItemClick = (event, index) => {
       if (rightClickSelectedIndex.value > -1) return
@@ -371,10 +382,8 @@ export default {
       isMoveMultiple,
       selectedAddMusicInfo,
 
-      isShowMusicSortModal,
-      selectedNum,
-      selectedSortMusicInfo,
-      sortMusic,
+      songDrag,
+      handleSongPointerDown,
 
       isShowDownload,
       isShowDownloadMultiple,
@@ -443,6 +452,7 @@ export default {
   }
 }
 .num {
+  cursor: grab;
   height: 100%;
   display: flex;
   align-items: center;
@@ -484,11 +494,80 @@ export default {
   opacity: .7;
 }
 .content {
+  position: relative;
   min-height: 0;
   font-size: 14px;
   display: flex;
   flex-flow: column nowrap;
   flex: auto;
+}
+
+:global(body.playlist-song-dragging) {
+  &, * {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+}
+
+.content :global([data-song-dragging]) {
+  opacity: .4;
+  background: var(--color-primary-background-hover);
+}
+
+.dragOverlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.dropLine {
+  position: absolute;
+  left: 4px;
+  right: 12px;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 2px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: inherit;
+  }
+}
+
+.dragCard {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  max-width: calc(100% - 40px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popup);
+
+  strong, span {
+    .mixin-ellipsis-1();
+  }
+
+  span {
+    font-size: 12px;
+    color: var(--color-font-label);
+  }
+
+  &.invalidDrop {
+    opacity: .5;
+  }
 }
 
 .entityLinks {

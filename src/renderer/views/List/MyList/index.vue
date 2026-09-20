@@ -3,6 +3,11 @@
     <div :class="$style.listHeader">
       <h2 :class="$style.listsTitle">{{ $t('my_list') }}</h2>
       <div :class="$style.headerBtns">
+        <button :class="$style.listsAdd" :aria-label="$t('list_trash__title')" :title="$t('list_trash__title')" @click="isShowRecycleBin = true">
+          <svg height="70%" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7m4-7v7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
         <button :class="$style.listsAdd" :aria-label="$t('lists__new_list_btn')" @click="isShowNewList = true">
           <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="70%" viewBox="0 0 24 24" space="preserve">
             <use xlink:href="#icon-list-add" />
@@ -90,6 +95,7 @@
     <DuplicateMusicModal v-model:visible="isShowDuplicateMusicModal" :list-info="duplicateListInfo" />
     <ListSortModal v-model:visible="isShowListSortModal" :list-info="sortListInfo" />
     <ListUpdateModal v-model:visible="isShowListUpdateModal" />
+    <RecycleBinModal v-model:visible="isShowRecycleBin" />
   </div>
 </template>
 
@@ -100,6 +106,7 @@ import musicSdk from '@renderer/utils/musicSdk'
 import DuplicateMusicModal from './components/DuplicateMusicModal.vue'
 import ListSortModal from './components/ListSortModal.vue'
 import ListUpdateModal from './components/ListUpdateModal.vue'
+import RecycleBinModal from './components/RecycleBinModal.vue'
 
 import { defaultList, loveList, userLists, fetchingListStatus } from '@renderer/store/list/state'
 import { removeUserList } from '@renderer/store/list/action'
@@ -128,6 +135,7 @@ import useFolders from './useFolders'
 export default {
   name: 'MyLists',
   components: {
+    RecycleBinModal,
     DuplicateMusicModal,
     ListSortModal,
     ListUpdateModal,
@@ -180,9 +188,9 @@ export default {
       void dialog.confirm({
         message: t('lists__remove_tip', { name: listInfo.name }),
         confirmButtonText: t('lists__remove_tip_button'),
-      }).then(isRemove => {
+      }).then(async isRemove => {
         if (!isRemove) return
-        void removeUserList([listInfo.id])
+        if (!await removeUserList([listInfo.id])) return
         if (props.listId == listInfo.id) {
           handleListToggle(LIST_IDS.DEFAULT)
         }
@@ -246,6 +254,7 @@ export default {
     })
 
     return {
+      isShowRecycleBin: ref(false),
       rightClickItemIndex,
       defaultList,
       loveList,

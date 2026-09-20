@@ -1,5 +1,5 @@
 <template lang="pug">
-material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose")
+material-modal(:show="versionInfo.showModal" :close-btn="!isInstalling && !isCancelling" max-width="60%" @close="handleClose")
   main(v-if="versionInfo.isLatest" :class="$style.main")
     h2 🎉 已是最新版本 🎉
     div.scroll.select(:class="$style.info")
@@ -31,27 +31,6 @@ material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose
         base-btn(v-if="versionInfo.status == 'error'" :class="$style.btn2" @click="handleCheckUpdate") 重新检查更新
         base-btn(v-else :class="$style.btn2" disabled) 检查更新中...
         base-btn(:disabled="disabledIgnoreFailBtn" :class="$style.btn2" @click="handleIgnoreFailTipClick") 一个星期内不再提醒
-  main(v-else-if="versionInfo.status == 'downloaded'" :class="$style.main")
-    h2 🚀程序更新🚀
-
-    div.scroll.select(:class="$style.info")
-      div(:class="$style.current")
-        h3 最新版本：{{ versionInfo.newVersion?.version }}
-        h3 当前版本：{{ versionInfo.version }}
-        h3 版本变化：
-        pre(:class="$style.desc" v-text="desc")
-      div(v-if="history.length" :class="[$style.history, $style.desc]")
-        h3 历史版本：
-        pre(v-text="historyDesc")
-    div(:class="$style.footer")
-      div(:class="$style.desc")
-        p 新版本已下载完毕。
-        p
-          | 你可以点击
-          strong 立即重启更新
-          | 安装新版本，也可以稍后再更新。
-      div(:class="$style.btns")
-        base-btn(:class="$style.btn" @click="handleRestartClick") 立即重启更新
   main(v-else :class="$style.main")
     h2 🌟发现新版本🌟
     div.scroll.select(:class="$style.info")
@@ -66,22 +45,27 @@ material-modal(:show="versionInfo.showModal" max-width="60%" @close="handleClose
 
     div(:class="$style.footer")
       div(:class="$style.desc")
-        p 发现有新版本啦，你可以选择自动更新或手动更新。
+        p 点击“自动更新”后才会下载更新，完成后将自动安装并重启。
         p 手动更新可以去&nbsp;
           strong.hover.underline(aria-label="点击打开" @click="handleOpenUrl('https://github.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/releases')") 软件发布页
           | 下载。
         p 若遇到问题可以阅读
           strong.hover.underline(aria-label="点击打开" @click="handleOpenUrl('https://lyswhut.github.io/lx-music-doc/desktop/faq')") 桌面版常见问题
           | 。
-        p(v-if="progress") 当前下载进度：{{ progress }}
-        p(v-else) &nbsp;
+        p(v-if="versionInfo.status == 'downloaded'") 新版本已下载，点击“自动更新”即可安装并重启。
         p(v-if="versionInfo.updateError" role="alert") {{ versionInfo.updateError }}
         p(v-else-if="!versionInfo.newVersion?.downloadUrl") 暂无适用的自动更新安装包，请手动更新。
+      div(v-if="isUpdating" :class="$style.updateProgress" data-update-progress)
+        div(:class="$style.progressHeader" role="status")
+          span {{ progressLabel }}
+          span(v-if="progressValue != null") {{ progressValue.toFixed(1) }}%
+        div(:class="$style.progressTrack" role="progressbar" aria-label="更新进度" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="progressValue" :aria-valuetext="progressLabel")
+          div(:class="[$style.progressFill, {[$style.indeterminate]: progressValue == null}]" :style="{ width: `${progressValue ?? 32}%` }")
+        p(v-if="progress" :class="$style.progressDetail") {{ progress }}
       div(:class="$style.btns")
-        base-btn(:class="$style.btn3" @click="handleClose") 暂不更新
-        base-btn(:class="$style.btn3" @click="handleManualUpdate") 手动更新
-        base-btn(v-if="versionInfo.status == 'downloading'" :class="$style.btn3" disabled) 下载更新中...
-        base-btn(v-else :class="$style.btn3" :disabled="!versionInfo.newVersion?.downloadUrl" @click="handleDownloadClick") 自动更新
+        base-btn(:class="$style.btn3" :disabled="isInstalling || isCancelling" @click="handleClose") 暂不更新
+        base-btn(:class="$style.btn3" :disabled="isInstalling || isCancelling" @click="handleManualUpdate") 手动更新
+        base-btn(:class="$style.btn3" :disabled="isUpdating || !versionInfo.newVersion?.downloadUrl" @click="handleDownloadClick") 自动更新
 </template>
 
 <script>
@@ -89,7 +73,7 @@ import { compareVer, sizeFormate } from '@common/utils'
 import { openUrl, clipboardWriteText } from '@common/utils/electron'
 import { dialog } from '@renderer/plugins/Dialog'
 import { versionInfo } from '@renderer/store'
-import { getIgnoreVersion, saveIgnoreVersion, quitUpdate, downloadUpdate, checkUpdate } from '@renderer/utils/ipc'
+import { getIgnoreVersion, saveIgnoreVersion, quitUpdate, downloadUpdate, cancelDownloadUpdate, checkUpdate } from '@renderer/utils/ipc'
 import { formatChangeLog } from '@renderer/utils/changeLog'
 
 export default {
@@ -102,6 +86,7 @@ export default {
     return {
       ignoreVersion: null,
       disabledIgnoreFailBtn: true,
+      isCancelling: false,
     }
   },
   computed: {
@@ -121,12 +106,29 @@ export default {
     historyDesc() {
       return this.history.map(ver => formatChangeLog(ver.desc, ver.version)).join('\n\n')
     },
+    isUpdating() {
+      return this.isCancelling || ['downloading', 'verifying', 'installing'].includes(this.versionInfo.status)
+    },
+    isInstalling() {
+      return this.versionInfo.status == 'installing'
+    },
+    progressLabel() {
+      if (this.isCancelling) return '正在停止更新…'
+      if (this.versionInfo.status == 'verifying') return '下载完成，正在校验安装包…'
+      if (this.versionInfo.status == 'installing') return '正在启动安装，稍后将自动重启…'
+      return '正在下载更新…'
+    },
+    progressValue() {
+      const info = this.versionInfo.downloadProgress
+      if (this.isCancelling || this.versionInfo.status != 'downloading' || !info || info.total <= 0 || !Number.isFinite(info.progress)) return undefined
+      return Math.max(0, Math.min(100, info.progress))
+    },
     progress() {
-      return this.versionInfo.status == 'downloading'
-        ? this.versionInfo.downloadProgress
-          ? `${this.versionInfo.downloadProgress.progress.toFixed(2)}% - ${sizeFormate(this.versionInfo.downloadProgress.transferred)}/${sizeFormate(this.versionInfo.downloadProgress.total)} - ${sizeFormate(this.versionInfo.downloadProgress.bytesPerSecond)}/s`
-          : '处理更新中...'
-        : ''
+      if (this.isCancelling || this.versionInfo.status != 'downloading') return ''
+      const info = this.versionInfo.downloadProgress
+      if (!info) return '正在连接下载…'
+      const total = info.total > 0 ? ` / ${sizeFormate(info.total)}` : ''
+      return `${sizeFormate(info.transferred)}${total} · ${sizeFormate(info.bytesPerSecond)}/s`
     },
     isIgnored() {
       return this.ignoreVersion == this.versionInfo.newVersion?.version
@@ -139,16 +141,27 @@ export default {
     this.disabledIgnoreFailBtn = Date.now() - parseInt(localStorage.getItem('update__check_failed_tip') ?? '0') < 7 * 86400000
   },
   methods: {
-    handleClose() {
+    async handleClose() {
+      if (this.isInstalling || this.isCancelling) return false
+      if (['downloading', 'downloaded', 'verifying'].includes(this.versionInfo.status)) {
+        this.isCancelling = true
+        try {
+          if (!await cancelDownloadUpdate()) return false
+          versionInfo.status = 'idle'
+          versionInfo.downloadProgress = null
+          versionInfo.updateError = ''
+        } catch (error) {
+          versionInfo.updateError = `无法停止更新，请重试：${error?.message ?? error}`
+          return false
+        } finally {
+          this.isCancelling = false
+        }
+      }
       versionInfo.showModal = false
+      return true
     },
     handleOpenUrl(url) {
       void openUrl(url)
-    },
-    handleRestartClick(event) {
-      this.handleClose()
-      event.target.disabled = true
-      quitUpdate()
     },
     handleCopy(text) {
       clipboardWriteText(text)
@@ -179,10 +192,17 @@ export default {
       // this.handleClose()
     },
     handleDownloadClick() {
+      if (this.isUpdating) return
       if (this.isIgnored) saveIgnoreVersion(this.ignoreVersion = null)
       const info = this.versionInfo.newVersion
       if (!info?.downloadUrl) return
       versionInfo.updateError = ''
+      if (versionInfo.status == 'downloaded') {
+        versionInfo.status = 'verifying'
+        quitUpdate()
+        return
+      }
+      versionInfo.downloadProgress = null
       versionInfo.status = 'downloading'
       downloadUpdate({
         version: info.version,
@@ -190,11 +210,11 @@ export default {
         fileName: info.fileName ?? '',
         size: info.size ?? 0,
         digest: info.digest ?? '',
+        installAfterDownload: true,
       })
     },
-    handleManualUpdate() {
-      this.handleOpenUrl('https://github.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/releases')
-      this.handleClose()
+    async handleManualUpdate() {
+      if (await this.handleClose()) this.handleOpenUrl('https://github.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/releases')
     },
     handleCheckUpdate() {
       versionInfo.updateError = ''
@@ -303,6 +323,53 @@ export default {
   display: flex;
   flex-flow: row nowrap;
   gap: 15px;
+}
+
+.updateProgress {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-alpha-100);
+}
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--color-font);
+  font-variant-numeric: tabular-nums;
+}
+.progressTrack {
+  height: 7px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--color-primary-alpha-200);
+}
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width var(--duration-fast) linear;
+}
+.indeterminate {
+  animation: update-progress 1.4s ease-in-out infinite;
+}
+.progressDetail {
+  margin-top: 7px;
+  color: var(--color-font-label);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes update-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(315%); }
+}
+:global(html[data-motion-enabled='false']) .indeterminate {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .indeterminate { animation: none; }
 }
 
 .btn {

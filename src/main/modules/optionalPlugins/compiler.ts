@@ -7,13 +7,19 @@ export const compilePluginSource = async(source: string, output: string, manifes
   let base = path.join(app.getAppPath(), 'dist/plugin-compiler')
   if (app.isPackaged && base.includes('app.asar' + path.sep)) base = base.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(base, 'worker.cjs')], {
+    // Node 16 exposes WASI only with this flag. The compiler's WASM scanner
+    // avoids loading modern Windows native binaries on Win7.
+    const nodeArgs = Number(process.versions.node.split('.')[0]) < 18 ? ['--experimental-wasi-unstable-preview1'] : []
+    const child = spawn(process.execPath, [...nodeArgs, path.join(base, 'worker.cjs')], {
       cwd: source,
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NODE_ENV: 'production', NODE_OPTIONS: '' },
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      // Node 16's WASI rejects Windows NUL as stdin (UVWASI_EINVAL). A pipe
+      // supplies a valid handle without requiring a console or user input.
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
       windowsHide: true,
     })
     let failure = ''
+    child.stdin?.end()
     let success = false
     const cancel = () => { failure = 'Plugin compilation cancelled'; child.kill() }
     app.once('before-quit', cancel)

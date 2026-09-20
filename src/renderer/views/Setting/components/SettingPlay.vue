@@ -35,7 +35,7 @@ dd
 
 dd
   h3#basic_play_quality {{ $t('setting__play_playQuality') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(
       v-for="item in playQualityList" :id="`setting_play_quality_${item}`" :key="item"
       name="setting_play_quality" need :model-value="appSetting['player.playQuality']" :value="item" :label="item"
@@ -44,7 +44,7 @@ dd
 dd
   h3#basic_play_max_volume {{ $t('setting__play_max_volume') }}
   p(style="color: var(--color-font-label); font-size: 12px; margin-bottom: 6px;") {{ $t('setting__play_max_volume_label') }}
-  div
+  .setting-row
     input.gap-left(
       type="number"
       style="width: 80px; padding: 4px 8px; border: 1px solid var(--color-primary-light-200-alpha-700); border-radius: 4px; background: var(--color-main-background); color: var(--color-font); font-size: 13px;"
@@ -52,18 +52,25 @@ dd
       min="100" max="200" step="1"
       @change="handleUpdateMaxVolumeInput"
     )
-    span(style="margin-left: 4px; font-size: 13px;") %
-    span(v-if="maxVolumeHint" style="margin-left: 8px; color: var(--color-font-label); font-size: 12px;") {{ maxVolumeHint }}
+    span(style="font-size: 13px;") %
+    span.setting-value(v-if="maxVolumeHint") {{ maxVolumeHint }}
+
+dd
+  h3#play_volume_normalization {{ $t('setting__play_volume_normalization') }}
+  .setting-row
+    base-checkbox(id="setting_player_volume_normalization" :model-value="appSetting['player.volumeNormalization']" :label="$t('setting__play_volume_normalization_enable')" @update:model-value="updateSetting({'player.volumeNormalization': $event})")
+  common-setting-reveal(:show="appSetting['player.volumeNormalization']" depends="setting_player_volume_normalization")
+    p.p.gap-top.setting-value {{ $t('setting__play_volume_normalization_tip') }}
 
 dd(:aria-label="$t('setting__play_mediaDevice_title')")
   h3#play_mediaDevice {{ $t('setting__play_mediaDevice') }}
-  div
+  div.setting-row
     base-selection.gap-left(v-model="mediaDeviceId" :list="mediaDevices" item-key="deviceId" item-name="label" @change="handleMediaDeviceIdChnage")
 </template>
 
 <script>
 import { ref, onBeforeUnmount, watch, computed } from '@common/utils/vueTools'
-import { hasInitedAdvancedAudioFeatures, setMediaDeviceId } from '@renderer/plugins/player'
+import { hasInitedAdvancedAudioFeatures, supportsAudioOutputDeviceSelection, setMediaDeviceId } from '@renderer/plugins/player'
 import { visualizerInstalled } from '@renderer/store/optionalPlugins'
 import { dialog } from '@renderer/plugins/Dialog'
 import { useI18n } from '@renderer/plugins/i18n'
@@ -96,13 +103,13 @@ export default {
 
     const mediaDeviceId = ref(appSetting['player.mediaDeviceId'])
     const handleMediaDeviceIdChnage = async() => {
-      if (hasInitedAdvancedAudioFeatures()) {
+      if (hasInitedAdvancedAudioFeatures() && !supportsAudioOutputDeviceSelection()) {
         await dialog({
           message: t('setting__play_media_device_error_tip'),
           confirmButtonText: t('alert_button_text'),
         })
         mediaDeviceId.value = appSetting['player.mediaDeviceId']
-      } else if (visualizerInstalled.value && appSetting['player.audioVisualization']) {
+      } else if (visualizerInstalled.value && appSetting['player.audioVisualization'] && !supportsAudioOutputDeviceSelection()) {
         const confirm = await dialog.confirm({
           message: t('setting__play_media_device_tip'),
           cancelButtonText: t('cancel_button_text'),

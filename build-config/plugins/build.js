@@ -9,6 +9,7 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const base = require('../renderer/webpack.config.base')
 const buildSourcePackage = require('./source-package.cjs')
 const buildCompiledPackage = require('./compiled-package.cjs')
+const { writeOutput, version: devkitVersion } = require('./developer-kit/project.cjs')
 const { validPath } = require('../../src/common/pluginSource')
 
 const root = path.resolve(__dirname, '../..')
@@ -155,6 +156,18 @@ async function main() {
   for (const plugin of catalog.plugins) Object.assign(plugin, sources.get(plugin.id)?.display ?? {})
   catalog.plugins.sort((a, b) => order.get(a.id) - order.get(b.id))
   await fs.writeFile(catalogFile, JSON.stringify(catalog, null, 2) + '\n')
+  const examples = path.join(root, 'plugins/development-examples')
+  const examplesIndex = { schemaVersion: 1, devkitVersion, plugins: [] }
+  for (const plugin of catalog.plugins) {
+    if (!sources.has(plugin.id) || !validPath(plugin.path)) throw new Error('Invalid development example')
+    const bytes = await fs.readFile(path.join(catalogRoot, plugin.path))
+    if (sha256(bytes) !== plugin.sha256 || bytes.length !== plugin.bytes) throw new Error('Development example checksum mismatch')
+    const filename = `${plugin.id}-${plugin.version}.zip`
+    if (!validPath(filename)) throw new Error('Invalid development example filename')
+    await writeOutput(path.join(examples, filename), bytes)
+    examplesIndex.plugins.push({ id: plugin.id, version: plugin.version, file: filename, bytes: bytes.length, sha256: plugin.sha256 })
+  }
+  await writeOutput(path.join(examples, 'index.json'), Buffer.from(JSON.stringify(examplesIndex, null, 2) + '\n'))
   console.log('Plugin catalog written to plugins/store/catalog.json')
 }
 main().catch(error => { console.error(error); process.exitCode = 1 })

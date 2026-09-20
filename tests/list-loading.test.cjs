@@ -11,9 +11,16 @@ function fixture(kind, mode = 'immediate') {
   const entity = kind === 'singer' || kind === 'album'
   const music = Object.fromEntries(platforms.map(source => {
     const search = (...args) => new Promise((resolve, reject) => calls.push({
-      source, text: args[entity ? 1 : 0], reject,
-      finish: (ids = []) => resolve({ source, allPage: 1, total: ids.length, limit: 30,
-        list: ids.map(id => ({ id, source, name: id, author: 'Fixture', singer: 'Fixture', meta: { albumName: 'Fixture' } })) }),
+      source,
+      text: args[entity ? 1 : 0],
+      reject,
+      finish: (ids = []) => resolve({
+        source,
+        allPage: 1,
+        total: ids.length,
+        limit: 30,
+        list: ids.map(id => ({ id, source, name: id, author: 'Fixture', singer: 'Fixture', meta: { albumName: 'Fixture' } })),
+      }),
     }))
     return [source, { musicSearch: { search }, songList: { search }, entitySearch: { search } }]
   }))
@@ -26,10 +33,92 @@ function fixture(kind, mode = 'immediate') {
     './state': { sources: [...platforms, 'all'], maxPages: {}, listInfos: entity ? { [kind]: listInfos } : listInfos },
   })
   const store = load(`src/renderer/store/search/${entity ? 'entity' : kind}/action.ts`)
-  return { calls, list: listInfos.all, search: text => entity ? store.search(kind, text, 1, 'all') : store.search(text, 1, 'all') }
+  return {
+    calls,
+    list: listInfos.all,
+    search: text => entity ? store.search(kind, text, 1, 'all') : store.search(text, 1, 'all'),
+    retry: () => entity ? store.retryFailedSources(kind) : store.retryFailedSources(),
+  }
 }
 
 for (const kind of ['music', 'songlist', 'singer', 'album']) {
+  test(`${kind}: one retry reloads every failed platform and preserves successful results`, async() => {
+    const f = fixture(kind)
+    const search = f.search('query')
+    await flush()
+    f.calls[0].finish(['kept'])
+    for (const call of f.calls.slice(1)) call.reject(Error('offline'))
+    await search
+    assert.equal(f.list.aggregate.status, 'partial')
+    assert.deepEqual(f.list.aggregate.failedSources, platforms.slice(1))
+    const retry = f.retry()
+    const duplicate = f.retry()
+    await flush()
+    assert.equal(f.calls.length, 9)
+    assert.deepEqual(f.calls.slice(5).map(call => call.source), platforms.slice(1))
+    assert.deepEqual(f.list.list.map(item => item.id), ['kept'])
+    assert.equal(f.list.noItemLabel, '', 'successful rows remain visible during retry')
+    f.calls[5].finish(['recovered'])
+    f.calls[6].reject(Error('still offline'))
+    await flush()
+    await f.retry()
+    assert.equal(f.calls.length, 9, 'another click cannot start a second batch before this one finishes')
+    for (const call of f.calls.slice(7)) call.reject(Error('still offline'))
+    await Promise.all([retry, duplicate])
+    assert.deepEqual(new Set(f.list.list.map(item => item.id)), new Set(['kept', 'recovered']))
+    assert.deepEqual(f.list.aggregate.failedSources, platforms.slice(2))
+    const remaining = f.retry()
+    await flush()
+    assert.deepEqual(f.calls.slice(9).map(call => call.source), platforms.slice(2))
+    for (const call of f.calls.slice(9)) call.finish([])
+    await remaining
+    assert.equal(f.list.aggregate.status, 'success')
+    assert.deepEqual(f.list.aggregate.failedSources, [])
+  })
+
+  test(`${kind}: all failures, partial empty results and genuine empty results are distinguishable`, async() => {
+    const f = fixture(kind)
+    const search = f.search('query')
+    await flush()
+    for (const call of f.calls) call.reject(Error('offline'))
+    await search
+    assert.equal(f.list.aggregate.status, 'failed')
+    assert.equal(f.list.noItemLabel, 'list__load_failed')
+    const retry = f.retry()
+    await flush()
+    assert.equal(f.list.noItemLabel, 'list__loading', 'retrying failed platforms must not flash an empty result')
+    f.calls[5].finish([])
+    for (const call of f.calls.slice(6)) call.reject(Error('still offline'))
+    await retry
+    assert.equal(f.list.aggregate.status, 'partial')
+    assert.notEqual(f.list.noItemLabel, 'no_item')
+    const rest = f.retry()
+    await flush()
+    for (const call of f.calls.slice(10)) call.finish([])
+    await rest
+    assert.equal(f.list.aggregate.status, 'empty')
+    assert.equal(f.list.noItemLabel, 'no_item')
+  })
+
+  test(`${kind}: a late retry cannot overwrite a newer search or its failure state`, async() => {
+    const f = fixture(kind)
+    const first = f.search('old')
+    await flush()
+    f.calls[0].reject(Error('offline'))
+    for (const call of f.calls.slice(1)) call.finish(['old'])
+    await first
+    const retry = f.retry()
+    await flush()
+    const next = f.search('new')
+    await flush()
+    for (const call of f.calls.slice(6)) call.finish(['new'])
+    await next
+    f.calls[5].finish(['stale'])
+    await retry
+    assert(f.list.list.every(item => item.id === 'new'))
+    assert.equal(f.list.aggregate.status, 'success')
+  })
+
   test(`${kind}: immediate mode publishes each platform while slower or failed requests remain pending`, async() => {
     const f = fixture(kind)
     let finished = false

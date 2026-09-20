@@ -4,7 +4,7 @@ const ESLintPlugin = require('eslint-webpack-plugin')
 const isDev = process.env.NODE_ENV === 'development'
 
 module.exports = {
-  target: 'electron-main',
+  target: process.env.BUILD_WIN7 ? 'electron22.3-main' : 'electron-main',
   output: {
     filename: '[name].js',
     library: {

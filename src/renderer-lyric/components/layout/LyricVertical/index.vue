@@ -2,7 +2,7 @@
   <div
     ref="dom_lyric"
     :class="classNames"
-    :style="lrcStyles" @wheel="handleWheel" @mousedown="handleLyricMouseDown" @touchstart="handleLyricTouchStart"
+    :style="lrcStyles" @wheel="handleWheel" @pointerdown="handleLyricPointerDown"
   >
     <div :class="$style.lyricSpace" />
     <div ref="dom_lyric_text" />
@@ -47,8 +47,7 @@ export default {
       dom_lyric,
       dom_lyric_text,
       isMsDown,
-      handleLyricMouseDown,
-      handleLyricTouchStart,
+      handleLyricPointerDown,
       handleWheel,
     } = useLyric(isComputeWidth)
 
@@ -59,8 +58,7 @@ export default {
       dom_lyric,
       dom_lyric_text,
       isMsDown,
-      handleLyricMouseDown,
-      handleLyricTouchStart,
+      handleLyricPointerDown,
       handleWheel,
     }
   },

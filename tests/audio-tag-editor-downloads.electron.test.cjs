@@ -4,7 +4,7 @@ const path = require('node:path')
 const { test } = require('node:test')
 const NodeID3 = require('node-id3')
 const { launch, route, settled } = require('./helpers/motion-fixture.cjs')
-const { mockGitHub, openStore, install, uninstall, label } = require('./helpers/plugin-fixture.cjs')
+const { mockGitHub, openStore, label } = require('./helpers/plugin-fixture.cjs')
 const { mp3, flac } = require('./helpers/tag-fixtures.cjs')
 
 test('Downloads opens the tag editor for the clicked file and handles stale files and task state', { timeout: 120000 }, async t => {
@@ -27,9 +27,12 @@ test('Downloads opens the tag editor for the clicked file and handles stale file
   })
   const tasks = [task('alpha-song', alphaPath), task('beta-song', betaPath), task('missing-song', missingPath), task('directory-song', directoryPath),
     task('unsupported-song', path.join(output, 'unsupported.wav')), task('unfinished-song', alphaPath, 'pause', false), task('restarted-song', betaPath, 'run')]
-  const editor = page.locator('[data-plugin-settings="audio-tag-editor"]')
+  const editor = page.locator('[data-audio-tag-editor]')
   const menu = () => page.getByRole('tab', { name: '修改音频标签', exact: true })
-  const downloads = async() => { await route(page, '/download'); await settled(page); await page.locator('.list-item').first().waitFor() }
+  const downloads = async() => {
+    if (await editor.isVisible()) { await editor.locator('form input').first().press('Escape'); await editor.waitFor({ state: 'hidden' }) }
+    await route(page, '/download'); await settled(page); await page.locator('.list-item').first().waitFor()
+  }
   const rightClick = async id => {
     await downloads()
     await page.locator('.list-item').filter({ hasText: id }).click({ button: 'right' })
@@ -37,11 +40,11 @@ test('Downloads opens the tag editor for the clicked file and handles stale file
   const dismiss = async text => {
     await page.getByText(text, { exact: true }).waitFor()
     await page.getByRole('button', { name: await label(page, 'confirm_button_text'), exact: true }).click()
-    await page.waitForFunction(() => !document.querySelector('[data-plugin-settings="audio-tag-editor"]') || !document.querySelector('[data-plugin-settings="audio-tag-editor"] fieldset')?.disabled)
+    await page.waitForFunction(() => !document.querySelector('[data-audio-tag-editor]') || !document.querySelector('[data-audio-tag-editor] fieldset')?.disabled)
   }
   const title = async value => {
     await editor.waitFor()
-    await page.waitForFunction(value => document.querySelector('[data-plugin-settings="audio-tag-editor"] form input')?.value === value, value)
+    await page.waitForFunction(value => document.querySelector('[data-audio-tag-editor] form input')?.value === value, value)
   }
   try {
     page.setDefaultTimeout(15000)
@@ -51,18 +54,15 @@ test('Downloads opens the tag editor for the clicked file and handles stale file
       ipcMain.handle('winMain_download_list_get', () => tasks)
     }, tasks)
     await page.evaluate(directory => { window.lxData.appSetting['download.savePath'] = directory; window.lxData.appSetting['download.enable'] = true }, output)
-    await t.test('the menu only exists while the plugin is installed', async() => {
-      await rightClick('alpha-song')
-      assert.equal(await menu().count(), 0)
-      await page.keyboard.press('Escape')
-      await openStore(page)
-      await install(page, 'audio-tag-editor')
+    await t.test('the menu is available on a fresh installation without visiting the store', async() => {
       await rightClick('alpha-song')
       await menu().waitFor()
       assert.equal(await menu().getAttribute('disabled'), null)
       await page.screenshot({ path: path.join(output, 'download-tag-menu.png') })
       await menu().click()
       await title('Alpha')
+      assert.ok(page.url().includes('/download'), 'Editing must stay on the Downloads page')
+      assert.equal(await page.getByRole('dialog', { name: '修改音频标签', exact: true }).count(), 1)
       await editor.getByLabel('标题', { exact: true }).fill('通过下载右键修改')
       await editor.getByRole('button', { name: '保存标签', exact: true }).click()
       await editor.getByRole('status').filter({ hasText: '标签已保存到音频文件。' }).waitFor()
@@ -175,11 +175,11 @@ test('Downloads opens the tag editor for the clicked file and handles stale file
       assert.equal(await editor.getByLabel('标题', { exact: true }).inputValue(), '不可写入')
       await assert.rejects(fs.stat(betaPath), { code: 'ENOENT' })
     })
-    await t.test('uninstall removes the right-click action immediately', async() => {
+    await t.test('store refresh preserves the built-in right-click action', async() => {
       await openStore(page)
-      await uninstall(page, 'audio-tag-editor')
+      await page.getByRole('button', { name: await label(page, 'setting__plugins_refresh'), exact: true }).click()
       await rightClick('alpha-song')
-      assert.equal(await menu().count(), 0)
+      assert.equal(await menu().count(), 1)
     })
     assert.deepEqual(errors, [])
     console.log('Download tag editor screenshots:', output)

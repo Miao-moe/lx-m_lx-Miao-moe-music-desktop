@@ -1,7 +1,12 @@
 import { ref, shallowReactive } from '@common/utils/vueTools'
+import type { MiniPlayerPointer } from '@common/miniPlayer'
+
+export const nativePointer = ref<MiniPlayerPointer>(null)
 
 export const setting = shallowReactive<LX.DesktopLyric.Config>({
   'desktopLyric.enable': false,
+  'desktopLyric.showPlayer': true,
+  'desktopLyric.autoHideControls': false,
   'desktopLyric.isLock': false,
   'desktopLyric.isAlwaysOnTop': false,
   'desktopLyric.isAlwaysOnTopLoop': false,
@@ -26,7 +31,7 @@ export const setting = shallowReactive<LX.DesktopLyric.Config>({
   'desktopLyric.style.lineGap': 15,
   // 'desktopLyric.style.fontWeight': true,
   'desktopLyric.style.opacity': 95,
-  'desktopLyric.style.backgroundOpacity': 0,
+  'desktopLyric.style.backgroundOpacity': 92,
   'desktopLyric.style.ellipsis': false,
   'desktopLyric.style.isFontWeightFont': false,
   'desktopLyric.style.isFontWeightLine': false,
@@ -87,6 +92,12 @@ export const setting = shallowReactive<LX.DesktopLyric.Config>({
 
 // export const status = ref<Status>('stopped')
 export const isPlay = ref(false)
+
+export const miniPlayer = shallowReactive<LX.DesktopLyric.PlayerState>({
+  id: null, name: '', singer: '', album: '', isPlay: false, position: 0, duration: 0, volume: 0, isMute: false,
+})
+export const miniPlayerCover = ref('')
+export const playerActionFailed = ref(false)
 
 export const musicInfo = shallowReactive<{
   id: string | null

@@ -13,6 +13,7 @@ import {
   playedList,
   tempPlayList,
   playQueueList,
+  playQueueRevision,
   PLAY_QUEUE_LIST_ID,
 } from './state'
 import { getListMusicsFromCache } from '@renderer/store/list/action'
@@ -82,6 +83,11 @@ export const getList = (listId: string | null): Array<LX.Music.MusicInfo | LX.Do
   return getListMusicsFromCache(listId)
 }
 
+const notifyPlayQueueChange = () => {
+  resetRandomNextMusicInfo()
+  playQueueRevision.value++
+}
+
 /**
  * 设置播放列表（播放队列）
  * @param list 播放队列
@@ -89,6 +95,7 @@ export const getList = (listId: string | null): Array<LX.Music.MusicInfo | LX.Do
 export const setPlayQueue = (list: LX.Player.PlayMusicInfo[]) => {
   playQueueList.splice(0, playQueueList.length)
   for (const item of list) playQueueList.push(item)
+  notifyPlayQueueChange()
 }
 /**
  * 从播放列表（播放队列）移除歌曲
@@ -96,7 +103,7 @@ export const setPlayQueue = (list: LX.Player.PlayMusicInfo[]) => {
  */
 export const removePlayQueue = (index: number) => {
   playQueueList.splice(index, 1)
-  resetRandomNextMusicInfo()
+  notifyPlayQueueChange()
 }
 /**
  * 清空播放列表（播放队列）
@@ -105,7 +112,7 @@ export const removePlayQueue = (index: number) => {
 export const clearPlayQueue = (): boolean => {
   const hasCurrent = playQueueList.some(item => item.musicInfo.id == playMusicInfo.musicInfo?.id)
   playQueueList.splice(0, playQueueList.length)
-  resetRandomNextMusicInfo()
+  notifyPlayQueueChange()
   return hasCurrent
 }
 
@@ -266,10 +273,11 @@ export const addTempPlayList = (list: LX.Player.TempPlayListItem[]) => {
   const insertIndex = currentIndex > -1 ? currentIndex + 1 : playQueueList.length
   const items: LX.Player.PlayMusicInfo[] = list.map(({ musicInfo, listId }) => ({ musicInfo, listId, isTempPlay: false }))
   playQueueList.splice(insertIndex, 0, ...items)
+  notifyPlayQueueChange()
   // 屏幕中间提示已添加到播放列表
   showToast(window.i18n.t('player__play_list_added'))
   // 未在播放任何歌曲时，直接开始播放插入的歌曲（保持原有行为）
-  if (!playMusicInfo.musicInfo) void playQueueById(insertIndex)
+  if (!playMusicInfo.musicInfo) playQueueById(insertIndex)
   return insertIndex
 }
 /**

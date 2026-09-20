@@ -88,17 +88,19 @@ test('Kawarp replaces the old effects, follows artwork without analysing audio, 
         if (this.canvas.closest('[data-ambient-background]')) this.canvas.__kawarpUploads = (this.canvas.__kawarpUploads ?? 0) + 1
         return upload.apply(this, args)
       }
-      const draw = prototype.drawArrays
-      prototype.drawArrays = function(...args) {
-        // Count only output frames; Kawarp also draws to small offscreen blur buffers.
-        if (!this.isContextLost() && this.canvas.closest('[data-ambient-background]') && !this.getParameter(this.FRAMEBUFFER_BINDING)) {
-          const sample = this.canvas.__kawarpProbe ??= { count: 0 }
-          const program = this.getParameter(this.CURRENT_PROGRAM)
-          const uniform = name => this.getUniform(program, this.getUniformLocation(program, name))
-          sample.count++
-          sample.time = uniform('u_time')
+      for (const method of ['drawArrays', 'drawElements']) {
+        const draw = prototype[method]
+        prototype[method] = function(...args) {
+          // Count only output frames, excluding the artwork's small blur buffers.
+          if (!this.isContextLost() && this.canvas.closest('[data-ambient-background]') && !this.getParameter(this.FRAMEBUFFER_BINDING)) {
+            const sample = this.canvas.__kawarpProbe ??= { count: 0 }
+            const program = this.getParameter(this.CURRENT_PROGRAM)
+            const uniform = name => this.getUniform(program, this.getUniformLocation(program, name))
+            sample.count++
+            sample.time = uniform('u_time')
+          }
+          return draw.apply(this, args)
         }
-        return draw.apply(this, args)
       }
     })
     await t.test('Advanced keeps its switch and quality with no background-style or music-response controls', async() => {
@@ -114,7 +116,7 @@ test('Kawarp replaces the old effects, follows artwork without analysing audio, 
       await page.locator('label[for="setting_advanced_background_enabled"]').click()
       await backend(page, 'kawarp')
       await state(page, main, 'static')
-      assert.equal(await page.evaluate(() => window.__kawarpPrograms.size), 5)
+      assert.equal(await page.evaluate(() => window.__kawarpPrograms.size), 2)
       assert.deepEqual(await page.evaluate(() => window.__kawarpShaderErrors), [])
       await page.locator('#setting_advanced_background_quality').selectOption('full')
     })
@@ -158,7 +160,7 @@ test('Kawarp replaces the old effects, follows artwork without analysing audio, 
         uploads: canvas.__kawarpUploads,
       }))
       assert.equal(await page.locator('[data-ambient-background] canvas').count(), 1)
-      assert.equal(await page.evaluate(() => window.__kawarpPrograms.size), 5)
+      assert.equal(await page.evaluate(() => window.__kawarpPrograms.size), 2)
       assert.equal(shared.canvas, true)
       assert.equal(shared.context, true)
       assert.equal(shared.uploads, before.uploads)
@@ -193,6 +195,27 @@ test('Kawarp replaces the old effects, follows artwork without analysing audio, 
     await t.test('static quality survives page switches without redrawing, and pause and playback still work', async() => {
       await update(page, { 'ui.ambientBackgroundQuality': 'static' })
       await state(page, main, 'static')
+      const snapshot = page.locator(main + ' [data-ambient-snapshot]')
+      await snapshot.waitFor()
+      const snapshotUrl = await snapshot.getAttribute('src')
+      assert.equal(await page.locator(main + ' canvas').isHidden(), true, 'static frames must leave WebGL compositing')
+      const difference = await snapshot.evaluate(async image => {
+        await image.decode()
+        const source = image.parentElement.querySelector('canvas')
+        const sample = document.createElement('canvas')
+        sample.width = source.width
+        sample.height = source.height
+        const ctx = sample.getContext('2d', { willReadFrequently: true })
+        ctx.drawImage(source, 0, 0)
+        const live = ctx.getImageData(0, 0, sample.width, sample.height).data
+        ctx.clearRect(0, 0, sample.width, sample.height)
+        ctx.drawImage(image, 0, 0)
+        const still = ctx.getImageData(0, 0, sample.width, sample.height).data
+        let max = 0
+        for (let i = 0; i < live.length; i++) max = Math.max(max, Math.abs(live[i] - still[i]))
+        return max
+      })
+      assert.equal(difference, 0, 'the cached image must preserve every rendered pixel')
       const before = await count(page, main)
       const uploads = await page.locator(main + ' canvas').evaluate(canvas => canvas.__kawarpUploads)
       for (const opened of [false, true]) {
@@ -201,16 +224,58 @@ test('Kawarp replaces the old effects, follows artwork without analysing audio, 
         assert.equal(await count(page, main), before)
         assert.equal(await page.locator(main + ' canvas').evaluate(canvas => canvas.__kawarpUploads), uploads)
         assert.equal(await page.locator(main + ' canvas').evaluate(canvas => canvas === window.__sharedBackgroundCanvas), true)
+        assert.equal(await snapshot.getAttribute('src'), snapshotUrl, 'interface motion must reuse the static image')
+      }
+      const win = await app.browserWindow(page)
+      const bounds = await win.evaluate(win => win.getBounds())
+      try {
+        await win.evaluate((win, bounds) => win.setSize(bounds.width + 64, bounds.height + 32), bounds)
+        await page.waitForFunction(({ main, snapshotUrl }) => {
+          const image = document.querySelector(main + ' [data-ambient-snapshot]')
+          const canvas = document.querySelector(main + ' canvas')
+          return image?.src !== snapshotUrl && image?.complete && image.naturalWidth === canvas.width && image.naturalHeight === canvas.height && canvas.hidden
+        }, { main, snapshotUrl })
+      } finally {
+        await win.evaluate((win, bounds) => win.setBounds(bounds), bounds)
+        await win.dispose()
       }
       await update(page, { 'ui.ambientBackgroundQuality': 'gentle' })
       await state(page, main, 'playing')
+      await snapshot.waitFor({ state: 'detached' })
+      assert.equal(await page.locator(main + ' canvas').isVisible(), true)
       await page.evaluate(() => window.__lxPluginHost.player.setPause())
       await state(page, main, 'static')
+      await snapshot.waitFor()
       const paused = await count(page, main)
       await page.waitForTimeout(200)
       assert.equal(await count(page, main), paused)
       await page.evaluate(() => window.__lxPluginHost.player.setPlay())
       await state(page, main, 'playing')
+    })
+    await t.test('the merged gradient follows theme changes in static mode without adaptive controls', async() => {
+      await update(page, { 'ui.ambientBackgroundQuality': 'static', 'ui.ambientBackgroundAutoContrast': false })
+      const snapshot = page.locator(main + ' [data-ambient-snapshot]')
+      await snapshot.waitFor()
+      const previous = await snapshot.getAttribute('src')
+      const themeCSS = await page.evaluate(() => window.dom_style.textContent)
+      try {
+        await page.evaluate(() => window.dom_style.appendChild(document.createTextNode(':root { --color-content-background: rgba(250, 245, 238, 0.4); }')))
+        await page.waitForFunction(({ main, previous }) => {
+          const image = document.querySelector(main + ' [data-ambient-snapshot]')
+          return image?.complete && image.src !== previous
+        }, { main, previous })
+        const shade = await page.locator(main + ' canvas').evaluate(canvas => {
+          const gl = canvas.getContext('webgl')
+          const program = gl.getParameter(gl.CURRENT_PROGRAM)
+          return Array.from(gl.getUniform(program, gl.getUniformLocation(program, 'u_shade')))
+        })
+        const expected = [250 / 255, 245 / 255, 238 / 255, 0.04]
+        shade.forEach((value, index) => assert(Math.abs(value - expected[index]) < 1e-6))
+        assert.equal(await page.locator(main + ' > div > div').count(), 1, 'only the hidden fallback remains, without another full-window gradient')
+      } finally {
+        await page.evaluate(css => { window.dom_style.textContent = css }, themeCSS)
+        await update(page, { 'ui.ambientBackgroundQuality': 'gentle' })
+      }
     })
     await t.test('window visibility and app switches control rendering independently of system preferences', async() => {
       const win = await app.browserWindow(page)
@@ -267,6 +332,9 @@ test('Kawarp replaces the old effects, follows artwork without analysing audio, 
       await cover(page, '#d92c38')
       await state(page, main, 'static')
       await dominant(page, 0)
+      const heldSnapshot = page.locator(main + ' [data-ambient-snapshot]')
+      await heldSnapshot.waitFor()
+      const heldUrl = await heldSnapshot.getAttribute('src')
       let begin
       let finish
       let requests = 0
@@ -282,7 +350,8 @@ test('Kawarp replaces the old effects, follows artwork without analysing audio, 
         await page.evaluate(() => { window.lxData.musicInfo.pic = 'https://kawarp-artwork.test/transition-blue.svg' })
         await started
         await page.waitForTimeout(200)
-        assert.equal(await page.locator(main + ' canvas').isVisible(), true)
+        assert.equal(await heldSnapshot.isVisible(), true)
+        assert.equal(await heldSnapshot.getAttribute('src'), heldUrl, 'pending artwork must keep the cached frame')
         assert.equal(await page.locator(visual).evaluate(element => Number(getComputedStyle(element).opacity)), 1)
         await dominant(page, 0)
         assert.equal(requests, 1, 'background and player share the same cover download')

@@ -106,7 +106,7 @@
           >
             <span v-if="isMessage(noItem, 'list__loading')" class="ui-spinner" />
             <p v-text="noItem" />
-            <base-btn v-if="isMessage(noItem, 'list__load_failed')" class="ui-state-retry" min @click="$emit('retry')">{{ $t('reload') }}</base-btn>
+            <base-btn v-if="!hideRetry && isMessage(noItem, 'list__load_failed')" class="ui-state-retry" min @click="$emit('retry')">{{ $t('reload') }}</base-btn>
           </div>
         </transition>
       </div>
@@ -167,6 +167,10 @@ export default {
     noItem: {
       type: String,
       default: '',
+    },
+    hideRetry: {
+      type: Boolean,
+      default: false,
     },
     checkApiSource: {
       type: Boolean,

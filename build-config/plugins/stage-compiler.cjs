@@ -31,10 +31,13 @@ const stageWasmScanner = async() => {
   const original = await fs.readFile(loader, 'utf8')
   // The scanner needs 983 initial pages. A 1 GiB reservation prevents its
   // worker threads from starting in 32-bit Electron's address space.
-  if (!original.includes('initial: 16384,') || !original.includes('maximum: 65536,')) throw new Error('Unexpected WASM scanner memory configuration')
+  if (!original.includes('initial: 16384,') || !original.includes('maximum: 65536,') || !original.includes('env: process.env,\n    })')) throw new Error('Unexpected WASM scanner configuration')
   await fs.writeFile(loader, original
     .replace('initial: 16384,', "initial: process.arch === 'ia32' ? 1024 : 16384,")
-    .replace('maximum: 65536,', "maximum: process.arch === 'ia32' ? 8192 : 65536,"))
+    .replace('maximum: 65536,', "maximum: process.arch === 'ia32' ? 8192 : 65536,")
+    // Electron 22 does not inherit this Node flag into worker threads. Without
+    // it the scanner waits forever for a worker that failed to import node:wasi.
+    .replace('env: process.env,\n    })', "env: process.env,\n      execArgv: Number(process.versions.node.split('.')[0]) < 18 ? ['--experimental-wasi-unstable-preview1'] : undefined,\n    })"))
 }
 
 const packageDirectory = (name, from) => {
@@ -60,6 +63,7 @@ const stageCompiler = async() => {
   await fs.rm(modules, { recursive: true, force: true })
   const visited = new Set()
   const copy = async(name, from, optional = false) => {
+    if (process.env.BUILD_WIN7 && (/^@tailwindcss\/oxide-(?!wasm32-wasi)/.test(name) || /^lightningcss-(?!wasm)/.test(name))) return
     let directory
     try { directory = packageDirectory(name, from) } catch (error) { if (optional) return; throw error }
     if (visited.has(directory)) return

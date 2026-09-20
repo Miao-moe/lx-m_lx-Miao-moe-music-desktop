@@ -306,15 +306,20 @@ export const createSortedList = (list: LX.Music.MusicInfo[], position: number, i
  * 创建本地列表音乐信息
  * @param filePaths 文件路径
  */
-export const createLocalMusicInfos = async(filePaths: string[]): Promise<LX.Music.MusicInfoLocal[]> => {
-  const list: LX.Music.MusicInfoLocal[] = []
+export const createLocalMusicInfos = async(filePaths: string[]) => {
+  const musicInfos: LX.Music.MusicInfoLocal[] = []
+  const failedPaths: string[] = []
   for await (const path of filePaths) {
-    const musicInfo = await createLocalMusicInfo(path)
-    if (!musicInfo) continue
-    list.push(musicInfo)
+    try {
+      const musicInfo = await createLocalMusicInfo(path)
+      if (musicInfo) musicInfos.push(musicInfo)
+      else failedPaths.push(path)
+    } catch {
+      failedPaths.push(path)
+    }
   }
 
-  return list
+  return { musicInfos, failedPaths }
 }
 
 /**

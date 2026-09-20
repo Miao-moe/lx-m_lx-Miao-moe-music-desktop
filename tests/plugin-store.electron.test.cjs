@@ -7,7 +7,7 @@ const { launch, route, settled, seedTrack, showDetail } = require('./helpers/mot
 const { mockGitHub, openStore, label, install, uninstall, startSilentAudio } = require('./helpers/plugin-fixture.cjs')
 
 test('GitHub plugins load independently, release audio resources, and survive offline restart', { timeout: 120000 }, async() => {
-  let fixture = await launch()
+  let fixture = await launch({ rendererPath: path.resolve('dist/index.html') })
   const profilePath = fixture.output
   const pluginErrors = []
   const capturePluginErrors = page => page.on('console', message => {
@@ -45,22 +45,23 @@ test('GitHub plugins load independently, release audio resources, and survive of
       window.AudioWorkletNode = class extends Worklet {
         constructor(...args) { super(...args); window.__pluginAudio.worklets.push(this) }
       }
-      window.lxData.updateSetting({ 'player.soundEffect.biquadFilter.hz1000': 6 })
     })
     assert.equal(await page.evaluate(() => window.__lxPluginHost.player.hasInitedAdvancedAudioFeatures()), false)
     await openStore(page)
     await install(page, 'audio-visualizer')
     assert.equal(await page.evaluate(() => window.__pluginAudio.filters.length), 0, 'The visualizer must not create sound effect nodes')
-    await install(page, 'sound-effects')
+    await page.evaluate(() => window.lxData.updateSetting({ 'player.soundEffect.biquadFilter.hz1000': 6 }))
     await page.waitForFunction(() => window.__pluginAudio.filters.length === 10)
     assert.equal(await page.evaluate(() => window.__pluginAudio.filters[5].gain.value), 6)
-    const soundCard = page.locator('[data-plugin-id="sound-effects"]')
-    await soundCard.getByRole('button', { name: await label(page, 'setting__plugins_settings'), exact: true }).click()
-    await page.locator('[data-plugin-settings="sound-effects"]').waitFor()
+    await seedTrack(page)
+    await showDetail(page, true)
+    await settled(page)
+    await page.locator('[data-sound-effect-button]').click()
+    await page.locator('[data-plugin-sound-dialog]').waitFor()
     for (const [width, height] of [[828, 540], [1366, 768], [3840, 2160]]) {
       await page.setViewportSize({ width, height })
       await settled(page)
-      const bounds = await page.locator('[data-plugin-id], [data-plugin-id] button, [data-plugin-settings] input, [data-plugin-settings] button').evaluateAll(elements => elements.map(element => {
+      const bounds = await page.locator('[data-plugin-sound-dialog] input, [data-plugin-sound-dialog] button').evaluateAll(elements => elements.map(element => {
         const { left, right, width } = element.getBoundingClientRect()
         return { left, right, width }
       }).filter(rect => rect.width > 0))
@@ -69,8 +70,10 @@ test('GitHub plugins load independently, release audio resources, and survive of
     }
     await page.setViewportSize({ width: 1114, height: 718 })
     await page.screenshot({ path: path.join(profilePath, 'plugin-store.png') })
+    await page.locator('[data-plugin-sound-dialog]').locator('..').getByRole('button', { name: await label(page, 'close'), exact: true }).click()
     const dataRoot = await app.evaluate(() => global.lxDataPath)
     const registryBefore = JSON.parse(await fs.readFile(path.join(dataRoot, 'plugins/installed.json'), 'utf8'))
+    assert.deepEqual(Object.keys(registryBefore), ['audio-visualizer'])
     await seedTrack(page)
     await page.evaluate(() => {
       window.lxData.musicInfo.lrc = '[00:00.00]Plugin audio check\n[00:01.00]Offline test signal'
@@ -103,18 +106,16 @@ test('GitHub plugins load independently, release audio resources, and survive of
     await page.waitForFunction(() => window.__pluginAudio.worklets.length === 1)
     await page.evaluate(() => { window.__motionDetail().isShowPlayerDetail = false })
     await openStore(page)
-    await uninstall(page, 'sound-effects')
+    await page.evaluate(() => window.lxData.updateSetting({ 'player.soundEffect.biquadFilter.hz1000': 0, 'player.soundEffect.convolution.fileName': '', 'player.soundEffect.pitchShifter.playbackRate': 1 }))
+    await page.waitForFunction(() => window.__pluginAudio.filters.every(filter => filter.__disconnected))
     assert.equal(await page.evaluate(() => window.__pluginAudio.filters.every(filter => filter.__disconnected)), true)
-    assert.equal(await page.evaluate(() => window.__lxPluginHost.player.getAudioElement().paused), false, 'Uninstalling effects must not pause playback')
+    assert.equal(await page.evaluate(() => window.__lxPluginHost.player.getAudioElement().paused), false, 'Disabling effects must not pause playback')
     assert.equal(await page.locator('style[data-plugin="sound-effects"]').count(), 0)
-    await assert.rejects(fs.stat(path.join(dataRoot, 'plugins', registryBefore['sound-effects'].directory)), { code: 'ENOENT' })
     assert.equal(await desktop.locator('[data-plugin-visualizer="desktop"]').count(), 1, 'The other plugin stays active')
-    await install(page, 'sound-effects')
+    await page.evaluate(() => window.lxData.updateSetting({ 'player.soundEffect.biquadFilter.hz1000': 6, 'player.soundEffect.convolution.fileName': 'filter-telephone.wav', 'player.soundEffect.pitchShifter.playbackRate': 1.25 }))
     await page.waitForFunction(() => window.__pluginAudio.worklets.length === 2)
-    assert.equal(await page.evaluate(() => window.__pluginAudio.filters.length), 20, 'Reinstalling creates a fresh effects graph')
+    assert.equal(await page.evaluate(() => window.__pluginAudio.filters.length), 20, 'Re-enabling creates a fresh effects graph')
     assert.equal(await page.evaluate(() => window.__pluginAudio.filters[15].gain.value), 6)
-    await uninstall(page, 'sound-effects')
-    assert.equal(await page.evaluate(() => window.__pluginAudio.filters.every(filter => filter.__disconnected)), true)
     await uninstall(page, 'audio-visualizer')
     await desktop.locator('[data-plugin-visualizer="desktop"]').waitFor({ state: 'detached' })
     assert.equal(await page.evaluate(() => window.__pluginAudio.analysers.every(analyser => analyser.__disconnected)), true)
@@ -128,7 +129,7 @@ test('GitHub plugins load independently, release audio resources, and survive of
     assert.deepEqual(fixture.errors, [])
     assert.deepEqual(pluginErrors, [])
     await app.close()
-    fixture = await launch({ profilePath })
+    fixture = await launch({ rendererPath: path.resolve('dist/index.html'), profilePath })
     ;({ app, page } = fixture)
     capturePluginErrors(page)
     page.setDefaultTimeout(12000)

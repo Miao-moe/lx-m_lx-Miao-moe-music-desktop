@@ -4,10 +4,11 @@
     :data-ambient-state="state" :data-ambient-renderer="backend" aria-hidden="true"
   >
     <div ref="visual" :class="$style.visual">
-      <div :class="$style.fallback" :style="fallbackStyle" />
+      <div :class="$style.fallback" :style="fallbackStyle" :hidden="backend == 'kawarp' && !!preview" />
       <div v-if="previousPreview" ref="previousLayer" :class="$style.fallback" :style="previousFallbackStyle" :hidden="backend == 'kawarp'" />
-      <canvas ref="canvas" :class="$style.canvas" :hidden="backend != 'kawarp' || !preview" />
-      <div v-if="preview" :class="$style.shade" />
+      <canvas ref="canvas" :class="$style.canvas" :hidden="backend != 'kawarp' || !preview || !!snapshot" />
+      <img v-if="snapshot" :class="$style.canvas" :src="snapshot" data-ambient-snapshot alt="" draggable="false">
+      <div v-if="preview && backend != 'kawarp'" :class="$style.shade" />
     </div>
   </div>
 </template>
@@ -24,6 +25,9 @@ import { normalizeQuality, surfaceSize } from '@renderer/utils/kawarpBackground/
 import { createKawarpRenderer } from '@renderer/utils/kawarpBackground/renderer'
 import { createArtworkTransition } from '@renderer/utils/kawarpBackground/transition'
 import { createAdaptiveColors } from '@renderer/utils/kawarpBackground/adaptiveColors'
+import { createStillFrame } from '@renderer/utils/kawarpBackground/stillFrame'
+import { createFrameClock } from '@renderer/utils/kawarpBackground/frameClock'
+import { parseColor } from '@renderer/utils/kawarpBackground/contrast'
 
 const props = defineProps({
   cover: { type: String as PropType<string | null>, default: '' },
@@ -36,6 +40,8 @@ const state = ref('static')
 const backend = ref('fallback')
 const preview = ref('')
 const previousPreview = ref('')
+const snapshot = ref('')
+const stillFrame = createStillFrame(url => { snapshot.value = url })
 const fallbackStyle = computed(() => preview.value ? { backgroundImage: `url("${preview.value}")` } : {})
 const previousFallbackStyle = computed(() => ({ backgroundImage: `url("${previousPreview.value}")` }))
 const motion = ref(isMotionEnabled())
@@ -53,7 +59,8 @@ let loadedCover: string | undefined
 let sourceDirty = true
 let disposed = false
 let frame = 0
-let lastFrame = 0
+let snapshotTimer: ReturnType<typeof setTimeout> | undefined
+const frameClock = createFrameClock()
 let time = 14
 let velocity = 0
 let width = 1
@@ -61,8 +68,10 @@ let height = 1
 
 const stop = () => {
   cancelAnimationFrame(frame)
+  clearTimeout(snapshotTimer)
+  snapshotTimer = undefined
   frame = 0
-  lastFrame = 0
+  frameClock.reset()
 }
 const updateSources = () => {
   const current = transition.frame()
@@ -70,16 +79,17 @@ const updateSources = () => {
   previousPreview.value = !current.done && current.from && current.to && current.from !== current.to ? current.from.preview : ''
 }
 const paintOpacity = (current: ReturnType<typeof transition.frame>) => {
-  if (visual.value) visual.value.style.opacity = String(current.opacity)
-  if (previousLayer.value) previousLayer.value.style.opacity = String(1 - current.mix)
+  const opacity = String(current.opacity)
+  const previousOpacity = String(1 - current.mix)
+  if (visual.value && visual.value.style.opacity !== opacity) visual.value.style.opacity = opacity
+  if (previousLayer.value && previousLayer.value.style.opacity !== previousOpacity) previousLayer.value.style.opacity = previousOpacity
 }
 const step = (now: number) => {
   frame = 0
   if (!visible.value || disposed) return
   const interval = 1000 / (quality.value == 'full' ? 30 : 20)
-  if (lastFrame && now - lastFrame < interval) { frame = requestAnimationFrame(step); return }
-  const dt = lastFrame ? Math.min((now - lastFrame) / 1000, 0.1) : interval / 1000
-  lastFrame = now
+  const dt = frameClock.advance(now, interval)
+  if (dt == null) { frame = requestAnimationFrame(step); return }
   const current = transition.frame(now)
   const playing = !!renderer && !!current.to && canMove.value && isPlay.value
   velocity += ((playing ? 1 : 0) - velocity) * (1 - Math.exp(-dt * 4.5))
@@ -87,7 +97,7 @@ const step = (now: number) => {
   const speed = Number.isFinite(requestedSpeed) ? Math.max(0.5, Math.min(1.5, requestedSpeed)) : 1
   time += dt * velocity * speed
   const size = surfaceSize(width, height, quality.value, window.devicePixelRatio)
-  if (preview.value) renderer?.draw(size.width, size.height, time, !current.done)
+  if (preview.value) renderer?.draw(size.width, size.height, time, !current.done, quality.value == 'gentle')
   paintOpacity(current)
   // Always sample the final frame before pausing, including static-quality covers.
   if (!playing && velocity <= 0.005 && current.done) adaptiveColors?.invalidate()
@@ -103,6 +113,12 @@ const step = (now: number) => {
     velocity = 0
     state.value = 'static'
     stop()
+    // Wait for resize/settings bursts to settle instead of starting a PNG
+    // encoding job on every intermediate window size.
+    snapshotTimer = setTimeout(() => {
+      snapshotTimer = undefined
+      if (renderer && preview.value && canvas.value) void stillFrame.capture(canvas.value)
+    }, 80)
   }
 }
 
@@ -115,6 +131,9 @@ function refresh() {
     state.value = 'hidden'
     return
   }
+  // Resume drawing before changing the image, size, motion settings or theme.
+  stillFrame.clear()
+  renderer?.setShade(parseColor(getComputedStyle(document.documentElement).getPropertyValue('--color-content-background')))
   if (!canMove.value) {
     velocity = 0
     transition.finish()
@@ -153,7 +172,9 @@ watch([visible, () => props.cover], ([active, cover]) => {
     transition.hold()
     updateSources()
     sourceDirty = true
-    refresh()
+    // Keep a settled image while the next artwork is downloading. There is no
+    // reason to wake WebGL and encode the same frame again during this wait.
+    if (!snapshot.value) refresh()
   }
   const apply = (value: Artwork | null) => {
     if (current.signal.aborted || disposed) return
@@ -180,6 +201,7 @@ const updateVisibility = () => { hidden.value = document.hidden }
 const updateMotion = () => { motion.value = isMotionEnabled(); refresh() }
 const contextLost = (event: Event) => {
   event.preventDefault()
+  stillFrame.clear()
   renderer?.dispose()
   renderer = null
   sourceDirty = true
@@ -208,6 +230,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true
   loader?.abort()
+  stillFrame.dispose()
   stop()
   adaptiveColors?.dispose()
   observer?.disconnect()

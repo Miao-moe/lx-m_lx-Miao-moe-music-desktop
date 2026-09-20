@@ -4,27 +4,29 @@ dd
   h3#hot_key_local_title {{ $t('setting__hot_key_local_title') }}
   div
     base-checkbox(id="setting_download_hotKeyLocal" v-model="current_hot_key.local.enable" :label="$t('setting__is_enable')" @change="handleHotKeySaveConfig")
-  div(:class="$style.hotKeyContainer" :style="{ opacity: current_hot_key.local.enable ? 1 : .6 }")
-    div(v-for="(item, index) in allHotKeys.local" :key="index" :class="$style.hotKeyItem")
-      h4(:class="$style.hotKeyItemTitle") {{ $t('setting__hot_key_' + item.name) }}
-      base-input(
-        :class="$style.hotKeyItemInput" readonly :auto-paste="false"
-        :placeholder="$t('setting__hot_key_unset_input')" :value="hotKeyConfig.local[item.name] && formatHotKeyName(hotKeyConfig.local[item.name].key)"
-        @keyup.prevent
-        @focus="handleHotKeyFocus($event, item, 'local')"
-        @blur="handleHotKeyBlur($event, item, 'local')")
+  common-setting-reveal(:show="current_hot_key.local.enable" depends="setting_download_hotKeyLocal")
+    .gap-top(:class="$style.hotKeyContainer")
+      div(v-for="(item, index) in allHotKeys.local" :key="index" :class="$style.hotKeyItem")
+        h4(:class="$style.hotKeyItemTitle") {{ $t('setting__hot_key_' + item.name) }}
+        base-input(
+          :class="$style.hotKeyItemInput" readonly :auto-paste="false"
+          :placeholder="$t('setting__hot_key_unset_input')" :value="hotKeyConfig.local[item.name] && formatHotKeyName(hotKeyConfig.local[item.name].key)"
+          @keyup.prevent
+          @focus="handleHotKeyFocus($event, item, 'local')"
+          @blur="handleHotKeyBlur($event, item, 'local')")
 dd
   h3#hot_key_global_title {{ $t('setting__hot_key_global_title') }}
   div
     base-checkbox(id="setting_download_hotKeyGlobal" v-model="current_hot_key.global.enable" :label="$t('setting__is_enable')" @change="handleEnableHotKey")
-  div(:class="$style.hotKeyContainer" :style="{ opacity: current_hot_key.global.enable ? 1 : .6 }")
-    div(v-for="(item, index) in allHotKeys.global" :key="index" :class="$style.hotKeyItem")
-      h4(:class="$style.hotKeyItemTitle") {{ $t('setting__hot_key_' + item.name) }}
-      base-input(
-        :class="[$style.hotKeyItemInput, hotKeyConfig.global[item.name] && hotKeyStatus[hotKeyConfig.global[item.name].key] && hotKeyStatus[hotKeyConfig.global[item.name].key].status === false ? $style.hotKeyFailed : null]"
-        :value="hotKeyConfig.global[item.name] && formatHotKeyName(hotKeyConfig.global[item.name].key)" :auto-paste="false" readonly :placeholder="$t('setting__hot_key_unset_input')" @input.prevent
-        @focus="handleHotKeyFocus($event, item, 'global')"
-        @blur="handleHotKeyBlur($event, item, 'global')")
+  common-setting-reveal(:show="current_hot_key.global.enable" depends="setting_download_hotKeyGlobal")
+    .gap-top(:class="$style.hotKeyContainer")
+      div(v-for="(item, index) in allHotKeys.global" :key="index" :class="$style.hotKeyItem")
+        h4(:class="$style.hotKeyItemTitle") {{ $t('setting__hot_key_' + item.name) }}
+        base-input(
+          :class="[$style.hotKeyItemInput, hotKeyConfig.global[item.name] && hotKeyStatus[hotKeyConfig.global[item.name].key] && hotKeyStatus[hotKeyConfig.global[item.name].key].status === false ? $style.hotKeyFailed : null]"
+          :value="hotKeyConfig.global[item.name] && formatHotKeyName(hotKeyConfig.global[item.name].key)" :auto-paste="false" readonly :placeholder="$t('setting__hot_key_unset_input')" @input.prevent
+          @focus="handleHotKeyFocus($event, item, 'global')"
+          @blur="handleHotKeyBlur($event, item, 'global')")
 </template>
 
 <script>
@@ -243,21 +245,16 @@ export default {
 @import '@renderer/assets/styles/layout.less';
 
 .hotKeyContainer {
-  display: flex;
-  flex-flow: row wrap;
-  // margin-top: -15px;
-  margin-bottom: 15px;
-  transition: opacity @transition-normal;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 16px;
 }
 .hotKeyItem {
-  width: 30%;
-  padding-right: 35px;
-  margin-top: 15px;
-  box-sizing: border-box;
+  min-width: 0;
 }
 .hotKeyItemTitle {
   .mixin-ellipsis-1();
-  padding-bottom: 5px;
+  padding-bottom: 8px;
   color: var(--color-font-label);
   font-size: 12px;
 }

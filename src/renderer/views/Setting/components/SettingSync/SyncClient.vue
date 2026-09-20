@@ -1,5 +1,5 @@
 <template lang="pug">
-dd(data-setting-search="setting__sync_client" data-setting-search-depends="setting_sync_enable setting_sync_mode_client")
+common-setting-reveal(tag="dd" :show="sync.mode == 'client'" data-setting-search="setting__sync_client" depends="setting_sync_enable setting_sync_mode_client")
   h3 {{ $t('setting__sync_client_mode') }}
   div
     .p.small {{ $t('setting__sync_client_status', { status: clientStatus }) }}
@@ -64,6 +64,8 @@ export default {
 }
 
 .hostInput {
-  min-width: 380px;
+  width: 380px;
+  min-width: 0;
+  max-width: 100%;
 }
 </style>

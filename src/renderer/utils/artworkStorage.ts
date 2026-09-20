@@ -11,7 +11,8 @@ let generation = 0
 const clearListeners = new Set<() => void>()
 
 const openDatabase = async() => {
-  database ??= new Promise<IDBDatabase>((resolve, reject) => {
+  if (database) return database
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1)
     request.onupgradeneeded = () => {
       request.result.createObjectStore('values')
@@ -20,13 +21,16 @@ const openDatabase = async() => {
     request.onsuccess = () => {
       request.result.onversionchange = () => {
         request.result.close()
-        database = undefined
+        if (database === opening) database = undefined
       }
+      request.result.onclose = () => { if (database === opening) database = undefined }
       resolve(request.result)
     }
     request.onerror = () => { reject(request.error) }
   })
-  return database
+  database = opening
+  void opening.catch(() => { if (database === opening) database = undefined })
+  return opening
 }
 
 const result = async<T>(request: IDBRequest<T>): Promise<T> => new Promise((resolve, reject) => {

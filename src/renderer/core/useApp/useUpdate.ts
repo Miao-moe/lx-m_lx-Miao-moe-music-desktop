@@ -128,15 +128,15 @@ export default () => {
     })
   })
   const rUpdateProgress = onUpdateProgress(({ params: progress }) => {
+    if (!['downloading', 'downloaded', 'verifying', 'installing'].includes(versionInfo.status)) return
     versionInfo.downloadProgress = progress
+    versionInfo.status = progress.phase ?? 'downloading'
   })
   const rUpdateDownloaded = onUpdateDownloaded(({ params: info }) => {
+    if (!['downloading', 'verifying'].includes(versionInfo.status)) return
     clearUpdateTimeout()
     versionInfo.updateError = ''
-    versionInfo.downloadProgress = null
-    void nextTick(() => {
-      showUpdateModal('downloaded')
-    })
+    versionInfo.status = info.installAfterDownload ? 'verifying' : 'downloaded'
   })
 
   // 监听 reCheck 变化以触发重新检查

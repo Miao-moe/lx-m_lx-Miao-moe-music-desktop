@@ -18,7 +18,8 @@ const { Worker, isMainThread, parentPort } = require('worker_threads')
 
 function build() {
   console.time('build')
-  del.sync(['dist/**', 'build/**'])
+  // The compatibility edition owns its own dependency cache and release output.
+  del.sync(['dist/**', 'build/**', '!build/win7', '!build/win7/**'])
 
   const spinners = new Spinnies({ color: 'blue' })
   spinners.add('main', { text: 'main building' })

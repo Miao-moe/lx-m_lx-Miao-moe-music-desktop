@@ -1,5 +1,6 @@
 import { reactive, markRaw } from '@common/utils/vueTools'
 import music from '@renderer/utils/musicSdk'
+import type { AggregateSearchState } from '../aggregate'
 
 // import { deduplicationList } from '@common/utils/renderer'
 
@@ -11,6 +12,7 @@ export declare interface ListInfo {
   limit: number
   key: string | null
   noItemLabel: string
+  aggregate?: AggregateSearchState
 }
 
 interface ListInfos extends Partial<Record<LX.OnlineSource, ListInfo>> {

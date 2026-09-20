@@ -32,10 +32,14 @@
       <p class="p small">{{ $t('setting__sync_webdav_download_tip') }}</p>
       <p class="p small">{{ $t('setting__sync_webdav_settings_tip') }}</p>
 
-      <div class="p" :class="$style.automatic">
+      <div class="p">
         <base-checkbox id="setting_sync_webdav_auto" :disabled="disabled" :model-value="appSetting['sync.webdav.autoSync']" :label="$t('setting__sync_webdav_auto')" @update:model-value="updateOption('sync.webdav.autoSync', $event)" />
-        <label for="setting_sync_webdav_interval">{{ $t('setting__sync_webdav_interval') }}</label>
-        <base-input id="setting_sync_webdav_interval" v-model="intervalInput" :class="$style.interval" type="number" min="1" max="1440" :disabled="disabled" @change="setInterval" />
+        <common-setting-reveal :show="appSetting['sync.webdav.autoSync']" depends="setting_sync_webdav_auto">
+          <div class="p" :class="$style.automatic">
+            <label for="setting_sync_webdav_interval">{{ $t('setting__sync_webdav_interval') }}</label>
+            <base-input id="setting_sync_webdav_interval" v-model="intervalInput" :class="$style.interval" type="number" min="1" max="1440" :disabled="disabled" @change="setInterval" />
+          </div>
+        </common-setting-reveal>
       </div>
       <div class="p" :class="$style.buttons">
         <base-btn min :disabled="disabled || !canSync" @click="run('sync')">{{ $t('setting__sync_webdav_sync') }}</base-btn>
@@ -137,7 +141,7 @@ const run = async(operation: LX.WebDAV.Operation) => {
   grid-template-columns: max-content minmax(180px, 1fr);
   align-items: center;
   gap: 12px 16px;
-  margin: 18px 0;
+  margin: 12px 0;
   font-size: 13px;
 
   input { min-width: 0; }
@@ -146,13 +150,13 @@ const run = async(operation: LX.WebDAV.Operation) => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 .options {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px 24px;
-  margin-bottom: 14px;
+  gap: 8px 16px;
+  margin-bottom: 8px;
 }
 .automatic { font-size: 13px; }
 .interval { width: 65px; }

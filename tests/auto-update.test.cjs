@@ -44,13 +44,14 @@ function fixture(t, { request, launch, installed = true, openError = '' } = {}) 
   app.isPackaged = true
   app.getPath = () => path.join(installDirectory, 'LX-M Music.exe')
   const handlers = new Map()
+  const invocations = new Map()
   const bus = new EventEmitter()
   const events = []
   const launches = []
   const opened = []
   let quits = 0
   let requests = 0
-  const names = Object.fromEntries(['update_error', 'update_progress', 'update_downloaded', 'update_download_update', 'quit_update'].map(n => [n, n]))
+  const names = Object.fromEntries(['update_error', 'update_progress', 'update_downloaded', 'update_download_update', 'update_cancel_update', 'quit_update'].map(n => [n, n]))
   class Agent {
     compose() { return this }
     async close() {}
@@ -66,14 +67,19 @@ function fixture(t, { request, launch, installed = true, openError = '' } = {}) 
     undici: {
       Agent,
       ProxyAgent: Agent,
-      interceptors: { redirect() {} },
-      async request(url, options) {
+    },
+    '@common/utils/undiciCompat': {
+      composeDispatcher: base => base,
+      async requestWithCompatibility(url, options) {
         requests++
         return request ? request(url, options) : response()
       },
     },
     '@common/utils': { log: { info() {}, warn() {}, error() {} }, isLinux: false },
-    '@common/mainIpc': { mainOn: (name, callback) => handlers.set(name, callback) },
+    '@common/mainIpc': {
+      mainOn: (name, callback) => handlers.set(name, callback),
+      mainHandle: (name, callback) => invocations.set(name, callback),
+    },
     './index': { isExistWindow: () => true, sendEvent(name, params) { events.push({ name, params }); bus.emit(name, params) } },
     '@common/ipcNames': { WIN_MAIN_RENDERER_EVENT_NAME: names },
     '@main/utils': { getProxy: () => null },
@@ -96,6 +102,7 @@ function fixture(t, { request, launch, installed = true, openError = '' } = {}) 
     emit,
     wait,
     findFile,
+    cancel: () => invocations.get('update_cancel_update')(),
     get quits() { return quits },
     get requests() { return requests },
     async download(info = {}, status = 'update_downloaded') {
@@ -148,6 +155,114 @@ test('validated update starts in the existing directory, quits once and survives
   assert.deepEqual(f.launches[0], [file, f.installDirectory, path.join(f.installDirectory, 'resources')])
   assert.deepEqual(f.opened, [])
   assert.deepEqual(fs.readFileSync(file), sample)
+})
+
+test('downloads stay idle on startup and require explicit opt-in to install automatically', async(t) => {
+  const f = fixture(t)
+  await delay(20)
+  assert.equal(f.requests, 0)
+  assert.equal(f.launches.length, 0)
+  await f.download()
+  await delay(20)
+  assert.equal(f.quits, 0)
+  assert.equal(f.launches.length, 0)
+  await f.download({ installAfterDownload: true })
+  for (let i = 0; !f.quits && i < 100; i++) await delay(10)
+  assert.equal(f.quits, 1)
+  assert.equal(f.launches.length, 1)
+  assert.equal(f.events.filter(event => event.name == 'update_progress').at(-1).params.phase, 'installing')
+})
+
+test('a short download reports zero, verified completion and the Release size without Content-Length', async(t) => {
+  const f = fixture(t, { request: async() => response(sample, { 'content-length': undefined }) })
+  await f.download()
+  const reports = f.events.filter(event => event.name == 'update_progress').map(event => event.params)
+  assert.equal(reports[0].progress, 0)
+  assert.equal(reports[0].total, sample.length)
+  assert.equal(reports.at(-1).progress, 100)
+  assert.equal(reports.at(-1).transferred, sample.length)
+  assert.equal(reports.at(-1).phase, 'verifying')
+})
+
+test('a slow unknown-length download reports received bytes without inventing a percentage', async(t) => {
+  const body = new PassThrough()
+  const f = fixture(t, { request: async() => ({ statusCode: 200, headers: {}, body }) })
+  const completed = f.download({ size: 0 })
+  await delay(550)
+  body.write(sample.subarray(0, 10))
+  await delay(30)
+  const partial = f.events.filter(event => event.name == 'update_progress').at(-1).params
+  assert.equal(partial.transferred, 10)
+  assert.equal(partial.total, 0)
+  assert.equal(partial.progress, 0)
+  assert(partial.bytesPerSecond > 0)
+  body.end(sample.subarray(10))
+  await completed
+  assert.equal(f.events.filter(event => event.name == 'update_progress').at(-1).params.total, sample.length)
+})
+
+test('cancel followed immediately by retry cannot install the cancelled download or clear the new task', async(t) => {
+  const firstBody = new PassThrough()
+  let first = true
+  const f = fixture(t, {
+    request: async() => {
+      if (!first) return response()
+      first = false
+      return { statusCode: 200, headers: {}, body: firstBody }
+    },
+  })
+  f.emit('update_download_update', { downloadUrl: 'https://example.test/first.exe', fileName, size: sample.length, digest: '', installAfterDownload: true })
+  await delay(10)
+  f.emit('update_download_update', null)
+  await f.download({ installAfterDownload: true })
+  for (let i = 0; !f.quits && i < 100; i++) await delay(10)
+  assert.equal(f.requests, 2)
+  assert.equal(f.launches.length, 1)
+  assert.equal(f.events.filter(event => event.name == 'update_downloaded').length, 1)
+  assert.equal(f.events.filter(event => event.name == 'update_error').length, 0)
+  assert(fs.existsSync(f.launches[0][0]))
+})
+
+test('automatic installation stops at a failed checksum and stays available for retry', async(t) => {
+  const f = fixture(t)
+  assert.match(await f.download({ installAfterDownload: true, digest: '0'.repeat(64) }, 'update_error'), /SHA-256/)
+  assert.equal(f.launches.length, 0)
+  assert.equal(f.quits, 0)
+  await f.download({ installAfterDownload: true })
+  for (let i = 0; !f.quits && i < 100; i++) await delay(10)
+  assert.equal(f.quits, 1)
+})
+
+test('cancelling at download completion stops installer preparation and permits an immediate retry', async(t) => {
+  const f = fixture(t)
+  await f.download({ installAfterDownload: true })
+  assert.equal(await f.cancel(), true)
+  assert.equal(f.launches.length, 0)
+  assert.equal(f.quits, 0)
+  assert.equal(f.findFile(), undefined)
+  assert.equal(f.events.filter(event => event.name == 'update_error').length, 0)
+  await f.download({ installAfterDownload: true })
+  for (let i = 0; !f.quits && i < 100; i++) await delay(10)
+  assert.equal(f.launches.length, 1)
+  assert.equal(f.quits, 1)
+})
+
+test('cancellation is rejected once the installer starts and preserves its file', async(t) => {
+  let started
+  let finish
+  const launching = new Promise(resolve => { started = resolve })
+  const launched = new Promise(resolve => { finish = resolve })
+  const f = fixture(t, { launch: async() => { started(); await launched } })
+  try {
+    await f.download({ installAfterDownload: true })
+    await launching
+    assert.equal(await f.cancel(), false)
+    assert(fs.existsSync(f.launches[0][0]))
+    assert.equal(f.quits, 0)
+  } finally { finish() }
+  for (let i = 0; !f.quits && i < 100; i++) await delay(10)
+  assert.equal(f.quits, 1)
+  assert.equal(f.launches.length, 1)
 })
 
 test('restart without a downloaded package keeps the app open', async(t) => {

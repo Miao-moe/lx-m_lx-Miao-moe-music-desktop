@@ -3,12 +3,15 @@
 const builder = require('electron-builder')
 const beforePack = require('./build-before-pack')
 const afterPack = require('./build-after-pack')
+const isWin7Build = require('../package.json').lxBuildTarget === 'win7'
+const win7Electron = require('./win7/profile.cjs').electron
 
 /**
 * @type {import('electron-builder').Configuration}
 * @see https://www.electron.build/configuration/configuration
 */
 const options = {
+  ...(isWin7Build ? { electronVersion: win7Electron, generateUpdatesFilesForAllChannels: false } : {}),
   appId: 'com.lx-m.music.desktop',
   productName: 'LX-M Music',
   beforePack,
@@ -21,7 +24,7 @@ const options = {
   },
   directories: {
     buildResources: './resources',
-    output: './build',
+    output: isWin7Build ? process.env.LX_WIN7_OUTPUT ?? './build' : './build',
   },
   files: [
     'dist/**/*',
@@ -56,6 +59,7 @@ const options = {
       provider: 'github',
       owner: 'Miao-moe',
       repo: 'lx-Miao-moe-music-desktop',
+      ...(isWin7Build ? { channel: 'win7' } : {}),
     },
   ],
 }
@@ -275,6 +279,8 @@ const createTarget = {
  * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
 const build = async(target, arch, packageType, publishType) => {
+  if (isWin7Build !== !!packageType?.startsWith('win7_')) throw new Error('The package type must match the selected runtime. Use build:win7 and pack:win7:* for Win7.')
+  if (isWin7Build && (require('electron/package.json').version !== win7Electron || !['x64', 'x86'].includes(arch))) throw new Error('Win7 requires Electron 22.3.27 and x64/x86')
   if (target == 'dir') {
     await builder.build({
       dir: true,

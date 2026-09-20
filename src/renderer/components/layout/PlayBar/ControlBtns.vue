@@ -7,11 +7,8 @@
       </svg>
     </button>
     <button :class="$style.titleBtn" :aria-label="toggleDesktopLyricBtnTitle" @click="toggleDesktopLyric" @contextmenu="toggleLockDesktopLyric">
-      <svg v-show="appSetting['desktopLyric.enable']" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 512 512" space="preserve">
-        <use xlink:href="#icon-desktop-lyric-on" />
-      </svg>
-      <svg v-show="!appSetting['desktopLyric.enable']" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="100%" viewBox="0 0 512 512" space="preserve">
-        <use xlink:href="#icon-desktop-lyric-off" />
+      <svg xmlns="http://www.w3.org/2000/svg" height="100%" viewBox="0 0 24 24" :style="{ opacity: appSetting['desktopLyric.enable'] ? 1 : 'var(--player-control-opacity, .7)' }">
+        <use xlink:href="#icon-mini-player" />
       </svg>
     </button>
     <common-volume-btn />

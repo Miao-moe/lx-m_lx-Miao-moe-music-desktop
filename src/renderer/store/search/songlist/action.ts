@@ -1,7 +1,7 @@
 import { markRawList } from '@common/utils/vueTools'
 import music from '@renderer/utils/musicSdk'
 import { sortInsert, similar } from '@common/utils/common'
-import { appSetting } from '@renderer/store/setting'
+import { createAggregateSearch } from '../aggregate'
 
 import type { ListInfoItem } from './state'
 import { sources, listInfos } from './state'
@@ -12,6 +12,9 @@ interface SearchResult {
   total: number
   source: LX.OnlineSource
 }
+
+const aggregateSearch = createAggregateSearch<SearchResult>()
+export const retryFailedSources = async() => aggregateSearch.retry(listInfos.all)
 
 const requests = new WeakMap<object, symbol>()
 
@@ -72,6 +75,7 @@ const setList = (datas: SearchResult, page: number, text: string): ListInfoItem[
 export const resetListInfo = (sourceId: LX.OnlineSource | 'all'): [] => {
   let listInfo = listInfos[sourceId]
   if (!listInfo) return []
+  aggregateSearch.reset(listInfo)
   requests.delete(listInfo)
   listInfo.page = 1
   listInfo.limit = 20
@@ -97,40 +101,9 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
   if (sourceId == 'all') {
     listInfo.noItemLabel = window.i18n.t('list__loading')
     listInfo.key = key
-    let task = []
-    for (const source of sources) {
-      if (source == 'all') continue
-      const searchPromise = music[source]?.songList?.search(text, page, listInfos.all.limit)
-      if (!searchPromise) {
-        console.log(new Error('source not found: ' + source))
-        task.push(Promise.resolve({
-          list: [],
-          total: 0,
-          limit: listInfos.all.limit,
-          source,
-        }))
-      } else {
-        task.push(searchPromise.catch((error: any) => {
-          console.log(error)
-          return {
-            list: [],
-            total: 0,
-            limit: listInfos.all.limit,
-            source,
-          }
-        }))
-      }
-    }
-    const partial: SearchResult[] = []
-    return Promise.all(task.map(async(request, index) => {
-      const result: SearchResult = await request
-      partial[index] = result
-      if (isCurrent() && appSetting['list.loadingMode'] === 'immediate') setLists(partial.filter(Boolean), page, text, true)
-      return result
-    })).then((results: SearchResult[]) => {
-      if (!isCurrent()) return []
-      return setLists(results, page, text)
-    }).finally(finish)
+    return aggregateSearch.search(listInfo, sources, source => music[source]?.songList?.search(text, page, listInfo.limit), (results, pending) => {
+      setLists(results, page, text, pending)
+    }).then(() => isCurrent() ? listInfo.list : []).finally(finish)
   } else {
     listInfo.noItemLabel = window.i18n.t('list__loading')
     listInfo.key = key

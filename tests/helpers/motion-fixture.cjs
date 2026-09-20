@@ -4,15 +4,16 @@ const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { _electron } = require('playwright-core')
 
-const project = path.resolve(__dirname, '../..')
+const project = process.env.LX_TEST_PROJECT ? path.resolve(process.env.LX_TEST_PROJECT) : path.resolve(__dirname, '../..')
 
 async function launch({ record = false, profilePath, initializeMotion = true, reducedMotion = 'no-preference', rendererPath = process.env.LX_TEST_RENDERER_PATH, disableHardwareAcceleration = true, args = [] } = {}) {
+  if (process.env.LX_TEST_PROJECT) rendererPath = path.join(project, 'dist/index.html')
   const output = profilePath ?? await fs.mkdtemp(path.join(os.tmpdir(), 'lx-motion-check-'))
   await fs.mkdir(path.join(output, 'portable'), { recursive: true })
   const wrapper = path.join(output, 'wrapper.cjs')
   await fs.writeFile(wrapper, `const electron = require('electron');
 electron.app.setAppPath(${JSON.stringify(project)});
-electron.app.getVersion = () => ${JSON.stringify(require('../../package.json').version)};
+electron.app.getVersion = () => ${JSON.stringify(require(path.join(project, 'package.json')).version)};
 electron.app.setAsDefaultProtocolClient = () => false;
 electron.app.removeAsDefaultProtocolClient = () => false;
 ${rendererPath ? `electron.app.on('web-contents-created', (_event, contents) => {
@@ -28,7 +29,7 @@ require(${JSON.stringify(path.join(project, 'dist/main.js'))});`)
   const env = { ...process.env, PORTABLE_EXECUTABLE_DIR: output }
   delete env.ELECTRON_RUN_AS_NODE
   const app = await _electron.launch({
-    executablePath: require('electron'),
+    executablePath: process.env.LX_TEST_ELECTRON ?? require(path.join(project, 'node_modules/electron')),
     args: [wrapper, '-hidden', ...(disableHardwareAcceleration ? ['-dha'] : []), ...args],
     env,
     ...(record ? { recordVideo: { dir: path.join(output, 'video'), size: { width: 1114, height: 718 } } } : {}),

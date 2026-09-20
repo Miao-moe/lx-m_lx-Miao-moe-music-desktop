@@ -53,7 +53,7 @@ async function fixture(t) {
     assert.ok(path.resolve(temporary).startsWith(path.join(os.tmpdir(), 'lx-plugin-manager-')))
     await fs.rm(temporary, { recursive: true, force: true })
   })
-  const state = { packages: [await bundle('sound-effects'), await bundle('audio-visualizer')], offline: false, corruptDownload: false, compileError: false, compilations: 0 }
+  const state = { packages: [await bundle('test-effects'), await bundle('audio-visualizer')], offline: false, corruptDownload: false, compileError: false, compilations: 0 }
   const fetchBinary = async url => {
     if (state.offline) throw new Error('Offline')
     if (url === OFFICIAL_PLUGIN_ROOT + PLUGIN_CATALOG_FILE) return Buffer.from(JSON.stringify({ schemaVersion: 2, plugins: state.packages.map(item => item.entry) }))
@@ -111,9 +111,33 @@ test('the text catalog advertises verified source ZIP and LXPlugin packages for 
   assert.throws(() => parseCatalog(fsSync.readFileSync(path.join(project, 'plugins/official/catalog-v2.json'))), /Invalid plugin catalog/)
 })
 
+test('built-in features ignore legacy installations and reject package replacement without touching saved data', async t => {
+  const { manager, root, state, writePackage } = await fixture(t)
+  const legacy = {
+    'sound-effects': { directory: 'old-missing-effects', manifestHash: 'invalid', source: 'official' },
+    'audio-tag-editor': { directory: 'old-damaged-editor', manifestHash: 'invalid', source: 'local' },
+  }
+  const saved = JSON.stringify(legacy)
+  await fs.writeFile(path.join(root, 'installed.json'), saved)
+  state.offline = true
+  const snapshot = await manager.refresh()
+  assert.deepEqual(snapshot.installed, {})
+  assert.deepEqual(snapshot.errors, {})
+  assert.deepEqual(snapshot.sources, {})
+  for (const id of Object.keys(legacy)) {
+    await assert.rejects(manager.install(id), { code: 'builtin' })
+    await assert.rejects(manager.uninstall(id), { code: 'builtin' })
+    await assert.rejects(manager.createExport(id), { code: 'builtin' })
+    await assert.rejects(manager.prepareImport(await writePackage(await bundle(id))), { code: 'builtin' })
+    await assert.rejects(manager.prepareImport(await writePackage(compiledBundle(id), 'incoming.lxplugin')), { code: 'builtin' })
+  }
+  assert.equal(state.compilations, 0)
+  assert.equal(await fs.readFile(path.join(root, 'installed.json'), 'utf8'), saved)
+})
+
 test('catalog rejects unsafe URLs, unknown formats, duplicate IDs and oversized packages', async() => {
-  const { entry } = await bundle('sound-effects')
-  for (const patch of [{ path: '../escape.zip' }, { path: 'https://example.com/a.zip' }, { path: 'sound-effects/1.0.0/a/../b.zip' }, { path: entry.path.replace('.zip', '.tar') }, { id: 'unknown' }, { bytes: 64 * 1024 * 1024 + 1 }]) {
+  const { entry } = await bundle('test-effects')
+  for (const patch of [{ path: '../escape.zip' }, { path: 'https://example.com/a.zip' }, { path: 'test-effects/1.0.0/a/../b.zip' }, { path: entry.path.replace('.zip', '.tar') }, { id: 'unknown' }, { bytes: 64 * 1024 * 1024 + 1 }]) {
     assert.throws(() => parseCatalog(Buffer.from(JSON.stringify({ schemaVersion: 2, plugins: [{ ...entry, ...patch }] }))))
   }
   assert.throws(() => parseCatalog(Buffer.from(JSON.stringify({ schemaVersion: 1, plugins: [entry] }))))
@@ -206,14 +230,14 @@ test('plugins compile independently, restart offline and uninstall only their ow
   const { manager, state, root, restart } = await fixture(t)
   await fs.writeFile(path.join(root, 'preserved-settings.json'), '{"eq":6}')
   await manager.refresh()
-  const first = (await manager.install('sound-effects')).installed['sound-effects']
+  const first = (await manager.install('test-effects')).installed['test-effects']
   await manager.install('audio-visualizer')
   state.offline = true
   const reopened = restart()
   assert.equal(Object.keys((await reopened.snapshot()).installed).length, 2)
   assert.equal(state.compilations, 2, 'Restart uses saved compiled files')
   assert.equal((await reopened.refresh()).catalogError, 'Offline')
-  assert.deepEqual(Object.keys((await reopened.uninstall('sound-effects')).installed), ['audio-visualizer'])
+  assert.deepEqual(Object.keys((await reopened.uninstall('test-effects')).installed), ['audio-visualizer'])
   await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
   assert.equal(await fs.readFile(path.join(root, 'preserved-settings.json'), 'utf8'), '{"eq":6}')
 })
@@ -221,12 +245,12 @@ test('plugins compile independently, restart offline and uninstall only their ow
 test('store installs retain sources but no downloaded ZIP or compilation workspace, and export offline', async t => {
   const { manager, state, root, restart } = await fixture(t)
   await manager.refresh()
-  const installed = (await manager.install('sound-effects')).installed['sound-effects']
+  const installed = (await manager.install('test-effects')).installed['test-effects']
   assert.deepEqual((await fs.readdir(installed.directory)).sort(), ['.source', 'assets', 'manifest.json', 'renderer.js'])
   assert.deepEqual((await fs.readdir(root)).sort(), ['catalog-cache.json', 'installed.json', path.basename(installed.directory)].sort())
   await assert.rejects(fs.stat(path.join(installed.directory, '.source.zip')), { code: 'ENOENT' })
   state.offline = true
-  const exported = await restart().createExport('sound-effects')
+  const exported = await restart().createExport('test-effects')
   assert.deepEqual(await unpackSource(exported.bytes), await unpackSource(state.packages[0].archive))
 })
 
@@ -246,18 +270,18 @@ test('repacking a wrapped ZIP preserves source contents and leaves the imported 
 test('a source write failure rolls back the update and removes all incomplete files', async t => {
   const { manager, state, root } = await fixture(t)
   await manager.refresh()
-  const installed = (await manager.install('sound-effects')).installed['sound-effects']
-  state.packages[0] = await bundle('sound-effects', '1.1.0')
+  const installed = (await manager.install('test-effects')).installed['test-effects']
+  state.packages[0] = await bundle('test-effects', '1.1.0')
   await manager.refresh()
   const writeFile = fs.writeFile
   fs.writeFile = async(filename, ...args) => {
     if (filename.includes(path.sep + '.source' + path.sep) && path.basename(filename) === 'index.js') throw Object.assign(new Error('Disk full'), { code: 'ENOSPC' })
     return writeFile(filename, ...args)
   }
-  try { await assert.rejects(manager.install('sound-effects'), { code: 'ENOSPC' }) } finally { fs.writeFile = writeFile }
-  assert.equal((await manager.snapshot()).installed['sound-effects'].directory, installed.directory)
+  try { await assert.rejects(manager.install('test-effects'), { code: 'ENOSPC' }) } finally { fs.writeFile = writeFile }
+  assert.equal((await manager.snapshot()).installed['test-effects'].directory, installed.directory)
   assert.deepEqual((await fs.readdir(root)).sort(), ['catalog-cache.json', 'installed.json', path.basename(installed.directory)].sort())
-  assert.deepEqual(await unpackSource((await manager.createExport('sound-effects')).bytes), await unpackSource((await bundle('sound-effects')).archive))
+  assert.deepEqual(await unpackSource((await manager.createExport('test-effects')).bytes), await unpackSource((await bundle('test-effects')).archive))
 })
 
 test('source junctions and source manifest tampering cannot be exported', async t => {
@@ -279,38 +303,38 @@ test('source junctions and source manifest tampering cannot be exported', async 
 test('download, metadata and compilation failures preserve the previous installation', async t => {
   const { manager, state, root } = await fixture(t)
   await manager.refresh()
-  const first = (await manager.install('sound-effects')).installed['sound-effects']
-  state.packages[0] = await bundle('sound-effects', '1.1.0')
+  const first = (await manager.install('test-effects')).installed['test-effects']
+  state.packages[0] = await bundle('test-effects', '1.1.0')
   await manager.refresh()
   state.corruptDownload = true
-  await assert.rejects(manager.install('sound-effects'), /checksum/)
+  await assert.rejects(manager.install('test-effects'), /checksum/)
   state.corruptDownload = false
   state.packages[0].entry.version = '1.2.0'
   state.packages[0].entry.path = state.packages[0].entry.path.replace('/1.1.0/', '/1.2.0/')
   await manager.refresh()
-  await assert.rejects(manager.install('sound-effects'), /does not match/)
-  state.packages[0] = await bundle('sound-effects', '1.1.0')
+  await assert.rejects(manager.install('test-effects'), /does not match/)
+  state.packages[0] = await bundle('test-effects', '1.1.0')
   await manager.refresh()
   state.compileError = true
-  await assert.rejects(manager.install('sound-effects'), { code: 'compile_failed' })
-  assert.equal((await manager.snapshot()).installed['sound-effects'].directory, first.directory)
+  await assert.rejects(manager.install('test-effects'), { code: 'compile_failed' })
+  assert.equal((await manager.snapshot()).installed['test-effects'].directory, first.directory)
   assert.equal((await fs.readdir(root)).some(name => /^(source|install)-/.test(name)), false)
   state.compileError = false
   await fs.writeFile(path.join(first.directory, 'renderer.js'), 'corrupt')
-  assert.match((await manager.snapshot()).errors['sound-effects'], /checksum/)
-  assert.equal((await manager.install('sound-effects')).installed['sound-effects'].manifest.version, '1.1.0')
+  assert.match((await manager.snapshot()).errors['test-effects'], /checksum/)
+  assert.equal((await manager.install('test-effects')).installed['test-effects'].manifest.version, '1.1.0')
   await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
 })
 
 test('concurrent changes are serialized and unsupported APIs are rejected', async t => {
   const { manager, state, root } = await fixture(t)
   await manager.refresh()
-  await Promise.all([manager.install('sound-effects'), manager.uninstall('sound-effects')])
+  await Promise.all([manager.install('test-effects'), manager.uninstall('test-effects')])
   assert.deepEqual((await manager.snapshot()).installed, {})
   assert.deepEqual(await fs.readdir(root), ['catalog-cache.json', 'installed.json'])
   state.packages[0].entry.apiVersion = 99
   await manager.refresh()
-  await assert.rejects(manager.install('sound-effects'), /different application version/)
+  await assert.rejects(manager.install('test-effects'), /different application version/)
   await assert.rejects(manager.install('../outside'), /Unknown official plugin/)
 })
 
@@ -346,10 +370,10 @@ test('malformed metadata keeps the last good catalog and IDs cannot address anot
   state.packages[0].entry.name = { 'en-us': 123 }
   assert.ok((await manager.refresh()).catalogError)
   assert.equal((await restart().snapshot()).catalog.length, 2)
-  const first = (await manager.install('sound-effects')).installed['sound-effects']
+  const first = (await manager.install('test-effects')).installed['test-effects']
   const filename = path.join(root, 'installed.json')
   const registry = JSON.parse(await fs.readFile(filename, 'utf8'))
-  registry['brand-new-plugin'] = registry['sound-effects']
+  registry['brand-new-plugin'] = registry['test-effects']
   await fs.writeFile(filename, JSON.stringify(registry))
   await assert.rejects(manager.uninstall('brand-new-plugin'), /Invalid installed plugin directory/)
   assert.ok(await fs.stat(first.directory))
@@ -416,7 +440,7 @@ test('legacy LXPlugin imports are supported while renamed archives and invalid Z
   const item = await bundle(id)
   const first = (await manager.importPrepared(await manager.prepareImport(await writePackage(item)))).installed[id]
   const oldCatalog = require('../plugins/official/catalog-v2.json')
-  const oldBytes = await fs.readFile(path.join(project, 'plugins/official', oldCatalog.plugins[0].path))
+  const oldBytes = await fs.readFile(path.join(project, 'plugins/official', oldCatalog.plugins.find(plugin => plugin.id === 'audio-visualizer').path))
   const legacy = await manager.prepareImport(await writePackage({ archive: oldBytes }, 'legacy.lxplugin'))
   assert.equal(legacy.format, 'lxplugin')
   assert.equal((await manager.importPrepared(legacy)).installed[legacy.manifest.id].format, 'lxplugin')
@@ -435,7 +459,7 @@ test('legacy LXPlugin imports are supported while renamed archives and invalid Z
 test('installations without source ZIPs require reinstall and retain settings', async t => {
   const { manager, root, restart } = await fixture(t)
   await manager.refresh()
-  const id = 'sound-effects'
+  const id = 'test-effects'
   const first = (await manager.install(id)).installed[id]
   const registryFile = path.join(root, 'installed.json')
   const registry = JSON.parse(await fs.readFile(registryFile, 'utf8'))
@@ -483,8 +507,8 @@ test('failed registry and export writes keep the previous installation and backu
 test('exports reject old extensions, damaged source files and installed paths', async t => {
   const { manager, state, root, files } = await fixture(t)
   await manager.refresh()
-  const installed = (await manager.install('sound-effects')).installed['sound-effects']
-  const exported = await manager.createExport('sound-effects')
+  const installed = (await manager.install('test-effects')).installed['test-effects']
+  const exported = await manager.createExport('test-effects')
   assert.deepEqual(exported.bytes, state.packages[0].archive)
   for (const target of [path.join(root, 'bad.zip'), path.join(installed.directory, 'bad.zip'), path.join(files, 'wrong.lxplugin')]) await assert.rejects(manager.writeExport(target, exported.bytes), { code: 'invalid_destination' })
   const junction = path.join(files, 'plugin-link')
@@ -492,7 +516,7 @@ test('exports reject old extensions, damaged source files and installed paths', 
   await assert.rejects(manager.writeExport(path.join(junction, 'bad.zip'), exported.bytes), { code: 'invalid_destination' })
   await fs.unlink(junction)
   await fs.writeFile(path.join(installed.directory, '.source/src/index.js'), 'corrupt')
-  await assert.rejects(manager.createExport('sound-effects'), { code: 'corrupt_installation' })
+  await assert.rejects(manager.createExport('test-effects'), { code: 'corrupt_installation' })
   await assert.rejects(manager.createExport('not-installed'), { code: 'not_installed' })
   await assert.rejects(manager.createExport('../outside'), { code: 'not_installed' })
 })

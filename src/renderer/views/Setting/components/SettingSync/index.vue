@@ -8,13 +8,13 @@ dd
 
 dd(data-setting-search="setting__sync_mode setting__sync_client setting__sync_server" data-setting-search-depends="setting_sync_enable")
   h3#sync_mode {{ $t('setting__sync_mode') }}
-  div
+  div.setting-options
     base-checkbox.gap-left(id="setting_sync_mode_server" :disabled="sync.enable" :model-value="appSetting['sync.mode']" need value="server" :label="$t('setting__sync_mode_server')" @update:model-value="updateSetting({ 'sync.mode': $event })")
     base-checkbox.gap-left(id="setting_sync_mode_client" :disabled="sync.enable" :model-value="appSetting['sync.mode']" need value="client" :label="$t('setting__sync_mode_client')" @update:model-value="updateSetting({ 'sync.mode': $event })")
 
 
-SyncClient(v-if="sync.mode == 'client'")
-SyncServer(v-else)
+SyncClient
+SyncServer
 
 SyncWebDAV
 

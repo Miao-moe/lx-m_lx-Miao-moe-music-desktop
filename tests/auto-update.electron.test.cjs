@@ -18,7 +18,7 @@ const nsis = process.env.LX_TEST_MAKENSIS || (fs.existsSync(cache) && fs.readdir
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lx-update-nsis-测试 & user's "))
-  const exe = path.join(root, 'LX-M Music-v9.0.0-x64-Setup.exe')
+  const exe = path.join(root, `LX-M Music-v9.0.0-${process.env.LX_TEST_PROJECT ? 'win7_' : ''}x64-Setup.exe`)
   const result = path.join(root, 'nsis-result.txt')
   const installDirectory = path.join(root, "音乐 & user's app")
   const cleanup = []
@@ -31,7 +31,7 @@ function fixture(t) {
     for (const dispose of cleanup.reverse()) await dispose()
     assert.equal(path.dirname(path.resolve(root)), path.resolve(os.tmpdir()))
     assert(path.basename(root).startsWith('lx-update-nsis-'))
-    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 15, retryDelay: 100 })
   })
   const readResult = async() => {
     for (let i = 0; !fs.existsSync(result) && i < 200; i++) await delay(25)
@@ -61,16 +61,21 @@ test('real NSIS receives the exact directory and silent/relaunch flags through C
   assert(lines[1].includes('--updated /S --force-run'))
 })
 
-test('the real update buttons report a missing package, then download and launch NSIS before quitting', {
+test('update choices require a click, show progress, cancel downloads and silently install without a second prompt', {
   skip: process.platform != 'win32' || !nsis,
   timeout: 60000,
 }, async(t) => {
   const f = fixture(t)
   const bytes = fs.readFileSync(f.exe)
   fs.writeFileSync(path.join(f.installDirectory, 'Uninstall LX-M Music.exe'), 'installed-edition test marker')
+  const responses = []
+  const slice = Math.floor(bytes.length / 3)
   const server = http.createServer((_req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length })
-    res.end(bytes)
+    res.write(bytes.subarray(0, slice))
+    const timer = setTimeout(() => { if (!res.destroyed) res.write(bytes.subarray(slice, slice * 2)) }, 650)
+    res.on('close', () => { clearTimeout(timer) })
+    responses.push(res)
   })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -95,19 +100,22 @@ test('the real update buttons report a missing package, then download and launch
     const getPath = app.getPath.bind(app)
     app.getPath = name => name == 'exe' ? exe : getPath(name)
     Object.defineProperty(app, 'isPackaged', { value: true, configurable: true })
-    const fs = process.getBuiltinModule('fs')
+    const fs = process.mainModule.require('fs')
     const mkdtemp = fs.mkdtempSync
     global.__updateTestDirectories = []
     fs.mkdtempSync = (...args) => {
       const directory = mkdtemp(...args)
-      if (process.getBuiltinModule('path').basename(directory).startsWith('lx-m-update-')) global.__updateTestDirectories.push(directory)
+      if (process.mainModule.require('path').basename(directory).startsWith('lx-m-update-')) global.__updateTestDirectories.push(directory)
       return directory
     }
   }, path.join(f.installDirectory, 'LX-M Music.exe'))
   await page.evaluate(info => {
+    window.__updateTestOpenedUrls = []
+    require('electron').shell.openExternal = async url => { window.__updateTestOpenedUrls.push(url) }
     const state = window.lxData.versionInfo
     Object.assign(state.newVersion, info)
-    Object.assign(state, { isLatest: false, isUnknown: false, reCheck: false, status: 'downloaded', showModal: true })
+    Object.assign(state, { isLatest: false, isUnknown: false, reCheck: false, status: 'idle', showModal: true })
+    window.lxData.appSetting['common.tryAutoUpdate'] = true
   }, {
     version: '9.0.0',
     desc: '## v9.0.0\n\n### 修复\n\n- 更新测试',
@@ -117,19 +125,145 @@ test('the real update buttons report a missing package, then download and launch
     size: bytes.length,
     digest: 'sha256:' + crypto.createHash('sha256').update(bytes).digest('hex'),
   })
-  await page.getByRole('button', { name: '立即重启更新', exact: true }).click()
+  const auto = () => page.getByRole('button', { name: '自动更新', exact: true })
+  const later = () => page.getByRole('button', { name: '暂不更新', exact: true })
+  const manual = () => page.getByRole('button', { name: '手动更新', exact: true })
+  const show = async() => {
+    await page.evaluate(() => { window.lxData.versionInfo.showModal = true })
+    await auto().waitFor()
+  }
+  const checkProgress = async() => {
+    await page.waitForFunction(() => {
+      const value = Number(document.querySelector('[data-update-progress] [role="progressbar"]')?.getAttribute('aria-valuenow'))
+      return value > 0 && value < 100
+    })
+    assert(await auto().isDisabled())
+    assert(await later().isEnabled())
+    assert(await manual().isEnabled())
+    assert.equal(closed, false)
+    assert.equal(fs.existsSync(f.result), false)
+  }
+  await auto().waitFor()
+  await delay(3200) // Includes the startup version check with the old automatic-download preference enabled.
+  assert.equal(responses.length, 0)
+  assert.equal(await page.getByRole('progressbar', { name: '更新进度' }).count(), 0)
+  await later().click()
+  await auto().waitFor({ state: 'hidden' })
+  assert.equal(responses.length, 0)
+  await show()
+  await manual().click()
+  await auto().waitFor({ state: 'hidden' })
+  assert.equal(responses.length, 0)
+  assert.deepEqual(await page.evaluate(() => window.__updateTestOpenedUrls), ['https://github.com/Miao-moe/lx-m_lx-Miao-moe-music-desktop/releases'])
+
+  await show()
+  await auto().click()
+  await checkProgress()
+  // A refused or pending cancellation must not look like a successful stop.
+  await page.evaluate(() => {
+    const ipc = require('electron').ipcRenderer
+    const invoke = ipc.invoke.bind(ipc)
+    ipc.invoke = (channel, ...args) => {
+      if (channel !== 'winMain_update_cancel_update') return invoke(channel, ...args)
+      ipc.invoke = invoke
+      return new Promise(resolve => { window.__updateCancelReply = resolve })
+    }
+  })
+  await later().click()
+  await page.waitForFunction(() => typeof window.__updateCancelReply === 'function')
+  assert(await auto().isVisible())
+  assert(await later().isDisabled())
+  assert(await manual().isDisabled())
+  assert.equal(await page.evaluate(() => window.lxData.versionInfo.status), 'downloading')
+  await page.evaluate(() => { window.__updateCancelReply(false) })
+  await page.waitForFunction(() => !Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === '暂不更新')?.disabled)
+  assert(await auto().isVisible())
+  assert.equal(responses[0].destroyed, false)
+  await fs.promises.mkdir(path.join(project, 'logs/update-progress'), { recursive: true })
+  await page.screenshot({ path: path.join(project, 'logs/update-progress/download.png') })
+  await later().click()
+  await auto().waitFor({ state: 'hidden' })
+  for (let i = 0; !responses[0].destroyed && i < 100; i++) await delay(10)
+  assert(responses[0].destroyed)
+  await show()
+  await auto().click()
+  await checkProgress()
+  await manual().click()
+  await auto().waitFor({ state: 'hidden' })
+  for (let i = 0; !responses[1].destroyed && i < 100; i++) await delay(10)
+  assert(responses[1].destroyed)
+  assert.equal(fs.existsSync(f.result), false)
+  assert.equal((await page.evaluate(() => window.__updateTestOpenedUrls)).length, 2)
+
+  // Hold status delivery so the user can cancel while the main process has
+  // already entered verification, then deliver the stale events after the ACK.
+  await show()
+  await auto().click()
+  await checkProgress()
+  const window = await app.browserWindow(page)
+  await window.evaluate(window => {
+    const fs = process.mainModule.require('fs')
+    const originalLstat = fs.promises.lstat
+    const originalSend = window.webContents.send.bind(window.webContents)
+    const held = []
+    let reached
+    global.__updateVerificationReady = new Promise(resolve => { reached = resolve })
+    const gate = new Promise(resolve => { global.__updateVerificationRelease = resolve })
+    fs.promises.lstat = async(...args) => {
+      const stat = await originalLstat(...args)
+      if (String(args[0]).includes('lx-m-update-') && String(args[0]).endsWith('.exe')) {
+        reached()
+        await gate
+      }
+      return stat
+    }
+    window.webContents.send = (channel, ...args) => {
+      if (channel === 'winMain_update_downloaded' || (channel === 'winMain_update_progress' && args[0]?.phase !== 'downloading')) {
+        held.push([channel, ...args])
+      } else originalSend(channel, ...args)
+    }
+    global.__updateRestoreDelivery = () => {
+      fs.promises.lstat = originalLstat
+      window.webContents.send = originalSend
+      for (const args of held.splice(0)) originalSend(...args)
+    }
+  })
+  await window.dispose()
+  try {
+    responses.at(-1).end(bytes.subarray(slice * 2))
+    await app.evaluate(() => global.__updateVerificationReady)
+    assert.equal(await page.evaluate(() => window.lxData.versionInfo.status), 'downloading')
+    await later().click()
+    assert(await auto().isVisible())
+    assert(await later().isDisabled())
+    await app.evaluate(() => { global.__updateVerificationRelease() })
+    await auto().waitFor({ state: 'hidden' })
+  } finally {
+    await app.evaluate(() => {
+      global.__updateVerificationRelease()
+      global.__updateRestoreDelivery()
+    })
+  }
+  await page.evaluate(() => new Promise(resolve => { window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)) }))
+  assert.equal(await page.evaluate(() => window.lxData.versionInfo.status), 'idle')
+  assert.equal(fs.existsSync(f.result), false)
+  assert.equal(closed, false)
+
+  await show()
+  await page.evaluate(() => { window.lxData.versionInfo.status = 'downloaded' })
+  await auto().click()
   await page.getByRole('alert').filter({ hasText: '更新安装包不存在' }).waitFor()
   assert.equal(closed, false, 'failed preparation must leave the application running')
-  await page.getByRole('button', { name: '自动更新', exact: true }).click()
-  await page.getByRole('button', { name: '立即重启更新', exact: true }).waitFor()
+  await auto().click()
+  await checkProgress()
   downloadedFiles = await app.evaluate(() => global.__updateTestDirectories.map(dir => {
-    const fs = process.getBuiltinModule('fs')
-    const path = process.getBuiltinModule('path')
-    return fs.readdirSync(dir).map(name => path.join(dir, name))
+    const fs = process.mainModule.require('fs')
+    const path = process.mainModule.require('path')
+    return fs.existsSync(dir) ? fs.readdirSync(dir).map(name => path.join(dir, name)) : []
   }).flat())
   assert.equal(downloadedFiles.length, 1)
   const closing = app.waitForEvent('close')
-  await page.getByRole('button', { name: '立即重启更新', exact: true }).click()
+  responses.at(-1).end(bytes.subarray(slice * 2))
   await closing
   const lines = await f.readResult()
   assert.equal(lines[0], f.installDirectory)

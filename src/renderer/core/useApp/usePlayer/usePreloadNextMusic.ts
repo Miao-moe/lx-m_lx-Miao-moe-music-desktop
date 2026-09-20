@@ -1,7 +1,7 @@
 import { onBeforeUnmount, watch } from '@common/utils/vueTools'
-import { onTimeupdate, getCurrentTime, getAudioElement } from '@renderer/plugins/player'
+import { onPlaying, onTimeupdate, getCurrentTime, getAudioElement, gaplessAudioOutput } from '@renderer/plugins/player'
 import { playProgress } from '@renderer/store/player/playProgress'
-import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
+import { musicInfo, playMusicInfo, playQueueRevision } from '@renderer/store/player/state'
 import { getNextPlayMusicInfo, playPreloadedNext, resetRandomNextMusicInfo } from '@renderer/core/player'
 import { getMusicUrl } from '@renderer/core/music'
 import { appSetting } from '@renderer/store/setting'
@@ -10,6 +10,7 @@ import {
   destroyGaplessEngine,
   initGaplessEngine,
   isGaplessHandoffActive,
+  isGaplessTransitionActive,
   refreshGaplessTransition,
   setGaplessMuted,
   setNextSongUrl,
@@ -17,6 +18,7 @@ import {
 import { reportPlayHistory } from '@renderer/utils/playHistoryReporter'
 
 let audio: HTMLAudioElement
+let cancelCheckMusicUrl: (() => void) | null = null
 const initAudio = () => {
   if (audio) return
   audio = new Audio()
@@ -30,6 +32,7 @@ const initAudio = () => {
 
 const checkMusicUrl = async(url: string): Promise<boolean> => {
   if (!url) return false
+  cancelCheckMusicUrl?.()
   initAudio()
   return new Promise((resolve) => {
     let timeout = 0
@@ -40,6 +43,7 @@ const checkMusicUrl = async(url: string): Promise<boolean> => {
     }
     const finish = (result: boolean) => {
       clear()
+      cancelCheckMusicUrl = null
       resolve(result)
     }
     const handleError = () => {
@@ -48,6 +52,7 @@ const checkMusicUrl = async(url: string): Promise<boolean> => {
     const handleCanPlay = () => {
       finish(true)
     }
+    cancelCheckMusicUrl = () => { finish(false) }
     timeout = window.setTimeout(() => {
       finish(false)
     }, 8000)
@@ -58,11 +63,14 @@ const checkMusicUrl = async(url: string): Promise<boolean> => {
   })
 }
 
-const getAvailableMusicUrl = async(info: LX.Player.PlayMusicInfo) => {
+const getAvailableMusicUrl = async(info: LX.Player.PlayMusicInfo, requestId: number) => {
   const url = await getMusicUrl({ musicInfo: info.musicInfo }).catch(() => '')
+  if (requestId !== preloadMusicInfo.requestId) return ''
   if (await checkMusicUrl(url)) return url
+  if (requestId !== preloadMusicInfo.requestId) return ''
 
   const refreshedUrl = await getMusicUrl({ musicInfo: info.musicInfo, isRefresh: true }).catch(() => '')
+  if (requestId !== preloadMusicInfo.requestId) return ''
   return await checkMusicUrl(refreshedUrl) ? refreshedUrl : ''
 }
 
@@ -77,6 +85,11 @@ const preloadMusicInfo = {
 
 const resetPreloadInfo = () => {
   preloadMusicInfo.requestId++
+  cancelCheckMusicUrl?.()
+  if (audio) {
+    audio.removeAttribute('src')
+    audio.load()
+  }
   preloadMusicInfo.preProgress = 0
   preloadMusicInfo.currentMusicId = null
   preloadMusicInfo.info = null
@@ -92,13 +105,13 @@ const preloadNextMusicUrl = async(curTime: number) => {
   const requestId = ++preloadMusicInfo.requestId
   preloadMusicInfo.isLoading = true
   preloadMusicInfo.preProgress = curTime
-  const info = await getNextPlayMusicInfo()
+  const info = await getNextPlayMusicInfo().catch(() => null)
   if (!info || requestId !== preloadMusicInfo.requestId || musicInfo.id !== currentMusicId) {
     if (requestId === preloadMusicInfo.requestId) preloadMusicInfo.isLoading = false
     return
   }
 
-  const url = await getAvailableMusicUrl(info)
+  const url = await getAvailableMusicUrl(info, requestId)
   if (requestId !== preloadMusicInfo.requestId || musicInfo.id !== currentMusicId) return
 
   preloadMusicInfo.isLoading = false
@@ -110,12 +123,15 @@ const preloadNextMusicUrl = async(curTime: number) => {
 }
 
 export default () => {
-  initGaplessEngine(getAudioElement(), (url) => {
-    const info = preloadMusicInfo.info
+  initGaplessEngine(getAudioElement(), async(url, isCurrentTransition) => {
+    const { info, requestId, currentMusicId } = preloadMusicInfo
     if (!info || preloadMusicInfo.url !== url || preloadMusicInfo.currentMusicId !== musicInfo.id) return false
+    const nextInfo = await getNextPlayMusicInfo().catch(() => null)
+    if (!isCurrentTransition() || window.lx.isPlayedStop || requestId !== preloadMusicInfo.requestId || currentMusicId !== musicInfo.id) return false
+    if (!nextInfo || nextInfo.musicInfo.id !== info.musicInfo.id || nextInfo.listId !== info.listId || nextInfo.isTempPlay !== info.isTempPlay) return false
     if (musicInfo.id) void reportPlayHistory(musicInfo.id)
-    return playPreloadedNext(info, url)
-  })
+    return playPreloadedNext(nextInfo, url)
+  }, gaplessAudioOutput)
 
   const setProgress = (time: number) => {
     if (!musicInfo.id) return
@@ -128,11 +144,25 @@ export default () => {
     if (!isExpectedHandoff) cancelGaplessTransition()
   }
 
-  watch(() => appSetting['player.togglePlayMethod'], () => {
-    if (preloadMusicInfo.info && !preloadMusicInfo.info.isTempPlay) resetRandomNextMusicInfo()
+  const invalidatePreload = () => {
+    const wasTransitionActive = isGaplessTransitionActive()
+    const hasPreload = preloadMusicInfo.isLoading || preloadMusicInfo.info !== null || wasTransitionActive
+    if (!hasPreload) return
     resetPreloadInfo()
     cancelGaplessTransition()
-  })
+    if (wasTransitionActive && getAudioElement().ended) {
+      const currentMusicId = musicInfo.id
+      queueMicrotask(() => {
+        if (musicInfo.id === currentMusicId && getAudioElement().ended && !isGaplessTransitionActive()) window.app_event.playerEnded()
+      })
+    }
+  }
+  // Cancel once per edit, before a pending handoff can consume the old candidate.
+  watch(playQueueRevision, invalidatePreload, { flush: 'sync' })
+  watch(() => appSetting['player.togglePlayMethod'], () => {
+    resetRandomNextMusicInfo()
+    invalidatePreload()
+  }, { flush: 'sync' })
   watch(() => appSetting['player.gaplessPlayback'], (enabled) => {
     if (enabled && preloadMusicInfo.url) setNextSongUrl(preloadMusicInfo.url)
     else if (!enabled) cancelGaplessTransition()
@@ -146,6 +176,12 @@ export default () => {
   window.app_event.on('setProgress', setProgress)
   window.app_event.on('musicToggled', handleSetPlayInfo)
 
+  const rOnPlaying = onPlaying(() => {
+    if (appSetting['player.gaplessPlayback'] && !window.lx.isPlayedStop && preloadMusicInfo.currentMusicId === musicInfo.id && preloadMusicInfo.url) {
+      setNextSongUrl(preloadMusicInfo.url)
+    }
+  })
+
   const rOnTimeupdate = onTimeupdate(() => {
     const time = getCurrentTime()
     const duration = playProgress.maxPlayTime
@@ -155,6 +191,7 @@ export default () => {
   })
 
   onBeforeUnmount(() => {
+    rOnPlaying()
     rOnTimeupdate()
     resetPreloadInfo()
     destroyGaplessEngine()

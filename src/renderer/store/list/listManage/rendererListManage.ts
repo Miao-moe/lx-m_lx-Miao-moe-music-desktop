@@ -19,6 +19,7 @@ import {
 } from './action'
 import { allMusicList, userLists } from './state'
 import { withLocalListLocks } from '../localMutationLock'
+import { deleteWithUndo } from '../recycleBin'
 
 const pendingLists = new Map<string, Promise<LX.Music.MusicInfo[]>>()
 let listRevision = 0
@@ -46,7 +47,7 @@ export const createUserList = async(data: LX.List.ListActionAdd) => {
  * @param data
  */
 export const removeUserList = async(data: LX.List.ListActionRemove) => {
-  await withLocalListLocks(data, async() => rendererInvoke<LX.List.ListActionRemove>(PLAYER_EVENT_NAME.list_remove, data))
+  return deleteWithUndo(async() => withLocalListLocks(data, async() => rendererInvoke<LX.List.ListActionRemove, LX.List.TrashEntry[]>(PLAYER_EVENT_NAME.list_remove, data)))
 }
 
 /**
@@ -120,7 +121,7 @@ export const moveListMusics = async(data: LX.List.ListActionMusicMove) => {
  * @param data
  */
 export const removeListMusics = async(data: LX.List.ListActionMusicRemove) => {
-  await withLocalListLocks([data.listId], async() => rendererInvoke<LX.List.ListActionMusicRemove>(PLAYER_EVENT_NAME.list_music_remove, data))
+  return deleteWithUndo(async() => withLocalListLocks([data.listId], async() => rendererInvoke<LX.List.ListActionMusicRemove, LX.List.TrashEntry[]>(PLAYER_EVENT_NAME.list_music_remove, data)))
 }
 
 /**
@@ -169,7 +170,7 @@ export const replaceListMusic = async(listId: string, oldId: string, musicInfo: 
  * @param ids
  */
 export const clearListMusics = async(ids: LX.List.ListActionMusicClear) => {
-  await withLocalListLocks(ids, async() => rendererInvoke<LX.List.ListActionMusicClear>(PLAYER_EVENT_NAME.list_music_clear, ids))
+  return deleteWithUndo(async() => withLocalListLocks(ids, async() => rendererInvoke<LX.List.ListActionMusicClear, LX.List.TrashEntry[]>(PLAYER_EVENT_NAME.list_music_clear, ids)))
 }
 
 /**

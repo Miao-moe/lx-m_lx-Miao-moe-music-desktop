@@ -1,13 +1,13 @@
 import { useRouter } from '@common/utils/vueRouter'
 import musicSdk from '@renderer/utils/musicSdk'
 import { openUrl } from '@common/utils/electron'
-import { checkPath } from '@common/utils/nodejs'
-// import { dialog } from '@renderer/plugins/Dialog'
+import { dialog } from '@renderer/plugins/Dialog'
+import { findDownloadFile } from '@renderer/utils/downloadFiles'
 // import { useI18n } from '@renderer/plugins/i18n'
 // import { appSetting } from '@renderer/store/setting'
 import { toOldMusicInfo } from '@renderer/utils/index'
-import { startDownloadTasks, pauseDownloadTasks, removeDownloadTasks } from '@renderer/store/download/action'
-import { openDirInExplorer } from '@renderer/utils/ipc'
+import { startDownloadTasks, pauseDownloadTasks, removeDownloadTasks, relocateDownloadTask } from '@renderer/store/download/action'
+import { openDirInExplorer, showSelectDialog } from '@renderer/utils/ipc'
 
 export default ({ list, selectedList, removeAllSelect }) => {
   const router = useRouter()
@@ -66,10 +66,32 @@ export default ({ list, selectedList, removeAllSelect }) => {
     }
   }
 
+  const handleRelocateFile = async(task) => {
+    if (!task?.isComplate) return ''
+    try {
+      const { canceled, filePaths } = await showSelectDialog({
+        title: window.i18n.t('download__relocate'),
+        defaultPath: task.metadata.filePath,
+        properties: ['openFile'],
+        filters: [{ name: 'Media File', extensions: ['mp3', 'flac', 'ogg', 'oga', 'wav', 'm4a', 'ape'] }],
+      })
+      if (canceled || !filePaths.length) return ''
+      if (await relocateDownloadTask(task.id, filePaths[0])) return filePaths[0]
+      await dialog(window.i18n.t('download__relocate_failed'))
+    } catch {
+      await dialog(window.i18n.t('download__relocate_failed'))
+    }
+    return ''
+  }
+
   const handleOpenFile = async(index) => {
     const task = list.value[index]
-    if (!checkPath(task.metadata.filePath)) return
-    openDirInExplorer(task.metadata.filePath)
+    let path = await findDownloadFile(task)
+    if (!path && task.isComplate && await dialog.confirm({
+      message: window.i18n.t('download__file_missing'),
+      confirmButtonText: window.i18n.t('download__relocate'),
+    })) path = await handleRelocateFile(task)
+    if (path) await openDirInExplorer(path)
   }
 
   return {
@@ -79,5 +101,6 @@ export default ({ list, selectedList, removeAllSelect }) => {
     handlePauseTask,
     handleRemoveTask,
     handleOpenFile,
+    handleRelocateFile,
   }
 }

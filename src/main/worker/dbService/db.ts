@@ -56,9 +56,17 @@ export const init = (lxDataPath: string): boolean | null => {
   }
 
   // https://www.sqlite.org/lang_vacuum.html
+  const cleanTrash = () => db.prepare('DELETE FROM list_trash WHERE expires_at <= ?').run(Date.now())
+  cleanTrash()
+  const trashTimer = setInterval(cleanTrash, 60 * 60 * 1000)
+  trashTimer.unref()
+
   // db.exec('VACUUM "main"')
 
-  process.on('exit', () => db.close())
+  process.on('exit', () => {
+    clearInterval(trashTimer)
+    db.close()
+  })
   console.log('db inited')
   // require('./test')
   return dbFileExists

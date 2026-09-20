@@ -61,10 +61,9 @@ export default ({ props, list, selectedList, removeAllSelect }) => {
         : Promise.resolve(true)
       )
       if (!confirm) return
-      removeListMusics({ listId: props.listId, ids: selectedList.value.map(m => m.id) })
-      removeAllSelect()
+      if (await removeListMusics({ listId: props.listId, ids: selectedList.value.map(m => m.id) })) removeAllSelect()
     } else {
-      removeListMusics({ listId: props.listId, ids: [list.value[index].id] })
+      await removeListMusics({ listId: props.listId, ids: [list.value[index].id] })
     }
   }
 

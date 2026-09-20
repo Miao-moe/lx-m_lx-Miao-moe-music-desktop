@@ -97,6 +97,17 @@ build
 
 dist
 
+# Generated plugin packages and standalone toolkit output
+/plugins/**/*.zip
+/plugins/**/*.lxplugin
+/plugins/development-examples/index.json
+/plugins/developer-kit/lx-plugin.cjs
+/plugins/developer-kit/template/
+/plugins/developer-kit/LICENSE
+/plugins/developer-kit/SOURCE-FORMAT.md
+/plugins/developer-kit/THIRD-PARTY-LICENSES.txt
+*.tsbuildinfo
+
 publish/assets
 
 publish/utils/githubToken.js

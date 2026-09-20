@@ -19,27 +19,23 @@
             <h3 :class="$style.title">{{ item.title }}</h3>
             <p :class="$style.meta">{{ $t(item.local ? 'setting__plugins_local' : 'setting__plugins_official') }}<span v-if="item.version"> · v{{ item.version }}</span></p>
           </div>
-          <span :class="[$style.badge, {[$style.installed]: item.loaded}]">{{ $t(item.broken ? 'setting__plugins_broken' : item.installed ? 'setting__plugins_installed' : 'setting__plugins_available') }}</span>
+          <span :class="[$style.badge, {[$style.installed]: item.loaded}]" data-plugin-status>{{ $t(item.builtin ? 'setting__plugins_builtin' : item.broken ? 'setting__plugins_broken' : item.installed ? 'setting__plugins_installed' : 'setting__plugins_available') }}</span>
         </div>
         <p v-if="item.description" :class="$style.description">{{ item.description }}</p>
+        <p v-if="item.builtin && item.id === 'audio-tag-editor'" :class="$style.meta">{{ $t('setting__plugins_tag_editor_hint') }}</p>
+        <p v-if="item.builtin && item.id === 'sound-effects'" :class="$style.meta">{{ $t('setting__plugins_sound_effects_hint') }}</p>
         <p v-if="item.bytes" :class="$style.meta">{{ (item.bytes / 1024 / 1024).toFixed(2) }} MB</p>
         <p v-if="item.incompatible" :class="$style.notice" role="status">{{ $t('setting__plugins_incompatible') }}</p>
         <p v-if="item.local" :class="$style.notice">{{ $t('setting__plugins_local_hint') }}</p>
-        <p v-else-if="item.installed && !item.available" :class="$style.notice" role="status">{{ $t('setting__plugins_removed') }}</p>
+        <p v-else-if="!item.builtin && item.installed && !item.available" :class="$style.notice" role="status">{{ $t('setting__plugins_removed') }}</p>
         <p v-if="item.broken || pluginOperationErrors[item.id]" :class="$style.notice" role="alert">{{ $t('setting__plugins_operation_error') }}</p>
-        <label v-if="item.formats.length > 1 && !item.local && (!item.installed || item.update || item.broken)" :class="$style.installFormat">
-          {{ $t('setting__plugins_install_format') }}
-          <select :value="item.format" :aria-label="$t('setting__plugins_install_format')" :disabled="pluginBusy[item.id] || pluginTransferBusy" @change="selectedFormats[item.id] = $event.target.value">
-            <option v-for="format in item.formats" :key="format" :value="format">{{ $t(`setting__plugins_format_${format}`) }}</option>
-          </select>
-        </label>
         <div :class="$style.actions">
-          <base-btn v-if="!item.local && (!item.installed || item.update || item.broken)" min :disabled="pluginBusy[item.id] || pluginTransferBusy || !item.available || item.incompatible" @click="changePluginInstallation(item.id, true, item.format)">
+          <base-btn v-if="!item.builtin && !item.local && (!item.installed || item.update || item.broken)" min :disabled="pluginBusy[item.id] || pluginTransferBusy || !item.available || item.incompatible" @click="changePluginInstallation(item.id, true, 'lxplugin')">
             {{ $t(pluginBusy[item.id] ? 'setting__plugins_working' : item.broken ? 'setting__plugins_reinstall' : item.update ? 'setting__plugins_update' : 'setting__plugins_install') }}
           </base-btn>
           <base-btn v-if="item.hasSettings" min :disabled="pluginBusy[item.id] || pluginTransferBusy" @click="expanded = expanded === item.id ? null : item.id">{{ $t(expanded === item.id ? 'setting__plugins_close_settings' : 'setting__plugins_settings') }}</base-btn>
-          <base-btn v-if="item.installed" min :disabled="storeBusy || !item.exportable" @click="transferPlugin(item.id)">{{ $t('setting__plugins_export') }}</base-btn>
-          <base-btn v-if="item.installed" min outline :disabled="pluginBusy[item.id] || pluginTransferBusy" @click="uninstall(item.id)">{{ $t(pluginBusy[item.id] ? 'setting__plugins_working' : 'setting__plugins_uninstall') }}</base-btn>
+          <base-btn v-if="item.installed && !item.builtin" min :disabled="storeBusy || !item.exportable" @click="transferPlugin(item.id)">{{ $t('setting__plugins_export') }}</base-btn>
+          <base-btn v-if="item.installed && !item.builtin" min outline :disabled="pluginBusy[item.id] || pluginTransferBusy" @click="uninstall(item.id)">{{ $t(pluginBusy[item.id] ? 'setting__plugins_working' : 'setting__plugins_uninstall') }}</base-btn>
         </div>
       </article>
     </div>
@@ -52,32 +48,30 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from '@common/utils/vueTools'
+import { computed, onMounted, ref } from '@common/utils/vueTools'
 import { isPluginApiSupported, pluginPackages, pluginText, comparePluginVersions } from '@common/optionalPlugins'
+import { builtinPlugins, getBuiltinPlugin } from '@common/builtinPlugins'
 import { pluginStore, pluginRuntime, pluginBusy, pluginOperationErrors, pluginStoreError, pluginTransferBusy, pluginTransferNotice, refreshPlugins, changePluginInstallation, transferPlugin } from '@renderer/store/optionalPlugins'
 import { appSetting } from '@renderer/store/setting'
 
 const expanded = ref(null)
 const refreshing = ref(false)
-const selectedFormats = reactive({})
 const storeBusy = computed(() => pluginTransferBusy.value || Object.values(pluginBusy).some(Boolean))
 const items = computed(() => {
   const snapshot = pluginStore.value
   const catalog = new Map(snapshot.catalog.map(plugin => [plugin.id, plugin]))
-  const ids = new Set([...catalog.keys(), ...Object.keys(snapshot.installed), ...Object.keys(snapshot.errors)])
+  const ids = new Set([...builtinPlugins.map(plugin => plugin.id), ...catalog.keys(), ...Object.keys(snapshot.installed), ...Object.keys(snapshot.errors)])
   const language = appSetting['common.langId']
   return [...ids].map(id => {
+    const builtin = getBuiltinPlugin(id)
     const installed = snapshot.installed[id]
     const available = catalog.get(id)
     const packages = available ? pluginPackages(available) : {}
-    const formats = ['lxplugin', 'zip'].filter(format => packages[format])
-    const format = formats.includes(selectedFormats[id]) ? selectedFormats[id] : formats[0]
-    const local = installed?.source === 'local' || snapshot.sources?.[id] === 'local'
-    const display = local ? installed?.manifest : available ?? installed?.manifest
+    const local = !builtin && (installed?.source === 'local' || snapshot.sources?.[id] === 'local')
+    const display = builtin ?? (local ? installed?.manifest : available ?? installed?.manifest)
     return {
       id,
-      formats,
-      format,
+      builtin: !!builtin,
       local,
       title: pluginText(display?.name, language, id),
       description: pluginText(display?.description, language),
@@ -86,12 +80,12 @@ const items = computed(() => {
       installed: !!installed || !!snapshot.errors[id],
       loaded: !!pluginRuntime.components[id],
       hasSettings: !!pluginRuntime.components[id]?.Settings,
-      broken: !!snapshot.errors[id] || !!pluginRuntime.errors[id],
+      broken: (!builtin && !!snapshot.errors[id]) || !!pluginRuntime.errors[id],
       available: !!available,
-      version: installed?.manifest.version ?? (local ? undefined : available?.version),
-      bytes: local ? undefined : packages[format]?.bytes,
+      version: builtin?.version ?? installed?.manifest.version ?? (local ? undefined : available?.version),
+      bytes: !!builtin || local ? undefined : packages.lxplugin?.bytes,
       update: installed && available && comparePluginVersions(available.version, installed.manifest.version) > 0,
-      incompatible: !local && available && !isPluginApiSupported(available.apiVersion),
+      incompatible: !builtin && !local && available && !isPluginApiSupported(available.apiVersion),
     }
   })
 })
@@ -123,9 +117,6 @@ onMounted(() => { void refresh() })
 .installed { color: var(--color-primary); }
 .meta { font-size: 11px; line-height: 1.4; color: var(--color-font-label); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 4px; }
-.installFormat { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--color-font-label); }
-.installFormat select { max-width: 100%; padding: 5px 8px; border: 1px solid var(--color-primary-light-100-alpha-700); border-radius: var(--radius-sm); color: var(--color-font); background: var(--color-main-background); }
-.installFormat select:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .note { margin: 16px 15px; font-size: 12px; line-height: 1.6; color: var(--color-font-label); }
 .notice { margin: 8px 15px; color: var(--color-font); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-line; }
 .card .notice { margin: 0; }

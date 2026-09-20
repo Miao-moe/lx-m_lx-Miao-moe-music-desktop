@@ -2,7 +2,7 @@ import { markRaw } from '@common/utils/vueTools'
 import music from '@renderer/utils/musicSdk'
 import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
 import { sortInsert, similar } from '@common/utils/common'
-import { appSetting } from '@renderer/store/setting'
+import { createAggregateSearch } from '../aggregate'
 
 import { sources, maxPages, listInfos } from './state'
 
@@ -13,6 +13,9 @@ interface SearchResult {
   total: number
   source: LX.OnlineSource
 }
+
+const aggregateSearch = createAggregateSearch<SearchResult>()
+export const retryFailedSources = async() => aggregateSearch.retry(listInfos.all)
 
 interface PendingSearch {
   key: string
@@ -85,6 +88,7 @@ export const resetListInfo = (sourceId: LX.OnlineSource | 'all'): [] => {
   pendingSearches.delete(sourceId)
   let listInfo = listInfos[sourceId]
   if (!listInfo) return []
+  aggregateSearch.reset(listInfo)
   listInfo.key = null
   listInfo.list = []
   listInfo.page = 0
@@ -95,44 +99,12 @@ export const resetListInfo = (sourceId: LX.OnlineSource | 'all'): [] => {
 }
 
 const performSearch = async(text: string, page: number, sourceId: LX.OnlineSource | 'all', isCurrent: () => boolean): Promise<LX.Music.MusicInfo[]> => {
+  if (!isCurrent()) return []
   const listInfo = listInfos[sourceId]
   if (sourceId == 'all') {
-    let task = []
-    for (const source of sources) {
-      if (source == 'all') continue
-      const searchPromise = music[source]?.musicSearch?.search(text, page, listInfos.all.limit)
-      if (!searchPromise) {
-        console.log(new Error('source not found: ' + source))
-        task.push(Promise.resolve({
-          allPage: 1,
-          limit: 30,
-          list: [],
-          source,
-          total: 0,
-        }))
-      } else {
-        task.push(searchPromise.catch((error: any) => {
-          console.log(error)
-          return {
-            allPage: 1,
-            limit: 30,
-            list: [],
-            source,
-            total: 0,
-          }
-        }))
-      }
-    }
-    const partial: SearchResult[] = []
-    return Promise.all(task.map(async(request, index) => {
-      const result: SearchResult = await request
-      partial[index] = result
-      if (isCurrent() && appSetting['list.loadingMode'] === 'immediate') setLists(partial.filter(Boolean), page, text, true)
-      return result
-    })).then((results: SearchResult[]) => {
-      if (!isCurrent()) return []
-      return setLists(results, page, text)
-    })
+    return aggregateSearch.search(listInfo!, sources, source => music[source]?.musicSearch?.search(text, page, listInfos.all.limit), (results, pending) => {
+      setLists(results, page, text, pending)
+    }).then(() => isCurrent() ? listInfo!.list : [])
   } else {
     return Promise.resolve().then(() => music[sourceId].musicSearch.search(text, page, listInfo!.limit)).then((data: SearchResult) => {
       if (!isCurrent()) return []

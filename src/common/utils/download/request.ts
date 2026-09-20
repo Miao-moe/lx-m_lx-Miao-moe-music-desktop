@@ -8,7 +8,7 @@ export interface Options {
   // body?: Record<string, string>
   headers?: Record<string, string>
   timeout?: number
-  agent?: http.Agent
+  agent?: http.Agent | ((url: string) => http.Agent | undefined)
 }
 
 const defaultOptions: Options = {
@@ -19,6 +19,7 @@ type HttpCallback = (res: http.IncomingMessage) => void
 
 const sendRequest = (url: string, options: Options, callback?: HttpCallback) => {
   const urlParse = new URL(url)
+  if (urlParse.protocol !== 'http:' && urlParse.protocol !== 'https:') throw new Error('Unsupported download protocol')
   const httpOptions: http.RequestOptions | https.RequestOptions = {
     host: urlParse.hostname,
     port: urlParse.port,
@@ -34,7 +35,7 @@ const sendRequest = (url: string, options: Options, callback?: HttpCallback) => 
 
   if (options.headers) httpOptions.headers = { ...options.headers }
 
-  if (options.agent) httpOptions.agent = options.agent
+  if (options.agent) httpOptions.agent = typeof options.agent === 'function' ? options.agent(url) : options.agent
 
   return urlParse.protocol == 'https:'
     ? https.request(httpOptions, callback)
@@ -47,11 +48,13 @@ const applyTimeout = (request: http.ClientRequest, time: number) => {
     if (request.destroyed) return
     request.destroy(new Error('Request timeout'))
   }, time)
-  request.on('response', () => {
+  const clear = () => {
     if (!timeout) return
     clearTimeout(timeout)
     timeout = null
-  })
+  }
+  request.once('response', clear)
+  request.once('close', clear)
 }
 
 // const isRequireRedirect = (response: http.IncomingMessage) => {
@@ -70,4 +73,3 @@ export function request(url: string, _options: Partial<Options>, callback?: Http
   if (options.timeout) applyTimeout(request, options.timeout)
   return request
 }
-

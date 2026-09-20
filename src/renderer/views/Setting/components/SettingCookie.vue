@@ -22,8 +22,8 @@ dd
         @update:model-value="updateSetting({ 'cookie.enablePlayHistorySync': $event })"
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__cookie_sync_play_history_tip')")
-      p(style="color: var(--color-font-label); font-size: 11px; margin-top: 4px; padding-left: 24px;") {{ $t('setting__cookie_sync_play_history_unsupported') }}
-    .p.gap-top(style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;")
+      p(style="color: var(--color-font-label); font-size: 11px; margin-top: 8px; padding-left: 22px; line-height: 1.5;") {{ $t('setting__cookie_sync_play_history_unsupported') }}
+    .p.gap-top.setting-actions
       base-btn.btn(min :disabled="syncing" @click="handleSyncNow") {{ syncing ? $t('setting__cookie_sync_now_running') : $t('setting__cookie_sync_now') }}
       span(v-if="syncTip" :style="{ color: syncError ? 'var(--color-font-label)' : 'var(--color-primary)', fontSize: '12px' }") {{ syncTip }}
 
@@ -39,7 +39,7 @@ dd(v-for="item in sources" :key="item.id" :data-setting-search="`setting__cookie
         spellcheck="false"
         @input="handleCookieChange(item.id, $event.target.value)"
       )
-    .p(style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;")
+    .p.setting-actions
       base-btn.btn(min :disabled="loginBusy(item.id)" @click="handleLogin(item)") {{ loginBusy(item.id) ? $t('setting__cookie_login_running') : $t('setting__cookie_login') }}
       base-btn.btn(min :disabled="testStates[item.id]?.busy || loginBusy(item.id) || syncing" @click="handleTestPlaylists(item.id)") {{ testStates[item.id]?.busy ? $t('setting__cookie_test_running') : $t('setting__cookie_test') }}
       base-btn.btn(min @click="handleClear(item.id)") {{ $t('setting__cookie_clear') }}

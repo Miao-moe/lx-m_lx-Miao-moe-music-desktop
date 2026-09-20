@@ -18,13 +18,14 @@ const run = config => new Promise((resolve, reject) => {
 const cssLoaders = (modules, extra = []) => [
   { loader: MiniCssExtractPlugin.loader, options: { esModule: false } },
   { loader: require.resolve('css-loader'), options: { esModule: !modules, ...(modules ? { modules: { localIdentName: '[hash:base64:5]', exportLocalsConvention: 'camelCase', namedExport: false } } : {}) } },
+  ...(Number(process.versions.node.split('.')[0]) < 18 ? [path.join(__dirname, 'legacy-css-loader.cjs')] : []),
   ...extra,
 ]
 
 const baseConfig = (source, output, browser = false) => ({
   mode: 'production',
   context: source,
-  target: browser ? ['web', 'es2020'] : 'electron-renderer',
+  target: browser ? ['web', 'es2020'] : 'electron22.3-renderer',
   devtool: false,
   cache: false,
   output: { path: output, filename: '[name].js', chunkFilename: '[name].js', publicPath: '', ...(browser ? {} : { library: { type: 'commonjs2' } }) },
@@ -58,7 +59,7 @@ const baseConfig = (source, output, browser = false) => ({
             const tools = path.dirname(path.dirname(require.resolve('webpack/package.json')))
             for (const loader of loaders) {
               const filename = path.resolve(request.context, loader.split('?')[0])
-              if (!filename.startsWith(tools + path.sep) && filename !== path.join(__dirname, 'tailwind-loader.cjs')) throw new Error('Only the built-in plugin loaders are supported')
+              if (!filename.startsWith(tools + path.sep) && !['tailwind-loader.cjs', 'legacy-css-loader.cjs'].some(name => filename === path.join(__dirname, name))) throw new Error('Only the built-in plugin loaders are supported')
             }
           })
         })

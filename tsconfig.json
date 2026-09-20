@@ -1,6 +1,7 @@
 {
   // https://github.com/tsconfig/bases#recommended-tsconfigjson
   "extends": "@tsconfig/recommended/tsconfig.json",
+  "exclude": ["node_modules", "build", "dist"],
   "compilerOptions": {
     "target": "ESNext",
     "allowJs": true,

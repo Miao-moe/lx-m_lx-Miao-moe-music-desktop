@@ -1,4 +1,4 @@
-import { ref, watch } from '@common/utils/vueTools'
+import { ref, watch, onBeforeUnmount } from '@common/utils/vueTools'
 import { isPlay, setting } from '@lyric/store/state'
 
 export default () => {
@@ -37,5 +37,9 @@ export default () => {
     immediate: true,
   })
 
+  onBeforeUnmount(() => {
+    clearIntv()
+    unWatch?.()
+  })
   return isHide
 }

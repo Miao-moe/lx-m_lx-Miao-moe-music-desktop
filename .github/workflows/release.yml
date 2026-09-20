@@ -98,27 +98,17 @@ jobs:
           NPM_CACHE: ${{ env.NPM_CACHE }}
         uses: ./.github/actions/setup
 
-      - name: Prepare win7 undici env
-        run: |
-          npm install undici@5
-          Set-Content -Path .\src\common\utils\request.ts -Value "export * from './request_node16'"
+      - name: Build isolated Win7 edition (Electron 22.3.27)
+        run: npm run build:win7
 
-      - name: Build src code
-        env:
-          BUILD_WIN7: true
-        run: |
-          git status --porcelain
-          npm run build
-
-      - name: Prepare win7 electron env
-        run: |
-          npm install electron@22
-          pip.exe install setuptools
+      - name: Verify Win7 runtime and core regressions
+        run: npm run test:win7 -- --core
 
       - name: Release win7 package
         run: |
           npm run publish:win7:setup:x64
           npm run publish:win7:7z:x64
+          npm run publish:win7:setup:x86
           npm run publish:win7:7z:x86
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,7 +116,7 @@ jobs:
 
       - name: Generate file MD5
         run: |
-          cd build
+          cd build/win7/artifacts
           Get-FileHash *.exe,*.7z -Algorithm MD5 | Format-List
 
   Mac:

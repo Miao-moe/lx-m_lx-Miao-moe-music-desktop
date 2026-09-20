@@ -1,5 +1,5 @@
 <template>
-  <section data-plugin-settings="audio-tag-editor" :class="$style.editor" @keydown.ctrl.s.prevent.stop="save" @keydown.meta.s.prevent.stop="save">
+  <section data-audio-tag-editor :class="$style.editor" @keydown.ctrl.s.prevent.stop="save" @keydown.meta.s.prevent.stop="save">
     <p :class="$style.intro">{{ text.intro }}</p>
     <div :class="$style.toolbar">
       <base-btn min :disabled="editor.busy" @click="chooseFile">{{ text.choose }}</base-btn>
@@ -130,7 +130,7 @@ onMounted(() => { void refreshDownloads() })
 <style lang="less" module>
 .editor { max-width: 1000px; color: var(--color-font); font-size: 13px; line-height: 1.6; }
 .intro { margin: 0 0 16px; color: var(--color-font-label); }
-.toolbar, .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.toolbar, .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .hint { color: var(--color-font-label); font-size: 12px; }
 .workspace { display: grid; grid-template-columns: minmax(160px, 0.8fr) minmax(240px, 1.5fr); border: 1px solid var(--color-primary-light-100-alpha-700); border-radius: var(--radius-lg); overflow: hidden; }
 .files { min-width: 0; padding: 16px; border-right: 1px solid var(--color-primary-light-100-alpha-700); background: var(--color-primary-alpha-900); }
@@ -148,16 +148,16 @@ onMounted(() => { void refreshDownloads() })
 .file:hover, .file.selected { background: var(--color-primary-alpha-800); border-color: var(--color-primary-light-100-alpha-700); }
 .file:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 .file:disabled { opacity: 0.6; cursor: default; }
-.form { min-width: 0; padding: 18px; }
+.form { min-width: 0; padding: 16px; }
 .fileInfo { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--color-primary-light-100-alpha-700); }
 .fileInfo h4 { margin-bottom: 4px; }
 .fileInfo p { margin: 0; font-size: 11px; color: var(--color-font-label); }
 .path { overflow-wrap: anywhere; user-select: text; }
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0; border: 0; margin: 0; min-width: 0; }
 .fields label { min-width: 0; }
-.fields label > span { display: block; margin-bottom: 4px; font-size: 12px; }
+.fields label > span { display: block; margin-bottom: 8px; font-size: 12px; }
 .wide { grid-column: 1 / -1; }
-.actions { margin: 18px 0 0; }
+.actions { margin: 16px 0 0; }
 .placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; padding: 30px; text-align: center; color: var(--color-font-label); }
 .placeholder svg { width: 48px; height: 48px; margin-bottom: 16px; color: var(--color-primary); }
 .placeholder p, .empty { font-size: 12px; color: var(--color-font-label); }

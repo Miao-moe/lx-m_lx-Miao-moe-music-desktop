@@ -1,5 +1,7 @@
 <template>
   <div :class="$style.container">
+    <AggregateStatus :state="listInfo.aggregate" @retry="retryFailedSources" />
+    <div :class="$style.results">
     <material-online-list
       ref="listRef"
       :page="listInfo.page"
@@ -7,12 +9,14 @@
       :total="listInfo.total"
       :list="listInfo.list"
       :no-item="listInfo.noItemLabel"
+      :hide-retry="!!listInfo.aggregate?.failedSources.length"
       :source-tag="sourceId == 'all'"
       check-api-source
       @toggle-page="handleTogglePage"
       @play-list="handlePlayList"
       @retry="handleRetry"
     />
+    </div>
   </div>
 </template>
 
@@ -21,6 +25,8 @@ import { watch } from '@common/utils/vueTools'
 import { searchText } from '@renderer/store/search/state'
 import { useRouter, useRoute } from '@common/utils/vueRouter'
 import useList, { type SearchSource } from './useList'
+import AggregateStatus from '../components/AggregateStatus.vue'
+import { retryFailedSources } from '@renderer/store/search/music'
 
 interface Props {
   sourceId: SearchSource
@@ -56,6 +62,10 @@ const handleTogglePage = (page: number) => {
 }
 
 const handleRetry = () => {
+  if (props.sourceId === 'all' && listInfo.value.aggregate?.failedSources.length) {
+    void retryFailedSources()
+    return
+  }
   search(searchText.value, props.sourceId, props.page || 1)
 }
 
@@ -65,12 +75,16 @@ const handleRetry = () => {
 
 <style lang="less" module>
 .container {
+  display: flex;
+  flex-direction: column;
   position: absolute;
   left: 0;
   top: 0;
   width: 100%;
   height: 100%;
 }
+
+.results { flex: 1; min-height: 0; position: relative; }
 
 .list {
   overflow: hidden;

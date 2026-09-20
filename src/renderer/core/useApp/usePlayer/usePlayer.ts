@@ -38,6 +38,8 @@ import usePlaybackRate from './usePlaybackRate'
 import useMaxOutputChannelCount from './useMaxOutputChannelCount'
 import { setPowerSaveBlocker } from '@renderer/core/player/utils'
 import usePreloadNextMusic from './usePreloadNextMusic'
+import useVolumeNormalization from './useVolumeNormalization'
+import useMiniPlayer from './useMiniPlayer'
 import { isGaplessTransitionActive } from '@renderer/utils/gaplessPlayer'
 
 
@@ -54,6 +56,8 @@ export default () => {
   usePlaybackRate()
   useWatchList()
   usePreloadNextMusic()
+  useVolumeNormalization()
+  useMiniPlayer()
 
   const handlePlayNext = () => {
     void playNext()

@@ -2,6 +2,8 @@ declare namespace LX {
   namespace DesktopLyric {
     interface Config {
       'desktopLyric.enable': LX.AppSetting['desktopLyric.enable']
+      'desktopLyric.showPlayer': LX.AppSetting['desktopLyric.showPlayer']
+      'desktopLyric.autoHideControls': LX.AppSetting['desktopLyric.autoHideControls']
       'desktopLyric.isLock': LX.AppSetting['desktopLyric.isLock']
       'desktopLyric.isAlwaysOnTop': LX.AppSetting['desktopLyric.isAlwaysOnTop']
       'desktopLyric.isAlwaysOnTopLoop': LX.AppSetting['desktopLyric.isAlwaysOnTopLoop']
@@ -42,6 +44,28 @@ declare namespace LX {
 
     type WinMainActions = 'get_info' | 'get_status' | 'get_analyser_data_array'
 
+    interface PlayerState {
+      id: string | null
+      name: string
+      singer: string
+      album: string
+      isPlay: boolean
+      position: number
+      duration: number
+      volume: number
+      isMute: boolean
+    }
+
+    type PlayerRequest = LyricAction<'get_player_state'>
+    | LyricAction<'player_toggle_play'>
+    | LyricAction<'player_prev'>
+    | LyricAction<'player_next'>
+    | LyricAction<'player_seek', { id: string, time: number }>
+    | LyricAction<'player_volume', number>
+    | LyricAction<'player_mute'>
+
+    type MainWindowRequest = LyricAction<'get_info'> | LyricAction<'get_status'> | LyricAction<'get_analyser_data_array'> | PlayerRequest
+
     interface LyricActionBase <A> {
       action: A
     }
@@ -81,6 +105,9 @@ declare namespace LX {
     | LyricAction<'set_pause'>
     | LyricAction<'set_stop'>
     | LyricAction<'send_analyser_data_array', Uint8Array>
+    | LyricAction<'set_player_state', PlayerState>
+    | LyricAction<'set_player_cover', { id: string | null, url: string }>
+    | LyricAction<'player_action_failed'>
 
 
     interface NewBounds {

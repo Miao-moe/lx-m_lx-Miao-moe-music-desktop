@@ -39,7 +39,9 @@ export const createAdaptiveColors = (background: HTMLElement, themeChanged: () =
     lastSample = -Infinity
     // Keep the background's shading independent of the foreground palette.
     background.style.setProperty('--ambient-shade-color', getComputedStyle(document.documentElement).getPropertyValue('--color-content-background'))
-    if (enabled) themeChanged()
+    // The renderer's gradient follows the theme even when adaptive controls
+    // are disabled; static snapshots must be refreshed as well.
+    themeChanged()
   })
   const themeStyle = (window as Window & { dom_style?: HTMLStyleElement }).dom_style
   if (themeStyle) themeObserver.observe(themeStyle, { childList: true, characterData: true, subtree: true })
@@ -69,7 +71,9 @@ export const createAdaptiveColors = (background: HTMLElement, themeChanged: () =
     const pixels: RGB[] = []
     try {
       context.clearRect(0, 0, 24, 16)
-      if (canvas && !canvas.hidden && frame.opacity) context.drawImage(canvas, 0, 0, 24, 16)
+      // Static presentation hides the live canvas, but its retained pixels are
+      // still the exact source of the displayed snapshot and its local colors.
+      if (canvas && frame.opacity) context.drawImage(canvas, 0, 0, 24, 16)
       else {
         const rect = background.getBoundingClientRect()
         const width = Math.max(1, rect.width)
@@ -95,7 +99,8 @@ export const createAdaptiveColors = (background: HTMLElement, themeChanged: () =
       const data = context.getImageData(0, 0, 24, 16).data
       for (let index = 0; index < data.length; index += 4) {
         const color: RGB = [data[index], data[index + 1], data[index + 2]]
-        const amount = Math.max(0, ((index / 4 % 24) / 23 - 0.12) / 1.03) * 0.1
+        // WebGL already contains the gradient; only CSS fallback needs it here.
+        const amount = canvas ? 0 : Math.max(0, ((index / 4 % 24) / 23 - 0.12) / 1.03) * 0.1
         pixels.push(mixColor(color, shade, amount))
       }
     } catch {
@@ -114,6 +119,7 @@ export const createAdaptiveColors = (background: HTMLElement, themeChanged: () =
       const color = regionColors[index] = stabilizeColor(regionColors[index], frame.opacity ? artworkColor(region) : currentArtwork, moving)
       const colors = createControlColors(compositeBackgrounds(region, base, opacity), color, palette)
       write(`--ambient-zone-${index}-accent`, rgb(colors.accent))
+      write(`--ambient-zone-${index}-lyric-accent`, rgb(colors.lyricAccent))
       write(`--ambient-zone-${index}-on-accent`, rgb(colors.onAccent))
     })
     root.dataset.ambientControls = darkText ? 'light' : 'dark'

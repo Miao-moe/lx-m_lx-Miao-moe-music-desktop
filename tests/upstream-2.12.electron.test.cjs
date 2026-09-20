@@ -42,7 +42,7 @@ test('playlist order, initial Open API volume and custom theme artwork survive a
       return canvas.toDataURL('image/png').split(',')[1]
     })
     backgroundUrl = await fixture.app.evaluate(async({ app }, { filename, png }) => {
-      const require = process.getBuiltinModule('module').createRequire(app.getAppPath() + '/package.json')
+      const require = process.mainModule.require('module').createRequire(app.getAppPath() + '/package.json')
       const fs = require('node:fs/promises'), path = require('node:path')
       const dir = path.join(global.lxDataPath, 'theme_images')
       await fs.mkdir(dir, { recursive: true })
@@ -69,7 +69,7 @@ test('playlist order, initial Open API volume and custom theme artwork survive a
 
   await t.test('restarted database retains song order and assigns nonoverlapping list positions', async() => {
     const state = await fixture.app.evaluate(async({ app }) => {
-      const require = process.getBuiltinModule('module').createRequire(app.getAppPath() + '/package.json')
+      const require = process.mainModule.require('module').createRequire(app.getAppPath() + '/package.json')
       const service = global.lx.worker.dbService
       const songs = (await service.getListMusics('list-a')).map(song => song.id)
       // Read only this fixture's SQLite database to verify the persisted positions.

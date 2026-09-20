@@ -119,6 +119,9 @@ declare global {
        */
       'player.maxVolume': number
 
+      /** 在每首歌曲的淡化和主音量之前平滑均衡播放音量 */
+      'player.volumeNormalization': boolean
+
       /**
        * 播放歌曲时是否阻止电脑休眠
        */
@@ -324,6 +327,10 @@ declare global {
        * 是否启用桌面歌词
        */
       'desktopLyric.enable': boolean
+      /** 显示迷你播放器的封面、歌曲和播放控制；关闭后仅显示歌词 */
+      'desktopLyric.showPlayer': boolean
+      /** 鼠标移出窗口后隐藏控制，悬停或键盘聚焦时恢复 */
+      'desktopLyric.autoHideControls': boolean
 
       /**
        * 是否锁定桌面歌词

@@ -24,7 +24,7 @@ export default () => {
 
   const search = (text: string, source: SearchSource, page: number) => {
     // console.log(text, source, page)
-    listInfo.value = listInfos[source] as SearchListInfo
+    listInfo.value = listInfos[source]!
     if (text.length) void addHistoryWord(text)
     void searchSongList(text, page, source).then((list: ListInfoItem[]) => {
       // console.log(list)
@@ -38,7 +38,7 @@ export default () => {
           listRef.value.scrollTo(0)
         })
       }
-    })
+    }).catch(() => {}) // The store exposes the failure and retry action.
   }
 
   onBeforeRouteLeave(() => {

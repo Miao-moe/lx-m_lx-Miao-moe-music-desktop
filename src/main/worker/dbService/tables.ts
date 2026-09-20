@@ -115,6 +115,8 @@ type Tables = 'db_info'
 | 'index_music_url_expire_time'
 | 'download_list'
 | 'dislike_list'
+| 'list_trash'
+| 'index_list_trash_expires_at'
 
 const tables = new Map<Tables, string>()
 
@@ -239,6 +241,18 @@ tables.set('dislike_list', `
   );
 `)
 
+tables.set('list_trash', `
+  CREATE TABLE "list_trash" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "deleted_at" INTEGER NOT NULL,
+    "expires_at" INTEGER NOT NULL,
+    "payload" TEXT NOT NULL
+  );
+`)
+tables.set('index_list_trash_expires_at', `
+  CREATE INDEX "index_list_trash_expires_at" ON "list_trash" ("expires_at");
+`)
+
 export default tables
 
-export const DB_VERSION = '3'
+export const DB_VERSION = '4'

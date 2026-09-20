@@ -1,9 +1,13 @@
 <template>
   <div :class="$style.container">
-    <SongList
-      ref="listRef" :list-info="listInfo" :visible-source="sourceId == 'all'" search-on-click
-      :search-result-type="type" @toggle-page="togglePage" @retry="handleRetry"
-    />
+    <AggregateStatus :state="listInfo.aggregate" @retry="handleRetry" />
+    <div :class="$style.results">
+      <SongList
+        ref="listRef" :list-info="listInfo" :visible-source="sourceId == 'all'" search-on-click
+        :hide-retry="!!listInfo.aggregate?.failedSources.length"
+        :search-result-type="type" @toggle-page="togglePage" @retry="handleRetry"
+      />
+    </div>
   </div>
 </template>
 
@@ -14,6 +18,8 @@ import { searchText } from '@renderer/store/search/state'
 import type { EntityType, SearchSource } from '@renderer/store/search/entity'
 import SongList from '@renderer/views/songList/List/components/SongList.vue'
 import useList from './useList'
+import AggregateStatus from '../components/AggregateStatus.vue'
+import { retryFailedSources } from '@renderer/store/search/entity'
 
 const props = defineProps<{
   type: EntityType
@@ -40,12 +46,18 @@ const togglePage = (page: number) => {
 }
 
 const handleRetry = () => {
+  if (props.sourceId === 'all' && listInfo.value.aggregate?.failedSources.length) {
+    void retryFailedSources(props.type)
+    return
+  }
   search(props.type, searchText.value, props.sourceId, props.page || 1)
 }
 </script>
 
 <style lang="less" module>
 .container {
+  display: flex;
+  flex-direction: column;
   position: absolute;
   left: 0;
   top: 0;
@@ -53,4 +65,5 @@ const handleRetry = () => {
   height: 100%;
   padding-top: 5px;
 }
+.results { flex: 1; min-height: 0; position: relative; }
 </style>

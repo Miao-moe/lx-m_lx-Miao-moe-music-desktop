@@ -1,10 +1,11 @@
 import { reactive, markRaw } from '@common/utils/vueTools'
 import music from '@renderer/utils/musicSdk'
+import type { AggregateSearchState } from '../aggregate'
 import { type ListInfo, type ListInfoItem } from '@renderer/store/songList/state'
 
 export type EntityType = 'singer' | 'album'
 export type SearchSource = LX.OnlineSource | 'all'
-export type SearchListInfo = Omit<ListInfo, 'source'>
+export type SearchListInfo = Omit<ListInfo, 'source'> & { aggregate?: AggregateSearchState }
 export type { ListInfoItem }
 
 interface ListInfos extends Partial<Record<LX.OnlineSource, SearchListInfo>> {

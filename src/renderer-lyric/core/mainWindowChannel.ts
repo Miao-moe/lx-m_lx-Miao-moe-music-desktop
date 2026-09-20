@@ -3,17 +3,28 @@ import { onBeforeUnmount } from '@common/utils/vueTools'
 import { setMusicInfo, setIsPlay } from '../store/action'
 import { pause, play, setLyric, setLyricOffset, setPlaybackRate, stop } from './lyric'
 import { lyrics } from '@lyric/store/lyric'
+import { miniPlayer, miniPlayerCover, playerActionFailed } from '@lyric/store/state'
 
 let mainWindowPort: Electron.IpcRendererEvent['ports'][0] | null = null
-export const sendDesktopLyricInfo = (info: LX.DesktopLyric.WinMainActions) => {
+export const sendDesktopLyricInfo = (info: LX.DesktopLyric.WinMainActions | LX.DesktopLyric.PlayerRequest) => {
   if (mainWindowPort == null) return
-  mainWindowPort.postMessage({ action: info })
+  mainWindowPort.postMessage(typeof info === 'string' ? { action: info } : info)
 }
 
 const listeners: Array<(event: LX.DesktopLyric.LyricActions) => void> = []
 
 const handleDesktopLyricMessage = (event: LX.DesktopLyric.LyricActions) => {
   switch (event.action) {
+    case 'set_player_state':
+      if (event.data.id !== miniPlayer.id) miniPlayerCover.value = ''
+      Object.assign(miniPlayer, event.data)
+      break
+    case 'set_player_cover':
+      if (event.data.id === miniPlayer.id) miniPlayerCover.value = event.data.url
+      break
+    case 'player_action_failed':
+      playerActionFailed.value = true
+      break
     case 'set_info':
       setMusicInfo({
         id: event.data.id,
@@ -76,6 +87,7 @@ const handleDesktopLyricMessage = (event: LX.DesktopLyric.LyricActions) => {
 export const init = () => {
   onProvideMainWindowChannel(({ event }) => {
     const [port] = event.ports
+    mainWindowPort?.close()
     mainWindowPort = port
 
     // ... register a handler to receive results ...
@@ -90,6 +102,7 @@ export const init = () => {
     }
 
     getInfo()
+    sendDesktopLyricInfo({ action: 'get_player_state' })
   })
 }
 

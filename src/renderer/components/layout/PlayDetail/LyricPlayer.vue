@@ -214,6 +214,55 @@ export default {
   position: relative;
   transition: flex-basis @transition-normal;
 }
+.right[data-ambient-lyrics] {
+  isolation: isolate;
+  --lyric-idle-color: var(--color-font);
+  --lyric-idle-opacity: .68;
+  --lyric-unsung-color: var(--color-450);
+  --lyric-active-color: var(--ambient-lyric-accent, var(--color-primary-dark-400));
+
+  :global(#root[data-ambient-controls]) & {
+    // Adaptive secondary text already has readable contrast; emphasize the
+    // current lyric with its own stronger accent instead of fading both colors.
+    --lyric-idle-color: var(--color-450);
+    --lyric-idle-opacity: 1;
+  }
+
+  // A soft local surface keeps the moving artwork from washing out the text.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -12px;
+    z-index: -1;
+    border-radius: 32px;
+    background: var(--color-surface);
+    opacity: .72;
+    filter: blur(24px);
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 35%, transparent 75%);
+    mask-image: radial-gradient(ellipse at center, #000 35%, transparent 75%);
+    pointer-events: none;
+  }
+
+  :global {
+    .font-lrc {
+      --lyric-active-color: var(--ambient-local-lyric-accent, var(--ambient-lyric-accent, var(--color-primary-dark-400)));
+      font-weight: 400;
+    }
+    .line-content:not(.active) .font-lrc {
+      --lyric-active-color: var(--lyric-idle-color);
+    }
+    .line-content.active > .line .font-lrc { font-weight: 700; }
+    .line-mode .font-lrc, .extended .font-lrc {
+      text-shadow: 0 1px 2px var(--color-surface), 0 0 8px var(--color-surface);
+    }
+  }
+
+  .lyricSelectline { opacity: var(--lyric-idle-opacity); }
+  .lyricSelectline.lrcActive {
+    opacity: 1;
+    font-weight: 700;
+  }
+}
 .lyric {
   text-align: center;
   height: 100%;
@@ -249,7 +298,7 @@ export default {
         }
       }
       &.line-mode.active .font-lrc, &.font-mode.played .font-lrc {
-        color: var(--color-primary-dark-200);
+        color: var(--lyric-active-color, var(--color-primary-dark-200));
       }
       &.active {
         opacity: 1;
@@ -263,8 +312,8 @@ export default {
           transition: opacity var(--duration-normal) var(--ease-standard);
           font-size: 1em;
           background-repeat: no-repeat;
-          background-color: var(--lyric-idle-color, var(--color-450));
-          background-image: -webkit-linear-gradient(top, var(--color-primary-dark-200), var(--color-primary-dark-200));
+          background-color: var(--lyric-unsung-color, var(--lyric-idle-color, var(--color-450)));
+          background-image: -webkit-linear-gradient(top, var(--lyric-active-color, var(--color-primary-dark-200)), var(--lyric-active-color, var(--color-primary-dark-200)));
           -webkit-text-fill-color: transparent;
           -webkit-background-clip: text;
           background-size: 0 100%;
@@ -350,7 +399,7 @@ export default {
   width: 100%;
   font-size: var(--playDetail-lrc-font-size, 16px);
   z-index: 10;
-  color: var(--color-400);
+  color: var(--lyric-idle-color, var(--color-400));
 
   .lyricSelectline {
     padding: calc(var(--playDetail-lrc-font-size, 16px) / 2) 1px;
@@ -362,7 +411,7 @@ export default {
     font-size: 14px;
   }
   .lrcActive {
-    color: var(--color-primary);
+    color: var(--lyric-active-color, var(--color-primary));
     font-weight: 500;
   }
 }

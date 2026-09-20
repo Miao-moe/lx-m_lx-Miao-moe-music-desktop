@@ -21,7 +21,7 @@
           </svg>
         </button>
       </div>
-      <div ref="dom_toc_ref" class="scroll" :class="$style.tocScroll">
+      <div ref="dom_toc_ref" class="scroll" :class="$style.tocScroll" data-setting-navigation>
         <ul v-if="visibleTocList.length" :class="$style.tocList" role="tablist" aria-orientation="vertical">
           <li v-for="h2 in visibleTocList" :key="h2.id" :class="$style.tocListItem" role="presentation">
             <h2
@@ -49,7 +49,7 @@
       </div>
     </common-resizable-sidebar>
     <common-motion-view :motion-key="avtiveComponentName" :distance="24">
-      <div ref="dom_content_ref" class="scroll" :class="[$style.setting, {[$style.searchFiltering]: isFiltering}]" data-setting-content>
+      <div ref="dom_content_ref" class="scroll" :class="[$style.setting, {[$style.searchFiltering]: isFiltering}]" data-setting-content @wheel.passive="cancelScrollRestore" @pointerdown="cancelScrollRestore" @keydown="cancelScrollRestore">
       <p v-if="isFiltering && !visibleTocList.length" :class="$style.contentEmpty">{{ $t('setting__filter_empty') }}</p>
       <dl v-show="visibleTocList.length">
         <template v-if="activePluginSetting">
@@ -86,6 +86,7 @@ import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from '@com
 import { useI18n } from '@renderer/plugins/i18n'
 import { useRoute } from '@common/utils/vueRouter'
 import { pluginText } from '@common/optionalPlugins'
+import { builtinPlugins, getBuiltinPlugin } from '@common/builtinPlugins'
 import { pluginRuntime, pluginStore } from '@renderer/store/optionalPlugins'
 import { appSetting } from '@renderer/store/setting'
 import { isMac, isLinux } from '@common/utils'
@@ -94,6 +95,7 @@ import { langList } from '@root/lang'
 import apiSourceInfo from '@renderer/utils/musicSdk/api-source-info'
 import { SOURCE_NAME } from '@renderer/utils/cookieManager'
 import { createSearchIndex, matchSearchIndex, matchesSearchKey, matchesSearchText, normalizeSearchText, searchTerms } from './search'
+import { settingSession } from './session'
 
 import SettingBasic from './components/SettingBasic.vue'
 import SettingPlay from './components/SettingPlay.vue'
@@ -164,10 +166,10 @@ export default {
     const pluginSearchEntries = computed(() => {
       const snapshot = pluginStore.value
       const catalog = new Map(snapshot.catalog.map(plugin => [plugin.id, plugin]))
-      return [...new Set([...catalog.keys(), ...Object.keys(snapshot.installed), ...Object.keys(snapshot.errors)])].map(id => {
+      return [...new Set([...builtinPlugins.map(plugin => plugin.id), ...catalog.keys(), ...Object.keys(snapshot.installed), ...Object.keys(snapshot.errors)])].map(id => {
         const installed = snapshot.installed[id]
         const local = installed?.source === 'local' || snapshot.sources?.[id] === 'local'
-        const display = local ? installed?.manifest : catalog.get(id) ?? installed?.manifest
+        const display = getBuiltinPlugin(id) ?? (local ? installed?.manifest : catalog.get(id) ?? installed?.manifest)
         return {
           key: `plugin-card:${id}`,
           text: `${id} ${Object.keys(window.i18n.messages).map(language => {
@@ -183,7 +185,7 @@ export default {
       return Object.keys(pluginRuntime.components).sort()
         .filter(id => pluginRuntime.components[id]?.Settings)
         .map(id => {
-          const installed = snapshot.installed[id]?.manifest
+          const installed = getBuiltinPlugin(id) ?? snapshot.installed[id]?.manifest
           const available = snapshot.catalog.find(plugin => plugin.id === id)
           return {
             id: `SettingPlugin_${id}`,
@@ -208,7 +210,7 @@ export default {
           ],
         },
         { id: 'SettingPlay', title: t('setting__play'), prefixes: ['setting__play', 'setting__player'], excludes: ['setting__play_detail', 'setting__play_timeout', ...(!isMac ? ['setting__play_statusbar_lyric'] : [])] },
-        { id: 'SettingPluginStore', title: t('setting__plugins'), prefixes: ['setting__plugins', 'player__sound_effect'], keys: ['audio_visualization', 'setting__desktop_lyric_audio_visualization'], entries: pluginSearchEntries.value },
+        { id: 'SettingPluginStore', title: t('setting__plugins'), prefixes: ['setting__plugins'], keys: ['audio_visualization', 'setting__desktop_lyric_audio_visualization'], entries: pluginSearchEntries.value },
         ...pluginSettingGroups.value,
         { id: 'SettingPlayDetail', title: t('setting__play_detail'), prefixes: ['setting__play_detail'] },
         { id: 'SettingDesktopLyric', title: t('setting__desktop_lyric'), prefixes: ['setting__desktop_lyric'], keys: ['desktop_lyric__lrc_active_zoom_on'], excludes: ['setting__desktop_lyric_audio_visualization', ...(isLinux ? ['setting__desktop_lyric_hover_hide'] : [])] },
@@ -257,10 +259,39 @@ export default {
       return tocList.value.filter(group => matchedGroups.value.has(group.id))
     })
 
-    const avtiveComponentName = ref(route.query.name && tocList.value.some(t => t.id == route.query.name)
-      ? route.query.name
-      : tocList.value[0].id)
+    const requestedTab = tocList.value.find(tab => tab.id === route.query.name)?.id
+    const savedView = !requestedTab ? settingSession.current : null
+    const rememberedView = savedView && tocList.value.some(tab => tab.id === savedView.id) ? savedView : null
+    const avtiveComponentName = ref(requestedTab ?? rememberedView?.id ?? (savedView ? 'SettingPluginStore' : tocList.value[0].id))
+    settingFilter.value = filterQuery.value = rememberedView?.query ?? ''
     const activePluginSetting = computed(() => pluginSettingGroups.value.find(group => group.id === avtiveComponentName.value))
+
+    let disposed = false
+    let restoreRevision = 0
+    let pendingScrollTop = null
+    const currentScrollTop = () => pendingScrollTop ?? dom_content_ref.value?.scrollTop ?? 0
+    const cancelScrollRestore = () => { ++restoreRevision; pendingScrollTop = null }
+    const restoreScroll = () => {
+      const content = dom_content_ref.value
+      if (disposed || pendingScrollTop == null || !content) return
+      content.scrollTop = pendingScrollTop
+      // Async plugin content may not be tall enough on the first render.
+      // Stop retrying once the position is reachable, or as soon as the user interacts.
+      if (content.scrollHeight - content.clientHeight >= pendingScrollTop) pendingScrollTop = null
+    }
+    const restorePosition = (top, sidebarTop) => {
+      const revision = ++restoreRevision
+      pendingScrollTop = top
+      void nextTick(() => {
+        if (disposed || revision !== restoreRevision) return
+        applySettingFilter()
+        restoreScroll()
+        if (sidebarTop != null && dom_toc_ref.value) dom_toc_ref.value.scrollTop = sidebarTop
+      })
+    }
+    const rememberTabPosition = () => {
+      if (!lastQuery) settingSession.tabPositions.set(avtiveComponentName.value, currentScrollTop())
+    }
 
     const markedElements = new Set()
     const clearSettingFilterState = () => {
@@ -312,7 +343,7 @@ export default {
         const longest = Math.max(0, ...related.map(section => section.length))
         if (longest) {
           for (const { element, length } of related) {
-            if (length == longest) markSearchBranch(element.hasAttribute('data-setting-search') ? element : element.closest('dd') ?? element)
+            if (length == longest) markSearchBranch(element.closest('[data-setting-search]') ?? element.closest('dd') ?? element)
           }
         }
       }
@@ -338,7 +369,7 @@ export default {
         let itemRoot
         if (target.closest('[data-setting-search]')) {
           itemRoot = target.closest('[data-setting-search]')
-        } else if (target.tagName == 'H3' || section?.querySelector(':scope > h3')) {
+        } else if (target.tagName == 'H3' || section?.querySelector(':scope > h3, :scope > [data-setting-reveal-content] > h3')) {
           // 命中组内选项时保留整组，便于查看和切换其他选项。
           itemRoot = section
         } else if (target.tagName == 'H4') {
@@ -349,7 +380,7 @@ export default {
         }
         markSearchBranch(itemRoot)
 
-        markSearchBranch(section?.querySelector(':scope > h3'))
+        markSearchBranch(section?.querySelector(':scope > h3, :scope > [data-setting-reveal-content] > h3'))
       }
       // Dependent controls keep the switch/mode that makes them available.
       for (const element of dom_content_ref.value.querySelectorAll('[data-setting-search-depends]')) {
@@ -365,15 +396,10 @@ export default {
         markSearchBranch(pageTitle?.parentElement)
       }
     }
-    const toggleTab = (id) => {
+    const toggleTab = (id, top) => {
+      rememberTabPosition()
       avtiveComponentName.value = id
-      void nextTick(() => {
-        applySettingFilter()
-        dom_content_ref.value?.scrollTo({
-          top: 0,
-          behavior: 'auto',
-        })
-      })
+      restorePosition(top ?? (isFiltering.value ? 0 : settingSession.tabPositions.get(id) ?? 0))
     }
     const clearSettingFilter = () => {
       isComposing.value = false
@@ -382,21 +408,25 @@ export default {
       void nextTick(() => dom_filter_input.value?.focus())
     }
 
-    let searchOrigin = null
-    let lastQuery = ''
+    let searchOrigin = rememberedView?.searchOrigin ?? null
+    let lastQuery = normalizeSearchText(filterQuery.value)
     watch(() => route.query.name, (name) => {
       if (tocList.value.some(item => item.id === name)) {
         searchOrigin = null
         settingFilter.value = filterQuery.value = ''
-        toggleTab(name)
+        toggleTab(name, 0)
       }
     })
 
     watch([visibleTocList, filterQuery], ([list, query]) => {
       const normalized = normalizeSearchText(query)
       const queryChanged = normalized !== lastQuery
-      if (normalized && !lastQuery) searchOrigin = { id: avtiveComponentName.value, top: dom_content_ref.value?.scrollTop ?? 0 }
+      if (normalized && !lastQuery) {
+        rememberTabPosition()
+        searchOrigin = { id: avtiveComponentName.value, top: currentScrollTop(), sidebarTop: dom_toc_ref.value?.scrollTop ?? 0 }
+      }
       const restore = !normalized && lastQuery ? searchOrigin : null
+      const previousTab = avtiveComponentName.value
       if (restore && tocList.value.some(group => group.id === restore.id)) avtiveComponentName.value = restore.id
       if (!normalized) searchOrigin = null
       lastQuery = normalized
@@ -406,10 +436,8 @@ export default {
       if (isFiltering.value && list.length && !list.some(group => group.id == avtiveComponentName.value)) {
         avtiveComponentName.value = list[0].id
       }
-      void nextTick(() => {
-        applySettingFilter()
-        if (queryChanged) dom_content_ref.value?.scrollTo({ top: restore?.top ?? 0, behavior: 'auto' })
-      })
+      if (queryChanged || previousTab !== avtiveComponentName.value) restorePosition(restore?.top ?? 0, restore?.sidebarTop)
+      else void nextTick(() => { if (!disposed) applySettingFilter() })
     })
 
     // Alt + ← / Alt + → 切换上一个 / 下一个设置面板
@@ -474,12 +502,12 @@ export default {
       } else if (event.key === 'Enter' && visibleTocList.value.length) {
         event.preventDefault()
         const controls = dom_content_ref.value?.querySelectorAll('button, input, select, textarea, [tabindex="0"]') ?? []
-        const first = [...controls].find(element => element.getBoundingClientRect().height && !element.disabled && element.getAttribute('aria-disabled') !== 'true')
+        const first = [...controls].find(element => element.getBoundingClientRect().height && !element.closest('[inert]') && !element.disabled && element.getAttribute('aria-disabled') !== 'true')
         first?.focus()
       }
     }
     let filterPending = false
-    let disposed = false
+    const contentResizeObserver = new window.ResizeObserver(restoreScroll)
     const searchObserver = new MutationObserver(() => {
       if (!isFiltering.value || filterPending) return
       filterPending = true
@@ -490,6 +518,9 @@ export default {
     })
     onMounted(() => {
       window.addEventListener('keydown', handleKeydown, true)
+      contentResizeObserver.observe(dom_content_ref.value)
+      contentResizeObserver.observe(dom_content_ref.value.querySelector('dl'))
+      restorePosition(rememberedView?.top ?? 0, rememberedView?.sidebarTop)
       searchObserver.observe(dom_content_ref.value, {
         childList: true,
         subtree: true,
@@ -499,7 +530,17 @@ export default {
       })
     })
     onBeforeUnmount(() => {
+      rememberTabPosition()
+      settingSession.current = {
+        id: avtiveComponentName.value,
+        top: currentScrollTop(),
+        sidebarTop: dom_toc_ref.value?.scrollTop ?? 0,
+        query: filterQuery.value,
+        searchOrigin,
+      }
       disposed = true
+      cancelScrollRestore()
+      contentResizeObserver.disconnect()
       window.removeEventListener('keydown', handleKeydown, true)
       searchObserver.disconnect()
       clearSettingFilterState()
@@ -519,6 +560,7 @@ export default {
       finishFilterComposition,
       handleFilterKeydown,
       handleTabKeydown,
+      cancelScrollRestore,
       toggleTab,
       clearSettingFilter,
     }
@@ -685,7 +727,11 @@ export default {
 // }
 
 .setting {
-  padding: 0 15px 15px;
+  --setting-row-gap: 8px;
+  --setting-column-gap: 16px;
+  --setting-section-gap: 24px;
+  --setting-inset: 16px;
+  padding: 0 var(--setting-inset) var(--setting-section-gap);
   font-size: 14px;
   box-sizing: border-box;
   overflow-y: auto;
@@ -697,7 +743,7 @@ export default {
     dt {
       border-left: 5px solid var(--color-primary-alpha-700);
       padding: 3px 7px;
-      margin: 15px 0;
+      margin: 16px 0;
 
       + dd h3 {
         margin-top: 0;
@@ -708,27 +754,70 @@ export default {
       // margin-left: 15px;
       // font-size: 13px;
       > div {
-        padding: 0 15px;
+        padding: 0 var(--setting-inset);
       }
 
     }
     h3 {
       font-size: 12px;
-      margin: 25px 0 15px;
+      line-height: 1.5;
+      margin: var(--setting-section-gap) 0 12px;
     }
     .p {
-      padding: 3px 0;
-      line-height: 1.3;
-      .btn {
-        + .btn {
-          margin-left: 10px;
-        }
-      }
+      padding-top: 0;
+      padding-bottom: 0;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .p + .p, .p + .gap-top, .gap-top + .p, .gap-top + .gap-top,
+    [data-setting-reveal] + .gap-top, [data-setting-reveal] + .p,
+    .p > .p + div {
+      margin-top: var(--setting-row-gap);
+    }
+    .gap-top.top { margin-top: var(--setting-section-gap); }
+    // Keep space inside the animated content so collapsed groups leave no extra gap.
+    dd [data-setting-reveal] > [data-setting-reveal-content] > :first-child:is(.p, .gap-top),
+    dd[data-setting-reveal] > [data-setting-reveal-content] > .p:first-child {
+      margin-top: var(--setting-row-gap);
+    }
+    [role='checkbox'] + span, [role='radio'] + span {
+      margin-left: var(--setting-row-gap);
+    }
+    .setting-row, .setting-options, .setting-actions, .setting-slider-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--setting-row-gap);
+      > .gap-left { margin-left: 0; }
+      > * { max-width: 100%; }
+      > .help-icon { margin: 0; }
+    }
+    .setting-options { column-gap: var(--setting-column-gap); }
+    .setting-slider-row { column-gap: 12px; }
+    .setting-label {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--setting-row-gap);
+      .help-icon { flex: none; margin: 0; }
+    }
+    .setting-value { color: var(--color-font-label); font-size: 12px; }
+    .setting-slider { width: 200px; max-width: 100%; }
+    button[data-motion-button] {
+      min-height: 28px;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 4px 12px;
+      line-height: 1.5;
+      vertical-align: middle;
+    }
+    input:not([type='checkbox']):not([type='radio']), select, textarea {
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .help-btn {
       padding: 0;
-      margin: 0 0.4em;
+      margin: 0 0 0 var(--setting-row-gap);
       border: none;
       background: none;
       color: var(--color-button-font);
@@ -739,7 +828,8 @@ export default {
       }
     }
     .help-icon {
-      margin: 0 0.4em;
+      margin: 0 0 0 var(--setting-row-gap);
+      vertical-align: middle;
     }
   }
 }

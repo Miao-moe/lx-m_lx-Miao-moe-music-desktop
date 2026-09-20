@@ -1,10 +1,10 @@
 import { CONTROL_COLUMNS, CONTROL_ROWS } from './contrast'
 
 const selector = 'button, [role="tab"], [role="checkbox"], [role="radio"], [role="slider"], input, select, textarea, .list-item .select, [data-player-detail] .font-lrc'
-const properties = ['--ambient-local-accent', '--ambient-local-on-accent'] as const
+const properties = ['--ambient-local-accent', '--ambient-local-on-accent', '--ambient-local-lyric-accent'] as const
 
 // Bind visible controls to the background area behind them. Palette changes only
-// update 24 pairs of shared variables; they do not rewrite each button's styles.
+// update 24 sets of shared variables; they do not rewrite each button's styles.
 export const createControlRegions = (root: HTMLElement, background: HTMLElement) => {
   const bindings = new Map<HTMLElement, { zone: number, attribute: string | null, styles: Array<{ value: string, priority: string }> }>()
   let enabled = false
@@ -55,6 +55,7 @@ export const createControlRegions = (root: HTMLElement, background: HTMLElement)
       element.dataset.ambientZone = String(zone)
       element.style.setProperty(properties[0], `var(--ambient-zone-${zone}-accent)`)
       element.style.setProperty(properties[1], `var(--ambient-zone-${zone}-on-accent)`)
+      element.style.setProperty(properties[2], `var(--ambient-zone-${zone}-lyric-accent)`)
     }
   }
   const schedule = () => { if (enabled && !pending && !document.hidden) pending = requestAnimationFrame(sync) }

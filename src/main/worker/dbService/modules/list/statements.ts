@@ -10,6 +10,7 @@ export const createListQueryStatement = () => {
   return db.prepare<[]>(`
     SELECT "id", "name", "source", "sourceListId", "position", "locationUpdateTime"
     FROM "main"."my_list"
+    ORDER BY "position" ASC
     `)
 }
 
@@ -193,5 +194,4 @@ export const createMusicInfoOrderDeleteStatement = () => {
   const db = getDB()
   return db.prepare<[LX.DBService.MusicInfoRemove]>('DELETE FROM "main"."my_list_music_info_order" WHERE "musicInfoId"=@id AND "listId"=@listId')
 }
-
 
