@@ -1,6 +1,7 @@
 import { checkPath, joinPath, extname, basename, readFile, getFileStats } from '@common/utils/nodejs'
 import { formatPlayTime } from '@common/utils/common'
 import { decodeKrc } from '@common/utils/lyricUtils/kg'
+import { BoundedMap } from '@common/utils/boundedMap'
 
 export const checkDownloadFileAvailable = async(musicInfo: LX.Download.ListItem, savePath: string): Promise<boolean> => {
   return musicInfo.isComplate && !/\.ape$/.test(musicInfo.metadata.fileName) &&
@@ -60,15 +61,8 @@ export const getMusicFilePath = async(musicInfo: LX.Music.MusicInfo | LX.Downloa
  */
 export const createLocalMusicInfo = async(path: string): Promise<LX.Music.MusicInfoLocal | null> => {
   if (!await checkPath(path)) return null
-  const { parseFile } = await import('music-metadata')
-
-  let metadata
-  try {
-    metadata = await parseFile(path)
-  } catch (err) {
-    console.log(err)
-    return null
-  }
+  const metadata = await getFileMetadata(path)
+  if (!metadata) return null
 
   // console.log(metadata)
   let ext = extname(path)
@@ -90,33 +84,45 @@ export const createLocalMusicInfo = async(path: string): Promise<LX.Music.MusicI
       songId: path,
       picUrl: '',
       ext: ext.replace(/^\./, ''),
+      year: metadata.common.year,
+      fileSize: (await getFileStats(path))?.size,
     },
   }
 }
 
-let prevFileInfo: {
-  path: string
-  promise: Promise<LX.MusicMetadataModule.IAudioMetadata | null>
-} = {
-  path: '',
-  promise: Promise.resolve(null),
-}
+const metadataCache = new BoundedMap<string, { promise: Promise<LX.MusicMetadataModule.IAudioMetadata | null>, bytes: number }>(16, 32 * 1024 * 1024, entry => entry.bytes)
+export const clearLocalMetadataCache = () => { metadataCache.clear() }
+export const getLocalMetadataCacheSize = () => [...metadataCache.values()].reduce((size, entry) => size + entry.bytes, 0)
 const getFileMetadata = async(path: string) => {
   const stats = await getFileStats(path)
   if (!stats?.isFile()) return null
   const key = JSON.stringify([path, stats.size, stats.mtimeMs, stats.ctimeMs])
-  if (prevFileInfo.path == key) return prevFileInfo.promise
+  const cached = metadataCache.get(key)
+  if (cached) return cached.promise
   const info = {
-    path: key,
-    promise: import('music-metadata').then(async({ parseFile }) => parseFile(path)).catch(err => {
-      if (prevFileInfo === info) prevFileInfo.path = ''
+    bytes: 0,
+    promise: import('music-metadata').then(async({ parseFile }) => parseFile(path)).then(metadata => {
+      info.bytes = 65536 + (metadata.common.picture ?? []).reduce((size, picture) => size + (picture.data?.byteLength ?? 0), 0)
+      metadataCache.prune()
+      return metadata
+    }).catch(err => {
+      if (metadataCache.get(key) === info) metadataCache.delete(key)
       console.log(err)
       return null
     }),
   }
-  prevFileInfo = info
+  metadataCache.set(key, info)
   return info.promise
 }
+
+/** 文件名、时长、封面等不能作为在线匹配所需的歌曲标签。 */
+export const hasLocalMusicFileTags = async(path: string): Promise<boolean> => {
+  const metadata = await getFileMetadata(path)
+  if (!metadata) return false
+  const { title, artist, artists, album } = metadata.common
+  return [title, artist, album, ...(artists ?? [])].some(value => !!value?.trim())
+}
+
 /**
  * 获取歌曲文件封面图片
  * @param path 路径

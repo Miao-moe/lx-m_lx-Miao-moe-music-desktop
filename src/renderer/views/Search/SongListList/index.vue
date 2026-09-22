@@ -3,7 +3,8 @@
     <AggregateStatus :state="listInfo.aggregate" @retry="retryFailedSources" />
     <div :class="$style.results">
       <SongList
-        ref="listRef" :list-info="listInfo" :visible-source="sourceId == 'all'"
+        ref="listRef"
+        :streaming="sourceId == 'all'" :list-info="listInfo" :visible-source="sourceId == 'all'"
         :hide-retry="!!listInfo.aggregate?.failedSources.length" @toggle-page="togglePage" @retry="handleRetry"
       />
     </div>

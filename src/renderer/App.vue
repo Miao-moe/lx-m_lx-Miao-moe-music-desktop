@@ -1,6 +1,6 @@
 <template>
-  <div id="container" class="view-container" :data-ambient-enabled="appSetting['ui.ambientBackground'] ? '' : null" :data-player-detail-open="isShowPlayerDetail ? '' : null">
-    <KawarpBackground v-if="appSetting['ui.ambientBackground']" :cover="musicInfo.pic" />
+  <div id="container" class="view-container" :data-ambient-enabled="ambientBackgroundEnabled ? '' : null" :data-player-detail-open="isShowPlayerDetail ? '' : null">
+    <KawarpBackground v-if="ambientBackgroundEnabled" :cover="musicInfo.pic" />
     <layout-aside id="left" :inert="isShowPlayerDetail ? '' : null" />
     <div id="right" :inert="isShowPlayerDetail ? '' : null">
       <layout-toolbar id="toolbar" />
@@ -18,7 +18,7 @@
 </template>
 
 <script setup>
-import { onMounted } from '@common/utils/vueTools'
+import { computed, onMounted } from '@common/utils/vueTools'
 // import BubbleCursor from '@common/utils/effects/cursor-effects/bubbleCursor'
 // import '@common/utils/effects/snow.min'
 import useApp from '@renderer/core/useApp'
@@ -26,6 +26,9 @@ import { useSmoothAnimation } from '@renderer/utils/smoothAnimation'
 import KawarpBackground from '@renderer/components/layout/PlayDetail/KawarpBackground.vue'
 import { appSetting } from '@renderer/store/setting'
 import { musicInfo, isShowPlayerDetail } from '@renderer/store/player/state'
+
+const ambientBackgroundEnabled = computed(() => appSetting['ui.ambientBackground'] &&
+  (!appSetting['ui.ambientBackgroundOnlyPlayDetail'] || isShowPlayerDetail.value))
 
 useApp()
 

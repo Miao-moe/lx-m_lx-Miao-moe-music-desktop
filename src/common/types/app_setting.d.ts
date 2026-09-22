@@ -543,12 +543,14 @@ declare global {
       /**
        * 文件命名方式
        */
-      'download.fileName': '歌名 - 歌手' | '歌手 - 歌名' | '歌名'
+      'download.fileName': string
 
       /**
        * 最大并发下载数
        */
       'download.maxDownloadNum': number
+      'download.rateLimit': number
+      'download.autoResume': boolean
 
       /**
        * 存在同名文件时跳过下载
@@ -783,6 +785,8 @@ declare global {
 
       /** 专辑封面动态背景的总开关与性能档位 */
       'ui.ambientBackground': boolean
+      /** 仅在播放详情页显示专辑封面动态背景 */
+      'ui.ambientBackgroundOnlyPlayDetail': boolean
       /** 根据动态背景调整按钮与选中文字的颜色 */
       'ui.ambientBackgroundAutoContrast': boolean
       'ui.ambientBackgroundQuality': 'static' | 'gentle' | 'full'
@@ -821,6 +825,7 @@ declare global {
        * 渐入渐出持续时间（毫秒），范围 100-3000
        */
       'player.fadeDuration': number
+      'sync.platform.selection': string
     }
   }
 

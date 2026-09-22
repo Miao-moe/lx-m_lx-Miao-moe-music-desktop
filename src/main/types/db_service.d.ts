@@ -60,6 +60,7 @@ declare namespace LX {
     }
 
     interface DownloadMusicInfo {
+      taskOptions: string
       id: string
       isComplate: 0 | 1
       status: LX.Download.DownloadTaskStatus

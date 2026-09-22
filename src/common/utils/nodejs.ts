@@ -4,6 +4,8 @@ import { gzip, gunzip } from 'node:zlib'
 import path from 'node:path'
 import { networkInterfaces } from 'node:os'
 import { log } from '@common/utils'
+import { writeFileAtomic } from './atomicFile'
+import { MAX_BACKUP_FILE, MAX_BACKUP_EXPANDED, BackupError, validateJsonTree } from '../backup'
 
 export const joinPath = (...paths: string[]): string => path.join(...paths)
 
@@ -146,10 +148,30 @@ export const gunzipData = async(buf: Buffer): Promise<string> => {
  * @param data 数据
  */
 export const saveLxConfigFile = async(path: string, data: any) => {
-  if (!path.endsWith('.lxmc')) path += '.lxmc'
-  fs.writeFile(path, await gzipData(JSON.stringify(data)), 'binary', err => {
-    console.log(err)
-  })
+  if (!path.toLowerCase().endsWith('.lxmc')) path += '.lxmc'
+  const json = JSON.stringify(data)
+  if (Buffer.byteLength(json) > MAX_BACKUP_EXPANDED) throw new BackupError('expanded_size')
+  const bytes = await gzipData(json)
+  if (bytes.length > MAX_BACKUP_FILE) throw new BackupError('file_size')
+  await writeFileAtomic(path, bytes)
+  return path
+}
+
+export const readFileLimited = async(filename: string, limit: number) => {
+  const file = await fs.promises.open(filename, 'r')
+  try {
+    const stat = await file.stat()
+    if (!stat.isFile() || stat.size > limit) throw new BackupError('file_size')
+    const bytes = Buffer.alloc(stat.size + 1)
+    let length = 0
+    while (length < bytes.length) {
+      const read = await file.read(bytes, length, bytes.length - length, length)
+      if (!read.bytesRead) break
+      length += read.bytesRead
+    }
+    if (length !== stat.size) throw new BackupError('file_changed')
+    return bytes.subarray(0, length)
+  } finally { await file.close() }
 }
 
 /**
@@ -158,21 +180,27 @@ export const saveLxConfigFile = async(path: string, data: any) => {
  * @returns 数据
  */
 export const readLxConfigFile = async(path: string): Promise<any> => {
-  let isJSON = path.endsWith('.json')
-  let data: string | Buffer = await fs.promises.readFile(path, isJSON ? 'utf8' : 'binary')
-  if (!data) return data
-  if (!isJSON) data = await gunzipData(Buffer.from(data, 'binary'))
-  data = JSON.parse(data)
-
-  // 修复v1.14.0出现的导出数据被序列化两次的问题
-  if (typeof data != 'object') {
+  const bytes = await readFileLimited(path, MAX_BACKUP_FILE)
+  let json: string
+  if (path.toLowerCase().endsWith('.json')) json = bytes.toString('utf8')
+  else {
     try {
-      data = JSON.parse(data)
-    } catch (err) {
-      return data
-    }
+      json = await new Promise<string>((resolve, reject) => {
+        gunzip(bytes, { maxOutputLength: MAX_BACKUP_EXPANDED }, (error, result) => {
+          if (error) reject(error)
+          else resolve(result.toString('utf8'))
+        })
+      })
+    } catch (error: any) { throw new BackupError(error.code === 'ERR_BUFFER_TOO_LARGE' ? 'expanded_size' : 'compression') }
   }
-
+  let data: any
+  try {
+    data = JSON.parse(json.replace(/^\uFEFF/, ''))
+    // v1.14.0 exported JSON twice. Only accept the historical extra string layer.
+    if (typeof data === 'string') data = JSON.parse(data)
+  } catch { throw new BackupError('json') }
+  validateJsonTree(data)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new BackupError('invalid')
   return data
 }
 

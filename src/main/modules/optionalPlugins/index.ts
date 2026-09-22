@@ -4,9 +4,24 @@ import { OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, PLUGIN_IPC, pluginText, comp
 import { getWebContents } from '../winMain/main'
 import { PluginManager, PluginTransferError } from './manager'
 import { compilePluginSource } from './compiler'
+import { errorForTransport } from '@common/utils/errorMessage'
+import { assertIpcRequest } from '@main/utils/ipcPolicy'
+
+const handle = (name: string, listener: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown) => {
+  ipcMain.handle(name, async(event, ...args) => {
+    try { assertIpcRequest(event, name, args[0], args.slice(1)); return await listener(event, ...args) } catch (error) { throw errorForTransport(error) }
+  })
+}
+
+let manager: PluginManager
+export const getPluginManager = () => manager
+export const notifyPluginBackupRestored = async() => {
+  const snapshot = await manager.backupRestored()
+  for (const window of BrowserWindow.getAllWindows()) if (!window.webContents.isDestroyed()) window.webContents.send(PLUGIN_IPC.changed, snapshot)
+}
 
 export default () => {
-  const manager = new PluginManager(path.join(global.lxDataPath, 'plugins'), async(url, maxBytes) => {
+  manager = new PluginManager(path.join(global.lxDataPath, 'plugins'), async(url, maxBytes) => {
     if (!url.startsWith(OFFICIAL_PLUGIN_ROOT)) throw new Error('Invalid official plugin URL')
     // net.request also supports the Electron 22 Windows 7 build and the app's proxy.
     return new Promise<Buffer>((resolve, reject) => {
@@ -57,10 +72,19 @@ export default () => {
     }
     return snapshot
   }
-  ipcMain.handle(PLUGIN_IPC.list, async() => manager.snapshot())
-  ipcMain.handle(PLUGIN_IPC.refresh, async() => broadcast(await manager.refresh()))
-  ipcMain.handle(PLUGIN_IPC.install, async(_event, id: PluginId, format?: PluginPackageFormat) => broadcast(await manager.install(id, format)))
-  ipcMain.handle(PLUGIN_IPC.uninstall, async(_event, id: PluginId) => broadcast(await manager.uninstall(id)))
+  handle(PLUGIN_IPC.list, async() => manager.snapshot())
+  handle(PLUGIN_IPC.refresh, async() => broadcast(await manager.refresh()))
+  handle(PLUGIN_IPC.install, async(_event, id: PluginId, format?: PluginPackageFormat) => broadcast(await manager.install(id, format)))
+  handle(PLUGIN_IPC.uninstall, async(_event, id: PluginId) => broadcast(await manager.uninstall(id)))
+  handle(PLUGIN_IPC.setEnabled, async(event, id: PluginId, enabled: boolean) => {
+    if (event.sender !== getWebContents() || event.senderFrame !== event.sender.mainFrame) throw new Error('Plugin state changes require the main window')
+    return broadcast(await manager.setEnabled(id, enabled))
+  })
+  handle(PLUGIN_IPC.runtimeResult, async(event, id: PluginId, directory: string, error?: string) => {
+    const lyric = event.sender !== getWebContents()
+    if (event.senderFrame !== event.sender.mainFrame || (lyric && !new URL(event.sender.getURL()).pathname.endsWith('/lyric.html'))) throw new Error('Invalid plugin runtime window')
+    return broadcast(await manager.reportRuntimeResult(id, directory, error, lyric))
+  })
 
   const transferState = { busy: false }
   const transfer = async<T>(event: Electron.IpcMainInvokeEvent, labels: PluginTransferLabels, operation: (window: BrowserWindow) => Promise<PluginTransferResult<T>>): Promise<PluginTransferResult<T>> => {
@@ -74,10 +98,10 @@ export default () => {
     transferState.busy = true
     try { return await operation(window) } catch (error) {
       console.error('Plugin transfer failed:', error)
-      return { status: 'error', code: error instanceof PluginTransferError ? error.code : 'write_failed', ...(error instanceof PluginTransferError && error.code === 'compile_failed' ? { detail: error.message.slice(0, 2000) } : {}) }
+      return { status: 'error', code: error instanceof PluginTransferError ? error.code : 'write_failed', detail: errorForTransport(error).message }
     } finally { transferState.busy = false }
   }
-  ipcMain.handle(PLUGIN_IPC.import, async(event, labels: PluginTransferLabels) => transfer(event, labels, async window => {
+  handle(PLUGIN_IPC.import, async(event, labels: PluginTransferLabels) => transfer(event, labels, async window => {
     const selected = await dialog.showOpenDialog(window, {
       title: labels.title,
       filters: [{ name: labels.filter, extensions: ['lxplugin', 'zip'] }],
@@ -106,7 +130,7 @@ export default () => {
     if (confirmed.response !== 0 || window.isDestroyed()) return { status: 'cancelled' }
     return { status: 'success', value: { id: manifest.id, snapshot: broadcast(await manager.importPrepared(prepared)) } }
   }))
-  ipcMain.handle(PLUGIN_IPC.export, async(event, id: PluginId, labels: PluginTransferLabels) => transfer(event, labels, async window => {
+  handle(PLUGIN_IPC.export, async(event, id: PluginId, labels: PluginTransferLabels) => transfer(event, labels, async window => {
     const archive = await manager.createExport(id)
     const selected = await dialog.showSaveDialog(window, {
       title: labels.title,

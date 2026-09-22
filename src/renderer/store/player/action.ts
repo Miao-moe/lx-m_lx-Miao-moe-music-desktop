@@ -24,6 +24,7 @@ import { LIST_IDS } from '@common/constants'
 import { toRaw } from '@common/utils/vueTools'
 import showToast from '@renderer/plugins/Toast'
 import { getCachedCoverUrl } from '@renderer/utils/musicCover'
+import { playbackSession } from '@renderer/core/player/playbackSession'
 
 
 type PlayerMusicInfoKeys = keyof typeof musicInfo
@@ -85,6 +86,7 @@ export const getList = (listId: string | null): Array<LX.Music.MusicInfo | LX.Do
 
 const notifyPlayQueueChange = () => {
   resetRandomNextMusicInfo()
+  playbackSession.invalidate('queue')
   playQueueRevision.value++
 }
 
@@ -102,7 +104,19 @@ export const setPlayQueue = (list: LX.Player.PlayMusicInfo[]) => {
  * @param index 歌曲位置
  */
 export const removePlayQueue = (index: number) => {
+  if (!Number.isInteger(index) || index < 0 || index >= playQueueList.length) return
   playQueueList.splice(index, 1)
+  if (index <= playInfo.playerPlayIndex) playInfo.playerPlayIndex--
+  if (playInfo.playerPlayIndex < 0 && playQueueList.length) playInfo.playerPlayIndex = playQueueList.length - 1
+  notifyPlayQueueChange()
+}
+
+export const movePlayQueue = (from: number, to: number) => {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= playQueueList.length || to >= playQueueList.length || from === to) return
+  const current = playQueueList[playInfo.playerPlayIndex]
+  const [item] = playQueueList.splice(from, 1)
+  playQueueList.splice(to, 0, item)
+  if (current) playInfo.playerPlayIndex = playQueueList.indexOf(current)
   notifyPlayQueueChange()
 }
 /**
@@ -146,7 +160,7 @@ export const getPlayIndex = (listId: string | null, musicInfo: LX.Download.ListI
   }
   if (!isTempPlay && musicInfo && playerList.length) {
     const currentId = musicInfo.id
-    const queueIndex = playerList.findIndex(m => m.id == currentId)
+    const queueIndex = playerList[playerPlayIndex]?.id === currentId ? playerPlayIndex : playerList.findIndex(m => m.id == currentId)
     if (queueIndex > -1) {
       playerPlayIndex = queueIndex
     } else if (playInfo.playerPlayIndex > -1) {
@@ -269,7 +283,8 @@ export const clearPlayedList = () => {
  * @param list 歌曲列表
  */
 export const addTempPlayList = (list: LX.Player.TempPlayListItem[]) => {
-  const currentIndex = playQueueList.findIndex(item => item.musicInfo.id == playMusicInfo.musicInfo?.id)
+  const currentIndex = playQueueList[playInfo.playerPlayIndex]?.musicInfo.id === playMusicInfo.musicInfo?.id
+    ? playInfo.playerPlayIndex : playQueueList.findIndex(item => item.musicInfo.id == playMusicInfo.musicInfo?.id)
   const insertIndex = currentIndex > -1 ? currentIndex + 1 : playQueueList.length
   const items: LX.Player.PlayMusicInfo[] = list.map(({ musicInfo, listId }) => ({ musicInfo, listId, isTempPlay: false }))
   playQueueList.splice(insertIndex, 0, ...items)

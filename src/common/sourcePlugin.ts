@@ -1,0 +1,2 @@
+export const SOURCE_PLUGIN_IPC = { load: 'source_plugin:load', call: 'source_plugin:call', cancel: 'source_plugin:cancel', reply: 'source_plugin:reply', network: 'source_plugin:network', cancelNetwork: 'source_plugin:cancel_network', command: 'source_plugin:command' } as const
+export interface SourcePluginManifest { id: string, version: string, url: string, sha256: string, allowedOrigins: string[] }

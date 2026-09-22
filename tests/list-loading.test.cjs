@@ -37,11 +37,32 @@ function fixture(kind, mode = 'immediate') {
     calls,
     list: listInfos.all,
     search: text => entity ? store.search(kind, text, 1, 'all') : store.search(text, 1, 'all'),
-    retry: () => entity ? store.retryFailedSources(kind) : store.retryFailedSources(),
+    retry: source => entity ? store.retryFailedSources(kind, source) : store.retryFailedSources(source),
   }
 }
 
 for (const kind of ['music', 'songlist', 'singer', 'album']) {
+  test(`${kind}: B21 reports progress and retries one failed platform while another remains pending`, async() => {
+    const f = fixture(kind)
+    const pending = f.search('query')
+    await flush()
+    f.calls[0].finish(['kept'])
+    f.calls[1].reject(Object.assign(new Error('private message'), { code: 'ECONNRESET' }))
+    await flush()
+    assert.equal(f.list.aggregate.sources[0].status, 'success')
+    assert(f.list.aggregate.sources[0].elapsedMs >= 0)
+    assert.equal(f.list.aggregate.sources[1].errorCode, 'ECONNRESET')
+    assert.equal(f.list.aggregate.pendingSources.length, 3)
+    const retry = f.retry(platforms[1])
+    await flush()
+    assert.equal(f.calls.length, 6)
+    assert.equal(f.calls[5].source, platforms[1])
+    f.calls[5].finish(['recovered'])
+    await retry
+    for (const call of f.calls.slice(2, 5)) call.finish([])
+    await pending
+    assert.deepEqual(new Set(f.list.list.map(item => item.id)), new Set(['kept', 'recovered']))
+  })
   test(`${kind}: one retry reloads every failed platform and preserves successful results`, async() => {
     const f = fixture(kind)
     const search = f.search('query')
@@ -83,7 +104,7 @@ for (const kind of ['music', 'songlist', 'singer', 'album']) {
     for (const call of f.calls) call.reject(Error('offline'))
     await search
     assert.equal(f.list.aggregate.status, 'failed')
-    assert.equal(f.list.noItemLabel, 'list__load_failed')
+    assert.match(f.list.noItemLabel, /^list__load_failed\n/); assert.match(f.list.noItemLabel, /SEARCH_LOAD_FAILED/)
     const retry = f.retry()
     await flush()
     assert.equal(f.list.noItemLabel, 'list__loading', 'retrying failed platforms must not flash an empty result')
@@ -144,14 +165,14 @@ for (const kind of ['music', 'songlist', 'singer', 'album']) {
     assert.equal(f.list.noItemLabel, '')
   })
 
-  test(`${kind}: existing modes still wait for all platform data`, async() => {
+  test(`${kind}: B12 aggregate results stream independently of the general list loading mode`, async() => {
     for (const mode of ['together', 'progressive']) {
       const f = fixture(kind, mode)
       const search = f.search('query')
       await flush()
       f.calls[0].finish(['first'])
       await flush()
-      assert.equal(f.list.list.length, 0)
+      assert.equal(f.list.list.length, 1)
       assert.equal(f.list.noItemLabel, 'list__loading')
       for (const call of f.calls.slice(1)) call.finish([])
       await search

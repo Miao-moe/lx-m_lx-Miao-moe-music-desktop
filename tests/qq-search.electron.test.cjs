@@ -33,7 +33,7 @@ test('QQ search retries the official interface, falls back to mobile, and recove
       const query = request.param.query
       requests.push({ query, desktop, time: Date.now() })
       const attempt = requests.filter(request => request.query === query).length
-      const failed = query === 'qq-permanent-error' ? !permitRetry : query === 'qq-mobile-fallback' ? desktop : attempt < 5
+      const failed = query === 'qq-permanent-error' ? !permitRetry : query === 'qq-mobile-fallback' ? desktop : attempt < 3
       res.writeHead(200, { 'Content-Type': 'application/json' })
       const songs = failed ? [] : [song]
       res.end(JSON.stringify({ code: 0, [desktop ? 'music.search.SearchCgiService' : 'req']: { code: failed ? 2001 : 0, data: { body: desktop ? { song: { list: songs } } : { item_song: songs }, meta: { [desktop ? 'sum' : 'estimate_sum']: failed ? 0 : 1 } } } }))
@@ -60,27 +60,27 @@ test('QQ search retries the official interface, falls back to mobile, and recove
     await route(page, '/search?text=Talullah%20Jamiroquai&source=tx&type=music')
     await page.getByText('Talullah', { exact: true }).first().waitFor()
     const recovered = requests.filter(item => item.query === 'Talullah Jamiroquai')
-    assert.equal(recovered.length, 5)
+    assert.equal(recovered.length, 3)
     assert.ok(recovered[1].time - recovered[0].time >= 600, 'QQ retries must be spaced out')
     assert(recovered.every(item => item.desktop), 'successful official retries must not use a fallback')
     await route(page, '/search?text=qq-mobile-fallback&source=tx&type=music')
     await page.getByText('Talullah', { exact: true }).first().waitFor()
     const fallback = requests.filter(item => item.query === 'qq-mobile-fallback')
-    assert.equal(fallback.length, 7)
-    assert(fallback.slice(0, 6).every(item => item.desktop))
-    assert.equal(fallback[6].desktop, false)
+    assert.equal(fallback.length, 4)
+    assert(fallback.slice(0, 3).every(item => item.desktop))
+    assert.equal(fallback[3].desktop, false)
     await route(page, '/search?text=qq-permanent-error&source=tx&type=music')
     const reload = await page.evaluate(() => window.i18n.t('reload'))
     const retry = page.getByRole('button', { name: reload, exact: true })
     await retry.waitFor()
-    assert.equal(requests.filter(item => item.query === 'qq-permanent-error').length, 12)
+    assert.equal(requests.filter(item => item.query === 'qq-permanent-error').length, 6)
     assert.deepEqual(errors, [])
     permitRetry = true
     await retry.click()
     await page.getByText('Talullah', { exact: true }).first().waitFor()
-    assert.equal(requests.filter(item => item.query === 'qq-permanent-error').length, 13)
+    assert.equal(requests.filter(item => item.query === 'qq-permanent-error').length, 7)
     const captured = JSON.parse(await page.evaluate(() => window.__lxQqSearchCapture.export()))
-    assert.equal(captured.records.length, 25)
+    assert.equal(captured.records.length, 14)
     assert.ok(captured.records.some(item => item.reqCode === 2001))
     assert.ok(captured.records.some(item => item.reqCode === 0 && item.songCount === 1))
     assert(!JSON.stringify(captured).includes('Talullah'))

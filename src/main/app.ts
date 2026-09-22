@@ -13,6 +13,7 @@ import createWorkers from './worker'
 import { migrateDBData } from './utils/migrate'
 import { openDirInExplorer } from '@common/utils/electron'
 import { setProxyByHost } from '@common/utils/request'
+import { flushStores } from '@main/utils/store'
 
 export const initGlobalData = () => {
   const envParams = parseEnvParams()
@@ -361,6 +362,22 @@ export const listenerAppEvent = (startApp: () => void) => {
 
   app.on('before-quit', () => {
     global.lx.isSkipTrayQuit = true
+  })
+  let storesFlushed = false
+  let flushingStores = false
+  app.on('will-quit', event => {
+    if (storesFlushed) return
+    event.preventDefault()
+    if (flushingStores) return
+    flushingStores = true
+    void flushStores().then(() => {
+      storesFlushed = true
+      app.quit()
+    }).catch(error => {
+      flushingStores = false
+      log.error(error)
+      void dialog.showMessageBox({ type: 'error', message: '配置保存失败 / Configuration save failed', detail: '请检查磁盘空间和目录权限后重试退出。\nCheck disk space and permissions before quitting again.' })
+    })
   })
   app.on('window-all-closed', () => {
     if (isMac) return

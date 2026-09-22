@@ -21,6 +21,7 @@ export const localPlaylistSnapshot = (list: LX.List.UserListInfo, songs: LX.Musi
       track = { key: String(song.meta.songId), songId: String(song.meta.songId), contentId: song.meta.contentId, copyrightId: song.meta.copyrightId }
     } else track = { key: String(song.meta.songId), songId: String(song.meta.songId) }
     if (!track.key || track.key === 'undefined') { ignored++; continue }
+    track.name ??= `${song.name} · ${song.singer}`
     if (!seen.has(track.key)) { tracks.push(track); seen.add(track.key) }
   }
   const name = /^userlist_(wy|tx|kg|mg)_sync_/.test(list.id) ? list.name.replace(/^(网易云音乐|QQ 音乐|酷狗音乐|咪咕音乐) - /, '') : list.name

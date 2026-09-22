@@ -17,6 +17,7 @@ SyncClient
 SyncServer
 
 SyncWebDAV
+SyncStatus
 
 </template>
 
@@ -28,6 +29,7 @@ import { appSetting, updateSetting } from '@renderer/store/setting'
 import SyncServer from './SyncServer.vue'
 import SyncClient from './SyncClient.vue'
 import SyncWebDAV from './SyncWebDAV.vue'
+import SyncStatus from './SyncStatus.vue'
 
 export default {
   name: 'SettingSync',
@@ -35,6 +37,7 @@ export default {
     SyncServer,
     SyncClient,
     SyncWebDAV,
+    SyncStatus,
   },
   setup() {
     return {

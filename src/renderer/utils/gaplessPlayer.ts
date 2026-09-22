@@ -1,4 +1,5 @@
 import { appSetting } from '@renderer/store/setting'
+import { playbackSession } from '@renderer/core/player/playbackSession'
 
 type TransitionState = 'idle' | 'crossfading' | 'handoff'
 type TransitionHandler = (url: string, isCurrentTransition: () => boolean) => boolean | Promise<boolean>
@@ -32,6 +33,7 @@ let primaryBuffering = false
 let lastPrimaryTime = 0
 let audioOutput: GaplessAudioOutput | null = null
 let releaseSecondaryOutput: (() => void) | undefined
+let releaseSession: (() => void) | undefined
 const getVolume = (audio: HTMLAudioElement) => audioOutput?.getVolume(audio) ?? audio.volume
 const setVolume = (audio: HTMLAudioElement, volume: number) => {
   if (audioOutput) audioOutput.setVolume(audio, volume)
@@ -156,7 +158,7 @@ const handlePrimaryCanPlay = () => {
 
 const commitTransition = async() => {
   // Switching tracks clears the timed-stop flag, so check it before the handoff.
-  if (window.lx.isPlayedStop || transitionState !== 'crossfading' || !primaryAudio || !nextSongUrl || !transitionHandler) {
+  if (!playbackSession.canAdvance() || transitionState !== 'crossfading' || !primaryAudio || !nextSongUrl || !transitionHandler) {
     finishTransition()
     return
   }
@@ -211,7 +213,7 @@ const runCrossfade = () => {
   const targetSecondaryVolume = getSecondaryTargetVolume()
   const tick = () => {
     if (transitionState !== 'crossfading' || !primaryAudio || !secondaryAudio) return
-    if (window.lx.isPlayedStop) {
+    if (!playbackSession.canAdvance()) {
       finishTransition()
       return
     }
@@ -245,7 +247,7 @@ const runCrossfade = () => {
 const startCrossfade = async() => {
   clearTransitionTimer()
   if (transitionState !== 'idle' || !primaryAudio || !secondaryAudio || !nextSongUrl) return
-  if (!appSetting['player.gaplessPlayback'] || window.lx.isPlayedStop) return
+  if (!appSetting['player.gaplessPlayback'] || !playbackSession.canAdvance()) return
   // A timeout is only a prediction; buffering may have stopped the media clock.
   if (!canAdvancePrimary() || !Number.isFinite(primaryAudio.duration) || getRemainingPlaybackTime() > getFadeDuration()) {
     scheduleTransition()
@@ -273,7 +275,7 @@ const startCrossfade = async() => {
     return
   }
   if (requestId !== transitionId || transitionState !== 'crossfading' || nextSongUrl !== url) return
-  if (window.lx.isPlayedStop) {
+  if (!playbackSession.canAdvance()) {
     finishTransition()
     return
   }
@@ -284,7 +286,7 @@ const startCrossfade = async() => {
 const scheduleTransition = () => {
   clearTransitionTimer()
   if (transitionState !== 'idle' || !primaryAudio || !secondaryAudio || !nextSongUrl) return
-  if (!appSetting['player.gaplessPlayback'] || window.lx.isPlayedStop || !canAdvancePrimary()) return
+  if (!appSetting['player.gaplessPlayback'] || !playbackSession.canAdvance() || !canAdvancePrimary()) return
 
   const duration = primaryAudio.duration
   if (!Number.isFinite(duration) || duration <= 0) return
@@ -376,6 +378,9 @@ export const initGaplessEngine = (mainAudio: HTMLAudioElement, onTransition: Tra
   transitionHandler = onTransition
   audioOutput = output ?? null
   createSecondaryAudio()
+  releaseSession = playbackSession.subscribe(reason => {
+    if (reason === 'pause' || reason === 'stop' || reason === 'timed-stop') finishTransition()
+  })
 
   primaryAudio.addEventListener('timeupdate', handlePrimaryTimeUpdate)
   primaryAudio.addEventListener('playing', handlePrimaryPlaying)
@@ -427,6 +432,8 @@ export const isGaplessTransitionActive = () => transitionState !== 'idle'
 export const isGaplessHandoffActive = () => transitionState === 'handoff'
 
 export const destroyGaplessEngine = () => {
+  releaseSession?.()
+  releaseSession = undefined
   finishTransition()
   if (primaryAudio) {
     primaryAudio.removeEventListener('timeupdate', handlePrimaryTimeUpdate)

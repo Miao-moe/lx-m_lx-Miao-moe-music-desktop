@@ -1,5 +1,4 @@
 const assert = require('node:assert/strict')
-const fs = require('node:fs')
 const path = require('node:path')
 const http = require('node:http')
 const { test } = require('node:test')
@@ -10,6 +9,22 @@ const load = require('./helpers/load-typescript.cjs')
 const project = path.resolve(__dirname, '..')
 const workspace = path.join(project, 'build/win7/workspace')
 const legacyRequire = createRequire(path.join(workspace, 'package.json'))
+
+test('H04: the pinned image-size 2.0.4 buffer parser runs on the legacy Node 16 runtime', () => {
+  const filename = path.join(project, 'node_modules/image-size')
+  const code = `
+    const assert = require('assert').strict;
+    const imageSize = require(${JSON.stringify(filename)}).imageSize;
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l5kAAAAASUVORK5CYII=', 'base64');
+    assert.equal(imageSize(png).width, 1);
+    assert.equal(imageSize(Buffer.from('<svg width="32" height="16" xmlns="http://www.w3.org/2000/svg"></svg>')).height, 16);
+    for (const bytes of [Buffer.alloc(0), Buffer.from('icns0000'), Buffer.from([0xff, 0x0a])]) {
+      assert.throws(() => imageSize(bytes));
+    }
+  `
+  const result = spawnSync(legacyRequire('electron'), ['-e', code], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, encoding: 'utf8', timeout: 5000 })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+})
 
 test('Win7 and regular editions cannot select each other\'s installers', () => {
   const { getWindowsSetupPriority: priority } = load({})('src/common/utils/update.ts')
@@ -39,6 +54,13 @@ for (const [name, requireDependency] of [['regular', require], ['win7', legacyRe
     const sockets = new Set()
     const server = http.createServer((req, res) => {
       if (req.url === '/hang') return
+      if (req.url === '/drip') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.write('[')
+        const timer = setInterval(() => res.write(' '), 20)
+        res.on('close', () => clearInterval(timer))
+        return
+      }
       if (req.url.startsWith('/redirect/')) {
         res.writeHead(Number(req.url.split('/')[2]), { location: '../../raw' })
         return res.end()
@@ -66,6 +88,9 @@ for (const [name, requireDependency] of [['regular', require], ['win7', legacyRe
     const pending = api.request(base + '/hang', { signal: controller.signal })
     controller.abort()
     await assert.rejects(pending, /abort/i)
+    const start = Date.now()
+    await assert.rejects(api.request(base + '/drip', { timeout: 100, retryNum: 2 }), error => error.code === 'ETIMEDOUT')
+    assert(Date.now() - start < 1000, 'B01/B15: buffered response has a total body deadline on both runtimes')
     const download = compat.composeDispatcher(new undici.Agent(), 5)
     try {
       const result = await compat.requestWithCompatibility(base + '/redirect/307', { dispatcher: download, method: 'GET' })

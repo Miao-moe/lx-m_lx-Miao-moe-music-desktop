@@ -45,6 +45,7 @@ function fixture(t, fade, nearEnd = false, output) {
   Object.assign(primary, { src: 'current.mp3', paused: false, autoplay: true, currentTime: nearEnd ? (fade ? 59.3 : 59.95) : 40 })
   const transitions = []
   const window = { lx: { isPlayedStop: false }, app_event: { playerEnded() {} }, setTimeout, clearTimeout }
+  const session = require('./helpers/playback-session.cjs')(window)
   const engine = {}
   vm.runInNewContext(code, {
     exports: engine,
@@ -53,6 +54,7 @@ function fixture(t, fade, nearEnd = false, output) {
     Date,
     console: { warn() {} },
     require(name) {
+      if (name.endsWith('playbackSession')) return session
       assert.equal(name, '@renderer/store/setting')
       return {
         appSetting: {

@@ -10,7 +10,7 @@ const dependencies = {
   webpack: '5.99.9',
   'css-loader': '6.11.0',
   'less-loader': '11.1.4',
-  less: '4.2.2',
+  less: '4.5.1',
   'postcss-loader': '7.3.4',
   '@tailwindcss/postcss': '4.1.18',
 }

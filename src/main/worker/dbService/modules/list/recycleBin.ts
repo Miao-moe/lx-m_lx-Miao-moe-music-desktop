@@ -20,6 +20,7 @@ interface Row {
   deleted_at: number
   expires_at: number
   payload: string
+  summary?: string
 }
 
 export const pruneListTrash = () => {
@@ -39,8 +40,8 @@ const summary = (row: Row, data: Snapshot): LX.List.TrashEntry => ({
 
 export const getListTrash = (): LX.List.TrashEntry[] => {
   pruneListTrash()
-  const rows = getDB().prepare('SELECT * FROM list_trash ORDER BY deleted_at DESC, rowid DESC').all() as Row[]
-  return rows.map(row => summary(row, JSON.parse(row.payload)))
+  const rows = getDB().prepare('SELECT id,deleted_at,expires_at,summary FROM list_trash ORDER BY deleted_at DESC, rowid DESC').all() as Row[]
+  return rows.map(row => ({ ...JSON.parse(row.summary!), id: row.id, deletedAt: row.deleted_at, expiresAt: row.expires_at }))
 }
 
 export const deleteListTrash = (ids: string[]) => {
@@ -68,7 +69,7 @@ export const archiveListDeletion = (kind: Snapshot['kind'], listIds: string[], s
     pruneListTrash()
     const lists = queryAllUserList()
     const listPositions = positions(lists, kind === 'list' ? new Set(listIds) : new Set())
-    const insert = db.prepare('INSERT INTO list_trash (id, deleted_at, expires_at, payload) VALUES (@id, @deleted_at, @expires_at, @payload)')
+    const insert = db.prepare('INSERT INTO list_trash (id, deleted_at, expires_at, payload, summary) VALUES (@id, @deleted_at, @expires_at, @payload, @summary)')
     const entries: LX.List.TrashEntry[] = []
     for (const listId of new Set(listIds)) {
       if (listId === LIST_IDS.TEMP) continue
@@ -87,6 +88,7 @@ export const archiveListDeletion = (kind: Snapshot['kind'], listIds: string[], s
       if (kind === 'songs' && !data.songs.length) continue
       const now = Date.now()
       const row: Row = { id: randomUUID(), deleted_at: now, expires_at: now + LIST_TRASH_RETENTION_MS, payload: JSON.stringify(data) }
+      row.summary = JSON.stringify(summary(row, data))
       insert.run(row)
       entries.push(summary(row, data))
     }

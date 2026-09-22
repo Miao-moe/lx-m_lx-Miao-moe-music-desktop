@@ -6,7 +6,7 @@ export const listLoadingKey: InjectionKey<{ hold: (kind?: 'content' | 'cover') =
 
 // Rows and covers register while the content is mounted but hidden. Once shown,
 // scrolling can load more rows without hiding the whole list again.
-export default (sources: WatchSource[], isLoading: () => boolean) => {
+export default (sources: WatchSource[], isLoading: () => boolean, isImmediate = () => appSetting['list.loadingMode'] === 'immediate') => {
   const parent = inject(listLoadingKey, null)
   const ready = ref(false)
   const pending = new Set<symbol>()
@@ -20,7 +20,7 @@ export default (sources: WatchSource[], isLoading: () => boolean) => {
     const current = ++revision
     cancelAnimationFrame(frame)
     if (disposed || ready.value) return
-    if (appSetting['list.loadingMode'] === 'immediate') {
+    if (isImmediate()) {
       ready.value = true
       return
     }

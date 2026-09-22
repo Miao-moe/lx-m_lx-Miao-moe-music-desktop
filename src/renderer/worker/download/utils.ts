@@ -1,8 +1,7 @@
 import { DOWNLOAD_STATUS, QUALITYS } from '@common/constants'
-import { filterFileName } from '@common/utils/common'
 import { buildLyrics } from './lrcTool'
 import fs from 'fs'
-import { clipFileNameLength, clipNameLength, formatMusicName } from '@common/utils/tools'
+import { formatDownloadFileName } from '@common/utils/download/fileName'
 
 /**
  * 保存歌词文件
@@ -18,15 +17,11 @@ export const saveLrc = async(lrcData: LX.Music.LyricInfo, info: {
   const lrc = buildLyrics(lrcData, info.downloadLxlrc, info.downloadTlrc, info.downloadRlrc)
   switch (info.format) {
     case 'gbk':
-      fs.writeFile(info.filePath, iconv.encode(lrc, 'gbk', { addBOM: true }), err => {
-        if (err) console.log(err)
-      })
+      await fs.promises.writeFile(info.filePath, iconv.encode(lrc, 'gbk', { addBOM: true }))
       break
     case 'utf8':
     default:
-      fs.writeFile(info.filePath, iconv.encode(lrc, 'utf8', { addBOM: true }), err => {
-        if (err) console.log(err)
-      })
+      await fs.promises.writeFile(info.filePath, iconv.encode(lrc, 'utf8', { addBOM: true }))
       break
   }
 }
@@ -98,7 +93,7 @@ export const createDownloadInfo = (musicInfo: LX.Music.MusicInfoOnline, type: LX
       ext,
       filePath: '',
       listId,
-      fileName: filterFileName(`${clipFileNameLength(formatMusicName(fileName, musicInfo.name, clipNameLength(musicInfo.singer)))}.${ext}`),
+      fileName: formatDownloadFileName(fileName, musicInfo, type, ext),
     },
   }
   // downloadInfo.metadata.filePath = joinPath(savePath, downloadInfo.metadata.fileName)

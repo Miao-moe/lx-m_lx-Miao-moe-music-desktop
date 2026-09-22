@@ -3,6 +3,7 @@ import { decodeName, formatPlayTime, sizeFormate } from '../../index'
 import { formatSingerName } from '../utils'
 import { assertSearch, readSearchBody, withSearchFallback } from '../searchFallback'
 import { msearch, mobilecdnSearch } from './searchFallback'
+import { providerError } from '../requestErrors'
 
 
 export default {
@@ -73,12 +74,8 @@ export default {
     let ids = new Set()
     const list = []
     rawData.forEach(item => {
-      const key = item.Audioid + item.FileHash
-      if (ids.has(key)) return
-      ids.add(key)
-      list.push(this.filterData(item))
-      for (const childItem of item.Grp ?? []) {
-        const key = item.Audioid + item.FileHash
+      for (const childItem of [item, ...(item.Grp ?? [])]) {
+        const key = JSON.stringify([childItem.Audioid, childItem.FileHash])
         if (ids.has(key)) continue
         ids.add(key)
         list.push(this.filterData(childItem))
@@ -92,7 +89,7 @@ export default {
     if (limit == null) limit = this.limit
     // http://newlyric.kuwo.cn/newlyric.lrc?62355680
     return this.musicSearch(str, page, limit).then(result => {
-      if (!result || result.error_code !== 0) return this.searchPrimary(str, page, limit, retryNum)
+      if (!result || result.error_code !== 0) throw providerError('kg', result?.error_code)
       assertSearch(Array.isArray(result.data?.lists))
       let list = this.handleResult(result.data.lists)
 

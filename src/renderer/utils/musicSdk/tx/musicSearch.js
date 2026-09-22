@@ -4,13 +4,13 @@ import { signRequest } from './utils'
 import { requestMsg } from '../../message'
 import { withSearchFallback } from '../searchFallback'
 import { buildDesktopSearchRequest, mobileSearch, smartboxSearch } from './searchFallback'
+import { requestDelay, shareRequest, throwIfRequestCancelled } from '../../requestContext'
 
 const pendingSearches = new Map()
 const retryDelays = [700, 1500]
 // Preserve the official LX six-attempt allowance for QQ 2001 responses
 // without extending network timeout retries.
 const qqSearchRetryDelays = [700, 1500, 1500, 1500, 1500]
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 const safeCode = value => typeof value == 'number' && Number.isFinite(value)
   ? value
   : typeof value == 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(value) ? value : null
@@ -30,6 +30,7 @@ const responseError = response => {
   error.searchDetails = details
   // Retrying a rejected request immediately only repeats the same failure.
   const status = Number(response?.statusCode)
+  error.stopSearchFallback = [401, 403, 429].includes(status)
   error.retryable = (status >= 200 && status < 300) || status >= 500 || status == 408 || status == 429
   const retryAfter = Number(response?.headers?.['retry-after'])
   error.retryAfterMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 0
@@ -42,11 +43,14 @@ const networkError = cause => {
   const kind = cause?.message == requestMsg.cancelRequest ? 'cancelled' : 'network'
   const details = { kind, networkCode: code }
   const error = new Error(`QQ 搜索失败 (${kind}${code ? ': ' + code : ''})`)
+  error.cause = cause
+  error.code = code
+  error.stopSearchFallback = cause?.stopSearchFallback
   error.searchDetails = details
-  error.retryable = kind != 'cancelled' && (
+  error.retryable = cause?.retryable ?? (kind != 'cancelled' && (
     ['ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE'].includes(code) ||
     [requestMsg.timeout, requestMsg.notConnectNetwork, requestMsg.unachievable].includes(cause?.message)
-  )
+  ))
   return error
 }
 
@@ -56,12 +60,14 @@ export default {
   page: 0,
   allPage: 1,
   successCode: 0,
-  musicSearch(str, page, limit, retryNum = 0, searchType = 0, isDesktop = true) {
-    const key = JSON.stringify([str, page, limit, searchType, isDesktop])
-    const pending = pendingSearches.get(key)
-    if (pending) return pending
+  musicSearch(str, page, limit, retryNum = 0, searchType = 0, isDesktop = true, context) {
+    const key = JSON.stringify([str, page, limit, searchType, isDesktop, !!context])
     const run = async() => {
       for (let attempt = 0; ; attempt++) {
+        throwIfRequestCancelled()
+        // Share the allowance across desktop/mobile fallback routes. Direct
+        // entity searches retain their existing six-attempt QQ 2001 allowance.
+        if (context && context.attempts++ >= 6) throw new Error('QQ search retry budget exhausted')
         const started = Date.now()
         let failure
         try {
@@ -127,18 +133,14 @@ export default {
         const delays = details.httpStatus == 200 && details.code == 0 && details.reqCode == 2001
           ? qqSearchRetryDelays
           : retryDelays
-        const retry = failure.retryable && attempt + retryNum < delays.length
+        const retry = failure.retryable && attempt + retryNum < delays.length && (!context || (attempt < 2 && context.attempts < 6))
         // Keep this small and free of keywords, signed URLs, cookies and response bodies.
         console.warn('[QQSearch]', JSON.stringify({ ...failure.searchDetails, attempt: attempt + 1, elapsedMs: Date.now() - started, retry }))
         if (!retry) throw failure
-        await delay(Math.max(delays[attempt + retryNum], failure.retryAfterMs || 0))
+        await requestDelay(Math.max(delays[attempt + retryNum], failure.retryAfterMs || 0))
       }
     }
-    const task = run()
-    pendingSearches.set(key, task)
-    const clear = () => { if (pendingSearches.get(key) === task) pendingSearches.delete(key) }
-    task.then(clear, clear)
-    return task
+    return shareRequest(pendingSearches, key, run)
   },
   // randomInt(min, max) {
   //   return Math.floor(Math.random() * (max - min + 1)) + min
@@ -220,11 +222,11 @@ export default {
     // console.log(list)
     return list
   },
-  search: withSearchFallback(function(str, page, limit) { return this.searchPrimary(str, page, limit) }, [mobileSearch, smartboxSearch]),
-  searchPrimary(str, page = 1, limit, isDesktop = true) {
+  search: withSearchFallback(function(str, page, limit, context) { return this.searchPrimary(str, page, limit, true, context) }, [mobileSearch, smartboxSearch]),
+  searchPrimary(str, page = 1, limit, isDesktop = true, context) {
     if (limit == null) limit = this.limit
     // http://newlyric.kuwo.cn/newlyric.lrc?62355680
-    return this.musicSearch(str, page, limit, 0, 0, isDesktop).then(({ body, meta }) => {
+    return this.musicSearch(str, page, limit, 0, 0, isDesktop, context).then(({ body, meta }) => {
       let list = this.handleResult(isDesktop ? body.song.list : body.item_song)
 
       this.total = isDesktop ? meta.sum : meta.estimate_sum

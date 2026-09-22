@@ -51,6 +51,14 @@ declare namespace LX {
       maxTime: number
       listId: string
       index: number
+      queue?: {
+        version: 1
+        items: PlayMusicInfo[]
+        current: PlayMusicInfo | null
+        index: number
+        sourceListId: string | null
+        played: PlayMusicInfo[]
+      }
     }
 
   }

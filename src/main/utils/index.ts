@@ -1,6 +1,7 @@
-import { encodePath, isUrl, throttle, isMac } from '@common/utils'
+import { encodePath, isUrl, isMac } from '@common/utils'
 import migrateSetting from '@common/utils/migrateSetting'
 import getStore from '@main/utils/store'
+import { recoverCredentialCommit } from './credentials'
 import { STORE_NAMES, URL_SCHEME_RXP } from '@common/constants'
 import defaultSetting from '@common/defaultSetting'
 import defaultHotKey from '@common/defaultHotKey'
@@ -113,28 +114,28 @@ const applyInitSetting = (setting: LX.AppSetting) => {
   }
 }
 
-export const updateSetting = (setting?: Partial<LX.AppSetting>, isInit: boolean = false) => {
+export const updateSetting = async(setting?: Partial<LX.AppSetting>, isInit: boolean = false) => {
   const electronStore_config = getStore(STORE_NAMES.APP_SETTINGS)
 
-  let originSetting: LX.AppSetting
   if (isInit) {
     setting = setting ? migrateSetting(setting) : {}
     applyInitSetting(setting as LX.AppSetting)
-    originSetting = { ...defaultSetting }
-  } else originSetting = global.lx.appSetting
-
-  const result = mergeSetting(originSetting, setting)
-
-  result.setting.version = defaultSetting.version
-
-  electronStore_config.override({ version: result.setting.version, setting: result.setting })
-  return result
+  }
+  const requested = { ...setting }
+  let result: ReturnType<typeof mergeSetting>
+  await electronStore_config.update(current => {
+    result = mergeSetting(isInit ? { ...defaultSetting } : current.setting ?? global.lx.appSetting, requested)
+    result.setting.version = defaultSetting.version
+    return { version: result.setting.version, setting: result.setting }
+  })
+  return result!
 }
 
 /**
  * 初始化设置
  */
 export const initSetting = async() => {
+  await recoverCredentialCommit(global.lxDataPath)
   const electronStore_config = getStore(STORE_NAMES.APP_SETTINGS)
 
   let setting = electronStore_config.get('setting') as LX.AppSetting | undefined
@@ -167,7 +168,6 @@ export const initHotKey = async() => {
       delete globalConfig.keys.MediaPlayPause
       delete globalConfig.keys.MediaNextTrack
       delete globalConfig.keys.MediaPreviousTrack
-      electronStore_hotKey.set('global', globalConfig)
     }
   } else {
     // migrate hotKey
@@ -179,21 +179,15 @@ export const initHotKey = async() => {
       localConfig = JSON.parse(JSON.stringify(defaultHotKey.local))
       globalConfig = JSON.parse(JSON.stringify(defaultHotKey.global))
     }
-
-    electronStore_hotKey.set('local', localConfig)
-    electronStore_hotKey.set('global', globalConfig)
   }
 
   const resolvedLocalConfig: LX.HotKeyConfig = localConfig ?? JSON.parse(JSON.stringify(defaultHotKey.local))
-  if (!localConfig) electronStore_hotKey.set('local', resolvedLocalConfig)
 
   if (hotKeyVersion < 1) {
     const listSearchHotKey = defaultHotKey.local.keys['mod+f']
     if (!Object.values(resolvedLocalConfig.keys).some(info => info.action == listSearchHotKey.action) && !resolvedLocalConfig.keys['mod+f']) {
       resolvedLocalConfig.keys['mod+f'] = { ...listSearchHotKey }
-      electronStore_hotKey.set('local', resolvedLocalConfig)
     }
-    electronStore_hotKey.set('version', 1)
   }
 
   if (hotKeyVersion < 2) {
@@ -201,27 +195,18 @@ export const initHotKey = async() => {
     const configs = [resolvedLocalConfig, globalConfig!]
     if (!configs.some(config => config.keys.f11 || Object.values(config.keys).some(info => info.action == fullscreenHotKey.action))) {
       resolvedLocalConfig.keys.f11 = { ...fullscreenHotKey }
-      electronStore_hotKey.set('local', resolvedLocalConfig)
     }
-    electronStore_hotKey.set('version', 2)
   }
 
-  return {
-    local: resolvedLocalConfig,
-    global: globalConfig!,
-  }
+  const config = { local: resolvedLocalConfig, global: globalConfig! }
+  await electronStore_hotKey.update(current => ({ ...current, ...config, version: Math.max(hotKeyVersion, 2) }))
+  return config
 }
 
-type HotKeyType = 'local' | 'global'
-
-const saveHotKeyConfig = throttle<[LX.HotKeyConfigAll]>((config: LX.HotKeyConfigAll) => {
-  for (const key of Object.keys(config) as HotKeyType[]) {
-    global.lx.hotKey.config[key] = config[key]
-    getStore(STORE_NAMES.HOTKEY).set(key, config[key])
-  }
-})
-export const saveAppHotKeyConfig = (config: LX.HotKeyConfigAll) => {
-  saveHotKeyConfig(config)
+export const saveAppHotKeyConfig = async(config: LX.HotKeyConfigAll) => {
+  const value = JSON.parse(JSON.stringify(config)) as LX.HotKeyConfigAll
+  await getStore(STORE_NAMES.HOTKEY).update(current => ({ ...current, ...value }))
+  Object.assign(global.lx.hotKey.config, value)
 }
 
 export const openDevTools = (webContents: Electron.WebContents) => {
@@ -241,18 +226,23 @@ export const getAllThemes = () => {
   }
 }
 
-export const saveTheme = (theme: LX.Theme) => {
-  const targetTheme = userThemes.find(t => t.id === theme.id)
-  if (targetTheme) Object.assign(targetTheme, theme)
-  else userThemes.push(theme)
-  getStore(STORE_NAMES.THEME).set('themes', userThemes)
+export const saveTheme = async(theme: LX.Theme) => {
+  const storage = getStore(STORE_NAMES.THEME)
+  const value = JSON.parse(JSON.stringify(theme)) as LX.Theme
+  await storage.update(current => {
+    const themes = (current.themes ?? []) as LX.Theme[]
+    const index = themes.findIndex(item => item.id === value.id)
+    if (index < 0) themes.push(value)
+    else themes.splice(index, 1, value)
+    return { ...current, themes }
+  })
+  userThemes = storage.get('themes')
 }
 
-export const removeTheme = (id: string) => {
-  const index = userThemes.findIndex(t => t.id === id)
-  if (index < 0) return
-  userThemes.splice(index, 1)
-  getStore(STORE_NAMES.THEME).set('themes', userThemes)
+export const removeTheme = async(id: string) => {
+  const storage = getStore(STORE_NAMES.THEME)
+  await storage.update(current => ({ ...current, themes: ((current.themes ?? []) as LX.Theme[]).filter(item => item.id !== id) }))
+  userThemes = storage.get('themes')
 }
 
 const copyTheme = (theme: LX.Theme): LX.Theme => {

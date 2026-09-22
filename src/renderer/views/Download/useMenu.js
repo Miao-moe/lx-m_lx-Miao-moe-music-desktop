@@ -7,6 +7,7 @@ import { pluginText } from '@common/optionalPlugins'
 import { pluginRuntime } from '@renderer/store/optionalPlugins'
 import { appSetting } from '@renderer/store/setting'
 import { dialog } from '@renderer/plugins/Dialog'
+import { setDownloadPriority } from '@renderer/store/download/action'
 
 export default ({
   handleStartTask,
@@ -77,6 +78,11 @@ export default ({
         hide: !menuTask.value?.isComplate,
       },
       {
+        name: t(menuTask.value?.priority ? 'download__priority_normal' : 'download__priority_first'),
+        action: 'priority',
+        hide: !menuTask.value || menuTask.value.isComplate,
+      },
+      {
         name: t('list__add_to'),
         action: 'addTo',
         disabled: !itemMenuControl.addTo,
@@ -123,6 +129,8 @@ export default ({
       itemMenuControl.pause = true
     }
 
+    if (taskInfo.audioDownloaded) itemMenuControl.file = true
+
     menuLocation.x = event.pageX
     menuLocation.y = event.pageY
 
@@ -155,6 +163,9 @@ export default ({
       return
     }
     switch (action.action) {
+      case 'priority':
+        if (task) setDownloadPriority([task], task.priority ? 0 : 1)
+        break
       case 'relocate':
         handleRelocateFile(task)
         break

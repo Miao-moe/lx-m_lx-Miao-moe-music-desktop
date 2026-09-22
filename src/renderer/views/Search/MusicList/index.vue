@@ -1,16 +1,22 @@
 <template>
   <div :class="$style.container">
     <AggregateStatus :state="listInfo.aggregate" @retry="retryFailedSources" />
+    <div v-if="sourceId === 'all'" :class="$style.filters" data-search-filters>
+      <base-checkbox id="search-merge-songs" v-model="mergeSongs" :label="$t('search__merge_songs')" />
+      <span>{{ displayList.length }}/{{ listInfo.list.length }}</span>
+    </div>
     <div :class="$style.results">
     <material-online-list
       ref="listRef"
       :page="listInfo.page"
       :limit="listInfo.limit"
       :total="listInfo.total"
-      :list="listInfo.list"
+      :list="displayList"
       :no-item="listInfo.noItemLabel"
+      :source-labels="sourceLabels"
       :hide-retry="!!listInfo.aggregate?.failedSources.length"
       :source-tag="sourceId == 'all'"
+      :streaming="sourceId == 'all'"
       check-api-source
       @toggle-page="handleTogglePage"
       @play-list="handlePlayList"
@@ -40,6 +46,9 @@ const route = useRoute()
 const {
   listRef,
   listInfo,
+  mergeSongs,
+  displayList,
+  sourceLabels,
   search,
   handlePlayList,
 } = useList()
@@ -85,6 +94,7 @@ const handleRetry = () => {
 }
 
 .results { flex: 1; min-height: 0; position: relative; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 15px; font-size: 13px; }
 
 .list {
   overflow: hidden;

@@ -1,5 +1,6 @@
 import { decodeName, formatPlayTime, sizeFormate } from '../../index'
 import { createHttpFetch } from './util'
+import { scheduleDetailRequest } from '../requestCache'
 
 const createGetMusicInfosTask = (hashs) => {
   let data = {
@@ -23,7 +24,7 @@ const createGetMusicInfosTask = (hashs) => {
     list = list.slice(100)
   }
   let url = 'http://gateway.kugou.com/v3/album_audio/audio'
-  return tasks.map(task => createHttpFetch(url, {
+  return tasks.map(task => scheduleDetailRequest(() => createHttpFetch(url, {
     method: 'POST',
     body: task,
     headers: {
@@ -34,7 +35,7 @@ const createGetMusicInfosTask = (hashs) => {
       'User-Agent': 'Android712-AndroidPhone-11451-376-0-FeeCacheUpdate-wifi',
       'x-router': 'kmr.service.kugou.com',
     },
-  }).then(data => data.map(s => s[0])))
+  }).then(data => data.map(s => s[0]))))
 }
 
 export const filterMusicInfoList = (rawList) => {

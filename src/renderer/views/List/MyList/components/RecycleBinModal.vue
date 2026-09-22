@@ -42,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatError } from '@common/utils/errorMessage'
 import { ref, watch, onBeforeUnmount } from '@common/utils/vueTools'
 import { LIST_IDS } from '@common/constants'
 import { LIST_TRASH_RETENTION_DAYS } from '@common/listTrash'
@@ -74,8 +75,8 @@ const load = async() => {
   try {
     const result = await getListTrash()
     if (current === revision) entries.value = result
-  } catch {
-    if (current === revision) error.value = t('list_trash__load_error')
+  } catch (cause) {
+    if (current === revision) error.value = formatError(cause, t('list_trash__load_error'), 'RECYCLE_BIN_LOAD_FAILED')
   } finally {
     if (current === revision) loading.value = false
   }

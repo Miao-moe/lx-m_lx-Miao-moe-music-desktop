@@ -9,6 +9,8 @@ import { createWritebackEngine } from './engine'
 import { openRemotePlaylist } from './api'
 import { localPlaylistSnapshot } from './snapshot'
 import type { SavedState, Status } from './types'
+import { recordSync } from '@renderer/store/syncStatus'
+import { formatError } from '@common/utils/errorMessage'
 
 export { isWritebackSupported } from './snapshot'
 export { WritebackError } from './types'
@@ -23,7 +25,16 @@ const engine = createWritebackEngine({
     return localPlaylistSnapshot(list, await getListMusics(id))
   },
   open: openRemotePlaylist,
-  status: (id, status) => { writebackStatus[id] = status },
+  status: (id, status) => {
+    writebackStatus[id] = status
+    recordSync('writeback:' + id, {
+      label: `${userLists.find(list => list.id === id)?.name ?? id} · 歌单回写`,
+      state: status.state === 'syncing' || status.state === 'pending' ? 'running' : status.state,
+      time: Date.now(),
+      lastSuccess: status.lastSuccess,
+      error: status.error ? formatError({ code: `WRITEBACK_${status.error.toUpperCase()}`, message: window.i18n.t(`list_writeback__error_${status.error}`) }, status.diagnostic) : undefined,
+    })
+  },
   lockLocal: async(id, task) => withLocalListLocks([id], task),
 })
 

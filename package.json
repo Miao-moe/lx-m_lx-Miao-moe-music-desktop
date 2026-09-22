@@ -75,7 +75,7 @@
     "test:request": "node --test tests/request.production.test.cjs",
     "lint": "eslint --ext .ts,.js,.vue -f node_modules/eslint-formatter-friendly src",
     "lint:fix": "eslint --ext .ts,.js,.vue -f node_modules/eslint-formatter-friendly --fix src",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "electron-builder install-app-deps && node build-config/dependencies-patch.js",
     "dp": "cross-env ELECTRON_GET_USE_PROXY=true GLOBAL_AGENT_HTTPS_PROXY=http://127.0.0.1:2081 npm run pack",
     "up": "cross-env ELECTRON_GET_USE_PROXY=true GLOBAL_AGENT_HTTPS_PROXY=http://127.0.0.1:2081 npm i"
   },
@@ -136,12 +136,12 @@
     "cross-env": "^10.1.0",
     "css-minimizer-webpack-plugin": "^8.0.0",
     "del": "^6.1.1",
-    "electron": "40.9.2",
+    "electron": "43.7.3",
     "electron-builder": "^26.9.0",
     "electron-debug": "^4.1.0",
     "electron-devtools-installer": "github:lyswhut/electron-devtools-installer#64596d615c1fc891eefd8aef1dfcb2c87aaadf03",
     "electron-to-chromium": "^1.5.345",
-    "electron-updater": "6.8.4",
+    "electron-updater": "6.8.9",
     "eslint": "^8.57.1",
     "eslint-config-standard": "^17.1.0",
     "eslint-config-standard-with-typescript": "^43.0.1",
@@ -178,10 +178,12 @@
     "css-loader": "7.1.4",
     "electron-log": "^5.4.3",
     "font-list": "^2.0.2",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.6",
     "iconv-lite": "^0.7.2",
-    "image-size": "^1.1.0",
+    "image-size": "2.0.4",
     "jschardet": "^3.1.4",
-    "less": "4.6.4",
+    "less": "4.9.1",
     "less-loader": "12.3.2",
     "lightningcss-wasm": "1.32.0",
     "long": "^5.3.2",
@@ -209,6 +211,7 @@
     "yazl": "3.3.1"
   },
   "overrides": {
+    "image-size": "2.0.4",
     "got": "^11",
     "json5": "latest",
     "node-abi": "latest",
@@ -222,7 +225,8 @@
       "postcss": "^8"
     },
     "svg-baker": {
-      "postcss": "^8"
+      "postcss": "^8",
+      "image-size": "2.0.4"
     },
     "braces": "latest",
     "node-gyp-build": "latest",

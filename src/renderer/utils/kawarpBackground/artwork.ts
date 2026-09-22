@@ -1,4 +1,5 @@
 import { acquireMusicCover } from '@renderer/utils/coverCache'
+import { onArtworkCacheCleared } from '@renderer/utils/artworkStorage'
 
 export interface Artwork {
   image: HTMLCanvasElement
@@ -8,6 +9,7 @@ export interface Artwork {
 // Keep a small, origin-clean image for both Kawarp and the static fallback.
 // Loading happens outside Kawarp so a cancelled request cannot update a disposed renderer.
 const cache = new Map<string, Artwork>()
+onArtworkCacheCleared(() => { cache.clear() })
 export const loadArtwork = async(src: string, signal: AbortSignal): Promise<Artwork | null> => {
   if (signal.aborted) throw new Error('Artwork request cancelled')
   if (!src) return null

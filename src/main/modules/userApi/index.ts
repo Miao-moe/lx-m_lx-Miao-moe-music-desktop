@@ -17,7 +17,7 @@ export const removeApi = async(ids: string[]): Promise<LX.UserApi.UserApiInfo[]>
     userApiId = null
     await closeWindow()
   }
-  handleRemoveApi(ids)
+  await handleRemoveApi(ids)
   return getUserApis()
 }
 
@@ -32,8 +32,8 @@ export const setApi = async(id: string) => {
   await loadApi(id)
 }
 
-export const setAllowShowUpdateAlert = (id: string, enable: boolean) => {
-  saveAllowShowUpdateAlert(id, enable)
+export const setAllowShowUpdateAlert = async(id: string, enable: boolean) => {
+  await saveAllowShowUpdateAlert(id, enable)
   setRendererEventAllowShowUpdateAlert(id, enable)
 }
 

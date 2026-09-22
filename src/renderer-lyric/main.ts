@@ -1,3 +1,4 @@
+import { showLoadError } from '@common/loadErrorNotice'
 import { createApp } from 'vue'
 
 import { i18nPlugin } from './plugins/i18n'
@@ -35,7 +36,8 @@ void getSetting().then((setting) => {
   initMainWindowChannel()
 
   const app = createApp(App)
+  app.config.errorHandler = error => { console.error(error); showLoadError(error, 'VIEW_LOAD_FAILED') }
   app.use(i18nPlugin)
   mountComponents(app)
   app.mount('#root')
-})
+}).catch(error => { showLoadError(error, 'APP_LOAD_FAILED', () => { window.location.reload() }) })

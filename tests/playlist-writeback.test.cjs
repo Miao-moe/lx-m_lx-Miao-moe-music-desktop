@@ -19,7 +19,7 @@ function fixture(t, initial = {}) {
     ...initial,
   }
   const engine = createWritebackEngine({
-    load: async() => clone(state.saved),
+    load: async() => { if (state.onLoad) await state.onLoad(); return clone(state.saved) },
     save: async saved => {
       if (state.onSave) await state.onSave(saved)
       if (state.failSave) throw Error('disk unavailable')
@@ -73,6 +73,47 @@ test('disabled by default, enabling establishes a baseline without uploading ear
   assert.equal(state.saved.lists.list.enabled, true)
   assert.equal(state.saved.lists.list.ownerId, '7')
   assert(!JSON.stringify(state.saved).includes('cookie'))
+})
+
+test('F08: unchanged writeback runs neither persist the entire binding store nor open a session', async t => {
+  const { engine, state } = fixture(t)
+  await engine.setEnabled('list', true)
+  let saves = 0
+  state.onSave = async() => { saves++ }
+  state.failOpen = true
+  for (let index = 0; index < 10; index++) await engine.run('list')
+  assert.equal(saves, 0)
+  assert.notEqual(state.statuses.list.state, 'failed')
+})
+
+test('F08: refreshing an unchanged remote playlist does not serialize saved bindings again', async t => {
+  const { engine, state } = fixture(t)
+  await engine.setEnabled('list', true)
+  let saves = 0
+  state.onSave = async() => { saves++ }
+  await engine.refresh('list', async() => clone(state.remote), async data => { state.local.snapshot = data })
+  assert.equal(saves, 0)
+})
+
+test('F09: an initialization failure can be retried after storage becomes available', async t => {
+  let calls = 0
+  const { engine } = fixture(t, { onLoad: async() => { if (++calls === 1) throw Error('temporarily unavailable') } })
+  await assert.rejects(engine.init(), /temporarily unavailable/)
+  await Promise.all([engine.init(), engine.init()])
+  assert.equal(calls, 2)
+  await engine.setEnabled('list', true)
+})
+
+test('F08: simultaneous changes to separate bindings coalesce into one durable save', async t => {
+  const { engine, state } = fixture(t)
+  await engine.setEnabled('one', true)
+  await engine.setEnabled('two', true)
+  let saves = 0
+  state.onSave = async() => { saves++ }
+  await Promise.all([engine.setEnabled('one', false), engine.setEnabled('two', false)])
+  assert.equal(saves, 1)
+  assert.equal(state.saved.lists.one.enabled, false)
+  assert.equal(state.saved.lists.two.enabled, false)
 })
 
 test('only explicit local additions/removals are sent; independently added platform songs survive', async t => {

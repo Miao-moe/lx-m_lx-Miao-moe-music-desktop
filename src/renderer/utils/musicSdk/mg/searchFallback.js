@@ -1,7 +1,10 @@
 import { httpFetch } from '../../request'
 import { assertSearch, readSearchBody, searchResult } from '../searchFallback'
+import { createRequestCache, createRequestLimiter } from '../requestCache'
 
 const pageSize = 20
+const cachedPage = createRequestCache()
+const schedulePage = createRequestLimiter(3)
 const normalizeSong = (item, legacy) => {
   assertSearch(item && (legacy ? item.id : item.songId) && item.copyrightId && (legacy ? item.name : item.songName))
   return legacy ? {
@@ -20,7 +23,7 @@ const normalizeSong = (item, legacy) => {
   } : { ...item, name: item.songName, mrcurl: item.mrcUrl ?? item.mrcurl }
 }
 
-const fetchPage = async(str, page, legacy) => {
+const fetchPage = (str, page, legacy, refresh) => cachedPage(JSON.stringify([str, page, legacy]), () => schedulePage(async() => {
   const params = new URLSearchParams({ text: str, pageNo: page, pageSize })
   if (legacy) {
     params.set('ua', 'Android_migu')
@@ -39,9 +42,9 @@ const fetchPage = async(str, page, legacy) => {
   const total = body.songResultData.totalCount
   assertSearch(total != null && total !== '' && Number.isSafeInteger(Number(total)) && Number(total) >= 0)
   return { songs: body.songResultData.result, total: Number(total) }
-}
+}), refresh)
 
-const pagedSearch = async function(str, page, limit, legacy) {
+const pagedSearch = async function(str, page, limit, legacy, refresh = false) {
   const offset = (page - 1) * limit
   const end = offset + limit
   const firstPage = Math.floor(offset / pageSize) + 1
@@ -51,8 +54,9 @@ const pagedSearch = async function(str, page, limit, legacy) {
   const songs = []
   let total = 0
   let totalIsExact = legacy
-  for (let physicalPage = firstPage; physicalPage <= lastPage; physicalPage++) {
-    const result = await fetchPage(str, physicalPage, legacy)
+  const pages = await Promise.all(Array.from({ length: lastPage - firstPage + 1 }, (_, i) => fetchPage(str, firstPage + i, legacy, refresh)))
+  for (const [index, result] of pages.entries()) {
+    const physicalPage = firstPage + index
     assertSearch(result.songs.length <= pageSize)
     const batchOffset = (physicalPage - 1) * pageSize
     total = legacy ? result.total : batchOffset + result.songs.length
@@ -69,5 +73,5 @@ const pagedSearch = async function(str, page, limit, legacy) {
   return searchResult('mg', this.filterData([selected]), total, page, limit, { totalIsExact })
 }
 
-export function legacySearch(str, page, limit) { return pagedSearch.call(this, str, page, limit, true) }
-export function pcSearch(str, page, limit) { return pagedSearch.call(this, str, page, limit, false) }
+export function legacySearch(str, page, limit, { refresh = false } = {}) { return pagedSearch.call(this, str, page, limit, true, refresh) }
+export function pcSearch(str, page, limit, { refresh = false } = {}) { return pagedSearch.call(this, str, page, limit, false, refresh) }

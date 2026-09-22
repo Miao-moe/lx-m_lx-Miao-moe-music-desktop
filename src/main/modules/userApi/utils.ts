@@ -38,7 +38,7 @@ export const getUserApis = (): LX.UserApi.UserApiInfo[] => {
     }
   } else {
     infoFull = defaultUserApis
-    electronStore_userApi.set('userApis', userApis)
+    void electronStore_userApi.set('userApis', infoFull)
   }
   userApis = infoFull.map(api => {
     if (api.allowShowUpdateAlert == null) api.allowShowUpdateAlert = false
@@ -107,44 +107,36 @@ const inflateScript = async(script: string) => new Promise<string>((resolve, rej
     })
   } else resolve(script)
 })
+const changeApis = async(change: (apis: LX.UserApi.UserApiInfoFull[]) => LX.UserApi.UserApiInfoFull[]) => {
+  getUserApis()
+  const store = getStore(STORE_NAMES.USER_API)
+  await store.update(current => ({ ...current, userApis: change(current.userApis ?? userApis!.map(api => ({ ...api, script: scripts.get(api.id)! }))) }))
+  const saved = store.get<LX.UserApi.UserApiInfoFull[]>('userApis')
+  scripts = new Map(saved.map(api => [api.id, api.script]))
+  userApis = saved.map(({ script, ...api }) => api)
+}
 export const importApi = async(scriptRaw: string): Promise<LX.UserApi.UserApiInfo> => {
   let scriptInfo = parseScriptInfo(scriptRaw)
   const script = await deflateScript(scriptRaw)
-  userApis ??= []
-  for (const api of userApis) {
-    const existingScript = scripts.get(api.id)
-    if (existingScript === script) {
-      throw new Error(`导入失败，脚本内容与已有的源「${api.name}」相同`)
-    }
-  }
   const apiInfo = {
     id: `user_api_${Math.random().toString().substring(2, 5)}_${Date.now()}`,
     ...scriptInfo,
     allowShowUpdateAlert: true,
   }
-  userApis.push(apiInfo)
-  scripts.set(apiInfo.id, script)
-  saveData()
+  await changeApis(apis => {
+    const existing = apis.find(api => api.script === script)
+    if (existing) throw new Error(`导入失败，脚本内容与已有的源「${existing.name}」相同`)
+    return [...apis, { ...apiInfo, script }]
+  })
   return apiInfo
 }
 
-export const removeApi = (ids: string[]) => {
-  if (!userApis) return
-  for (let index = userApis.length - 1; index > -1; index--) {
-    if (ids.includes(userApis[index].id)) {
-      scripts.delete(userApis[index].id)
-      userApis.splice(index, 1)
-      ids.splice(index, 1)
-    }
-  }
-  saveData()
+export const removeApi = async(ids: string[]) => {
+  await changeApis(apis => apis.filter(api => !ids.includes(api.id)))
 }
 
-export const setAllowShowUpdateAlert = (id: string, enable: boolean) => {
-  const targetApi = userApis?.find(api => api.id == id)
-  if (!targetApi) return
-  targetApi.allowShowUpdateAlert = enable
-  saveData()
+export const setAllowShowUpdateAlert = async(id: string, enable: boolean) => {
+  await changeApis(apis => apis.map(api => api.id === id ? { ...api, allowShowUpdateAlert: enable } : api))
 }
 
 export const getScript = async(id: string) => {

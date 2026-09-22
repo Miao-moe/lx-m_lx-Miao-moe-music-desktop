@@ -486,7 +486,7 @@ const DioramaScene: React.FC<DioramaSceneProps> = ({
     const fontStack = useMemo(
         () => resolveThemeFontStack(theme),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [theme.fontStyle, theme.fontFamily, fontsEpoch]
+        [theme.fontStyle, theme.fontFamily, theme.fontFamilyStack, fontsEpoch]
     );
     const fontWeight = resolveThemeFontWeight(theme, 700);
     const fontSpec = useMemo(() => buildDioramaFontSpec(fontStack, fontWeight), [fontStack, fontWeight]);

@@ -1,7 +1,19 @@
 import { LIST_IDS } from '@common/constants'
 import { markRaw, reactive } from '@common/utils/vueTools'
+import { BoundedMap } from '@common/utils/boundedMap'
 
-export const allMusicList: Map<string, LX.Music.MusicInfo[]> = markRaw(new Map())
+const visibleLists = new Map<string, number>()
+export const allMusicList = markRaw(new BoundedMap<string, LX.Music.MusicInfo[]>(12, 50000, songs => songs.length, id =>
+  id === LIST_IDS.TEMP || visibleLists.has(id) || id === window.lxData.playInfo?.playerListId || id === window.lxData.playMusicInfo?.listId))
+export const retainMusicList = (id: string) => {
+  visibleLists.set(id, (visibleLists.get(id) ?? 0) + 1)
+  return () => {
+    const count = (visibleLists.get(id) ?? 1) - 1
+    if (count) visibleLists.set(id, count)
+    else visibleLists.delete(id)
+    allMusicList.prune()
+  }
+}
 
 export const defaultList = markRaw<LX.List.MyDefaultListInfo>({
   id: LIST_IDS.DEFAULT,

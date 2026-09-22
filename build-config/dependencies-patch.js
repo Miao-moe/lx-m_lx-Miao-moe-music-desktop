@@ -6,6 +6,16 @@ const path = require('node:path')
 const rootPath = path.join(__dirname, '../')
 
 const patchs = [
+  ...(require('../package.json').lxBuildTarget === 'win7' ? [[
+    path.join(rootPath, './node_modules/less/lib/less-node/image-size.js'),
+    "var sizeOf = require('image-size');",
+    "var sizeOf = filename => require('image-size').imageSize(require('fs').readFileSync(filename));",
+  ]] : []),
+  [
+    path.join(rootPath, './node_modules/svg-baker/lib/transformations/raster-to-svg.js'),
+    "const getImageSize = require('image-size');",
+    "const { imageSize: getImageSize } = require('image-size');",
+  ],
   [
     path.join(rootPath, './node_modules/ws/package.json'),
     '\n      "browser": "./browser.js",',
@@ -35,4 +45,3 @@ const patchs = [
   }
   console.log('\nDependencies patch finished.\n')
 })()
-

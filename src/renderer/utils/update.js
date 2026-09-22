@@ -18,7 +18,7 @@ const request = async(url, retryNum = 0) => {
     }, (err, resp, body) => {
       if (err || resp.statusCode != 200) {
         ++retryNum >= 3
-          ? reject(err || new Error(resp.statusMessage || resp.statusCode))
+          ? reject(err || Object.assign(new Error(resp.statusMessage || String(resp.statusCode)), { statusCode: resp.statusCode }))
           : request(url, retryNum).then(resolve).catch(reject)
       } else resolve(body)
     })

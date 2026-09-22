@@ -22,7 +22,7 @@ export default () => {
   })
 
   mainHandle<Partial<LX.AppSetting>>(WIN_LYRIC_RENDERER_EVENT_NAME.set_config, async({ params: config }) => {
-    global.lx.event_app.update_config(config)
+    await global.lx.event_app.update_config(config)
   })
 
   mainHandle<LX.DesktopLyric.Config>(WIN_LYRIC_RENDERER_EVENT_NAME.get_config, async() => {

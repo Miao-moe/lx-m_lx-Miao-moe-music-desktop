@@ -1,3 +1,4 @@
+import { errorForTransport } from '@common/utils/errorMessage'
 import {
   getCookie,
   getCookieValue,
@@ -23,12 +24,14 @@ export const fetchResponse = async(url: string, options: Record<string, any> = {
 }
 
 export interface CookiePlaylistCheck {
+  message?: string
   source: CookieSource
   status: 'success' | 'missing_cookie' | 'invalid_cookie' | 'login_expired' | 'failed'
   listCount: number
 }
 
 export interface CookieSyncDetail {
+  message?: string
   source: CookieSource
   status: 'success' | 'failed'
   listCount: number
@@ -322,7 +325,7 @@ export const checkCookiePlaylists = async(source: CookieSource): Promise<CookieP
     return { source, status: 'success', listCount: playlists.length }
   } catch (error) {
     const status = error instanceof CookieLoginError ? 'login_expired' : 'failed'
-    return { source, status, listCount: 0 }
+    return { source, status, listCount: 0, message: errorForTransport(error).message }
   }
 }
 

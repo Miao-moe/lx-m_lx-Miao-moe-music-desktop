@@ -19,7 +19,7 @@
         <span v-if="dirty" class="small">{{ $t('setting__sync_webdav_unsaved') }}</span>
         <span v-else-if="saved" class="small">{{ $t('setting__sync_webdav_saved') }}</span>
       </div>
-      <p v-if="saveError" class="p small" role="alert">{{ $t('setting__sync_webdav_error_local_error') }}</p>
+      <p v-if="saveError" class="p small" role="alert">{{ saveError }}</p>
 
       <h3>{{ $t('setting__sync_webdav_items') }}</h3>
       <div :class="$style.options">
@@ -50,17 +50,22 @@
         <span>{{ statusText }}</span>
         <span v-if="!webdav.busy && webdav.result">{{ $t('setting__sync_webdav_last_time', { time: lastTime }) }}</span>
       </div>
+      <SyncDiffPanel :diff="webdav.result?.diff" title="远端相对本地的差异（尚未覆盖）" />
+      <WebDAVAudio />
     </div>
   </dd>
 </template>
 
 <script setup lang="ts">
+import { formatError } from '@common/utils/errorMessage'
 import { computed, reactive, ref, watch } from '@common/utils/vueTools'
 import { appSetting } from '@renderer/store/setting'
 import { updateSetting } from '@renderer/utils/ipc'
 import { webdav, runWebDAVAction } from '@renderer/store/webdav'
 import { useI18n } from '@renderer/plugins/i18n'
 import { dialog } from '@renderer/plugins/Dialog'
+import SyncDiffPanel from '@renderer/components/common/SyncDiffPanel.vue'
+import WebDAVAudio from './WebDAVAudio.vue'
 
 const t = useI18n()
 const sections = ['playlists', 'downloadHistory', 'downloadTasks', 'settings', 'dislike'] as const
@@ -69,7 +74,7 @@ const form = reactive({ url: '', username: '', password: '', directory: '' })
 for (const key of connectionKeys) watch(() => appSetting[`sync.webdav.${key}`], value => { form[key] = value }, { immediate: true })
 const saving = ref(false)
 const saved = ref(false)
-const saveError = ref(false)
+const saveError = ref('')
 const intervalInput = ref<string | number>(5)
 watch(() => appSetting['sync.webdav.interval'], value => { intervalInput.value = value }, { immediate: true })
 const lastTime = computed(() => webdav.result ? new Date(webdav.result.time).toLocaleString() : '')
@@ -86,7 +91,8 @@ const statusText = computed(() => {
   if (!result) return t('setting__sync_webdav_idle')
   if (!result.success) {
     const message = t(`setting__sync_webdav_error_${result.error ?? 'local_error'}`)
-    return [message, result.sections?.length ? sectionNames(result.sections) : '', result.statusCode ? `HTTP ${result.statusCode}` : ''].filter(Boolean).join(' · ')
+    if (result.diagnostic) return formatError(result.diagnostic, message, 'WEBDAV_LOCAL_ERROR')
+    return formatError({ code: result.statusCode ? `HTTP_${result.statusCode}` : `WEBDAV_${(result.error ?? 'local_error').toUpperCase()}`, message }, result.sections?.length ? sectionNames(result.sections) : '')
   }
   if (result.operation == 'test') return t('setting__sync_webdav_test_success')
   if (!result.uploaded.length && !result.downloaded.length) return t('setting__sync_webdav_up_to_date')
@@ -95,7 +101,7 @@ const statusText = computed(() => {
 
 const saveConnection = async() => {
   saving.value = true
-  saveError.value = false
+  saveError.value = ''
   try {
     await updateSetting({
       'sync.webdav.url': form.url.trim(),
@@ -105,15 +111,15 @@ const saveConnection = async() => {
     })
     saved.value = true
     return true
-  } catch {
-    saveError.value = true
+  } catch (error) {
+    saveError.value = formatError(error, t('setting__sync_webdav_error_local_error'), 'WEBDAV_CONFIG_FAILED')
     return false
   } finally { saving.value = false }
 }
 
 const updateOption = async(key: string, value: boolean | number) => {
-  saveError.value = false
-  try { await updateSetting({ [key]: value }) } catch { saveError.value = true }
+  saveError.value = ''
+  try { await updateSetting({ [key]: value }) } catch (error) { saveError.value = formatError(error, t('setting__sync_webdav_error_local_error'), 'WEBDAV_CONFIG_FAILED') }
 }
 const setInterval = (value: string) => {
   intervalInput.value = Math.max(1, Math.min(1440, Math.round(Number(value)) || 5))

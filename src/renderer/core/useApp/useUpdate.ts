@@ -1,3 +1,4 @@
+import { formatError } from '@common/utils/errorMessage'
 import { nextTick, onBeforeUnmount, watch } from '@common/utils/vueTools'
 import {
   onUpdateDownloaded,
@@ -51,7 +52,8 @@ export default () => {
         versionInfo.newVersion = body
         return body
       })
-    ).catch(() => {
+    ).catch(error => {
+      versionInfo.updateError = formatError(error, '', 'UPDATE_INFO_LOAD_FAILED')
       if (versionInfo.newVersion) return versionInfo.newVersion
       let result = {
         version: '0.0.0',
@@ -121,7 +123,7 @@ export default () => {
 
   const rUpdateError = onUpdateError(({ params: message }) => {
     clearUpdateTimeout()
-    versionInfo.updateError = message || '更新失败，请重试'
+    versionInfo.updateError = formatError(message, '', 'UPDATE_DOWNLOAD_FAILED')
     versionInfo.downloadProgress = null
     void nextTick(() => {
       showUpdateModal('error')

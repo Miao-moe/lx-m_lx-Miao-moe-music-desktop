@@ -16,6 +16,7 @@ import { quitApp } from '@main/app'
 import { APP_NAME } from '@common/constants'
 import { getWindowsSetupPriority } from '@common/utils/update'
 import { launchWindowsInstaller } from './updateInstaller'
+import { formatError } from '@common/utils/errorMessage'
 
 interface DownloadedUpdate {
   filePath: string
@@ -57,8 +58,13 @@ const downloadUpdate = async({ downloadUrl: url, fileName, digest, size, install
   const tempName = fileName || `lx-m-music-desktop-update-${Date.now()}`
   let tempPath: string | null = null
   let dispatcher: ReturnType<typeof buildDownloadDispatcher> | null = null
+  let deadline: ReturnType<typeof setTimeout> | undefined
 
   try {
+    if (typeof digest !== 'string' || !/^(?:sha256:)?[a-f0-9]{64}$/i.test(digest)) throw Object.assign(new Error('更新包缺少有效的上游 SHA-256 摘要，已停止自动更新'), { code: 'UPDATE_DIGEST_REQUIRED' })
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol !== 'https:' || parsedUrl.username || parsedUrl.password) throw Object.assign(new Error('更新包必须来自 HTTPS 地址'), { code: 'UPDATE_URL_INVALID' })
+    deadline = setTimeout(() => { controller.abort(Object.assign(new Error('更新下载超过 30 分钟，请重试'), { code: 'UPDATE_TOTAL_TIMEOUT' })) }, 30 * 60_000)
     if (tempName == '.' || tempName == '..' || /[/\\\0]/.test(tempName)) throw new Error('更新文件名无效')
     if (process.platform == 'win32' && !getWindowsSetupPriority(tempName, process.arch)) {
       throw new Error('未找到适用于当前系统架构的 Setup 安装包，请手动更新')
@@ -78,7 +84,7 @@ const downloadUpdate = async({ downloadUrl: url, fileName, digest, size, install
       method: 'GET',
       dispatcher,
       headersTimeout: 30000,
-      bodyTimeout: 0,
+      bodyTimeout: 30000,
       headers: { 'User-Agent': 'lx-m-music-desktop' },
       signal: controller.signal,
     })
@@ -126,14 +132,12 @@ const downloadUpdate = async({ downloadUrl: url, fileName, digest, size, install
     })
 
     const actualHash = hash.digest('hex')
-    if (digest) {
+    {
       const expectedHash = digest.replace(/^sha256:/i, '').toLowerCase()
       if (actualHash !== expectedHash) {
         throw new Error(`SHA-256 校验失败\n期望: ${expectedHash}\n实际: ${actualHash}`)
       }
       log.info('update download SHA-256 verification passed')
-    } else {
-      log.warn('update download: no digest provided, SHA-256 verification skipped')
     }
 
     if (isLinux) {
@@ -146,11 +150,12 @@ const downloadUpdate = async({ downloadUrl: url, fileName, digest, size, install
     if (installAfterDownload && !controller.signal.aborted) await quitAndInstall()
   } catch (err: any) {
     if (tempPath) removeUpdateFile(tempPath)
-    if (!controller.signal.aborted) {
+    if (!controller.signal.aborted || controller.signal.reason?.code === 'UPDATE_TOTAL_TIMEOUT') {
       log.error('update download error:', err)
-      sendStatusToWindow(WIN_MAIN_RENDERER_EVENT_NAME.update_error, String(err?.message ?? err))
+      sendStatusToWindow(WIN_MAIN_RENDERER_EVENT_NAME.update_error, formatError(controller.signal.reason?.code === 'UPDATE_TOTAL_TIMEOUT' ? controller.signal.reason : err, '更新下载失败', 'UPDATE_DOWNLOAD_FAILED'))
     }
   } finally {
+    clearTimeout(deadline)
     await dispatcher?.close().catch(error => { log.warn('update download dispatcher close error:', error) })
     if (updateState.controller === controller) updateState.controller = null
   }

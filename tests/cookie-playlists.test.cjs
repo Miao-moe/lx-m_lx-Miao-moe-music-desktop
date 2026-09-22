@@ -22,6 +22,7 @@ function load(file, imports) {
   const module = { exports: {} }
   const execute = vm.runInThisContext('(function(require, module, exports, console) {' + code + '\n})', { filename })
   execute(name => {
+    if (name === '@common/utils/errorMessage' || name === '@common/loadErrorNotice') return require('./helpers/load-typescript.cjs')()('src/common/' + name.slice(8) + '.ts')
     assert(Object.hasOwn(imports, name), 'Unexpected dependency: ' + name)
     return imports[name]
   }, module, module.exports, { warn() {} })
@@ -48,6 +49,10 @@ function fixture({ sources = Object.keys(cookies), respond, sdk = {} } = {}) {
     },
   })
   const sync = load('src/renderer/utils/cookieSync.ts', {
+    '@renderer/store/setting': { appSetting },
+    '@renderer/store/syncStatus': { beginSync() {}, progressSync() {}, finishSync() {} },
+    './syncQueue': require('./helpers/load-typescript.cjs')()('src/renderer/utils/syncQueue.ts'),
+    './platformSyncSelection': require('./helpers/load-typescript.cjs')()('src/renderer/utils/platformSyncSelection.ts'),
     '@renderer/store/list/action': actions,
     '@renderer/store/list/listManage/state': { userLists: [] },
     './cookieManager': manager,

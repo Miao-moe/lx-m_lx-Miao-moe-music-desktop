@@ -1,5 +1,6 @@
 // import progress from 'request-progress'
 import { request, type Options } from '@common/utils/request'
+import { withRequestMessage } from '@common/utils/requestError'
 // import fs from 'fs'
 
 export const requestMsg = {
@@ -28,14 +29,17 @@ export const httpFetch = async<T = unknown> (url: string, options: Options) => {
     // console.log('出错', err)
     if (err.message === 'socket hang up') {
       // window.globalObj.apiSource = 'temp'
-      throw new Error(requestMsg.unachievable)
+      throw withRequestMessage(err, requestMsg.unachievable)
     }
     switch (err.code) {
       case 'ETIMEDOUT':
       case 'ESOCKETTIMEDOUT':
-        throw new Error(requestMsg.timeout)
+      case 'UND_ERR_HEADERS_TIMEOUT':
+      case 'UND_ERR_BODY_TIMEOUT':
+      case 'UND_ERR_CONNECT_TIMEOUT':
+        throw withRequestMessage(err, requestMsg.timeout)
       case 'ENOTFOUND':
-        throw new Error(requestMsg.notConnectNetwork)
+        throw withRequestMessage(err, requestMsg.notConnectNetwork)
       default:
         throw err
     }

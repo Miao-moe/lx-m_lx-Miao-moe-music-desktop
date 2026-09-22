@@ -1,3 +1,4 @@
+import { showLoadError } from '@common/loadErrorNotice'
 import { onBeforeUnmount, watch } from '@common/utils/vueTools'
 import { musicInfo, playerCover } from '@renderer/store/player/state'
 import { setMusicInfo } from '@renderer/store/player/action'
@@ -20,8 +21,8 @@ export default () => {
       // eslint-disable-next-line require-atomic-updates
       release = cover.release
       playerCover.value = cover.src
-    } catch {
-      if (current === generation) setMusicInfo({ pic: null })
+    } catch (error) {
+      if (current === generation) { setMusicInfo({ pic: null }); showLoadError(error, 'COVER_LOAD_FAILED') }
     }
   }, { immediate: true })
   onBeforeUnmount(() => { generation++; release?.(); playerCover.value = '' })

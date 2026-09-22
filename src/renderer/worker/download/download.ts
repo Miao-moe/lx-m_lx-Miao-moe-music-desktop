@@ -1,326 +1,124 @@
-import { createDownload, type DownloaderType, type Options as DownloadOptions } from '@common/utils/download'
-// import music from '@renderer/utils/musicSdk'
+import { createDownload, type DownloaderType } from '@common/utils/download'
+import { classifyDownloadError } from '@common/utils/download/errors'
+import { checkAndCreateDir, removeFile } from '@common/utils/nodejs'
+import fs from 'node:fs/promises'
 import { createDownloadInfo } from './utils'
-// import {
-//   filterFileName,
-// } from '@common/utils/common'
-// import {
-//   assertApiSupport,
-//   getExt,
-// } from '..'
-import { checkAndCreateDir, checkPath, getFileStats, removeFile } from '@common/utils/nodejs'
-import { DOWNLOAD_STATUS } from '@common/constants'
-// import { download as eventDownloadNames } from '@renderer/event/names'
+import { reserveDownloadPath } from './fileLease'
 
-// window.downloadList = []
-// window.downloadListFull = []
-// window.downloadListFullMap = new Map()
-
-const dls = new Map<string, DownloaderType>()
-const tryNum = new Map<string, number>()
-const taskActions = new Map<string, (action: LX.Download.DownloadTaskActions) => void>()
-const tasks = new Map<string, LX.Download.ListItem>()
-
-export const checkList = (list: LX.Download.ListItem[], musicInfo: LX.Music.MusicInfo, quality: LX.Quality, ext: string): boolean => {
-  return list.some(s => s.id === musicInfo.id && (s.metadata.quality === quality || s.metadata.ext === ext))
+interface Task {
+  info: LX.Download.ListItem
+  callback: (action: LX.Download.DownloadTaskActions) => void
+  cancelled: boolean
+  downloader?: DownloaderType
+  retryTimer?: NodeJS.Timeout
+  retries: number
+  preparing?: Promise<void>
+  recovery?: Promise<void>
+  lease?: Awaited<ReturnType<typeof reserveDownloadPath>>
 }
+const tasks = new Map<string, Task>()
+const current = (task: Task) => !task.cancelled && tasks.get(task.info.id) === task
+const send = (task: Task, action: LX.Download.DownloadTaskActions) => { if (current(task)) task.callback(action) }
+export const checkList = (list: LX.Download.ListItem[], info: LX.Music.MusicInfo, quality: LX.Quality, ext: string) =>
+  list.some(item => item.metadata.musicInfo.id === info.id && (item.metadata.quality === quality || item.metadata.ext === ext))
+export const createDownloadTasks = (list: LX.Music.MusicInfoOnline[], quality: LX.Quality, format: string, qualityList: LX.QualityList, listId?: string) =>
+  list.map(info => createDownloadInfo(info, quality, format, qualityList, listId))
 
-// const removeTask = (id: string) => {
-//   dls.delete(id)
-//   tryNum.delete(id)
-//   taskActions.delete(id)
-//   tasks.delete(id)
-// }
-const sendAction = (id: string, action: LX.Download.DownloadTaskActions) => {
-  const callback = taskActions.get(id)
-  if (!callback) return
-  callback(action)
-}
-
-export const createDownloadTasks = (
-  list: LX.Music.MusicInfoOnline[],
-  quality: LX.Quality,
-  fileNameFormat: string,
-  qualityList: LX.QualityList,
-  listId?: string,
-): LX.Download.ListItem[] => {
-  return list.map(musicInfo => {
-    return createDownloadInfo(musicInfo, quality, fileNameFormat, qualityList, listId)
-  }).filter(task => task)
-  // commit('addTasks', { list: taskList, addMusicLocationType: rootState.setting.list.addMusicLocationType })
-  // let result = getStartTask(downloadList, DOWNLOAD_STATUS, rootState.setting.download.maxDownloadNum)
-  // while (result) {
-  //   dispatch('startTask', result)
-  //   result = getStartTask(downloadList, DOWNLOAD_STATUS, rootState.setting.download.maxDownloadNum)
-  // }
-}
-
-const createTask = async(downloadInfo: LX.Download.ListItem, savePath: string, skipExistFile: boolean, proxy?: { host: string, port: number }) => {
-  // console.log('createTask', downloadInfo, savePath)
-  // 开始任务
-  /* commit('onStart', downloadInfo)
-  commit('setStatusText', { downloadInfo, text: '任务初始化中' }) */
-  if (!await checkAndCreateDir(savePath)) {
-    sendAction(downloadInfo.id, {
-      action: 'error',
-      data: {
-        error: 'download_status_error_check_path',
-      },
-    })
-    return
-  }
-  if (!tasks.has(downloadInfo.id)) return
-
-  if (downloadInfo.downloaded == 0) {
-    if (skipExistFile) {
-      const stats = await getFileStats(downloadInfo.metadata.filePath)
-      if (stats && stats.size > 100) {
-        sendAction(downloadInfo.id, {
-          action: 'error',
-          data: {
-            error: 'download_status_error_check_path_exist',
-          },
-        })
-        return
-      }
-    } else if (await checkPath(downloadInfo.metadata.filePath)) {
-      try {
-        await removeFile(downloadInfo.metadata.filePath)
-      } catch (err) {
-        sendAction(downloadInfo.id, {
-          action: 'error',
-          data: {
-            error: 'download_status_error_check_path',
-          },
-        })
-        return
-      }
-    }
-  }
-
-  const downloadOptions: DownloadOptions = {
-    url: downloadInfo.metadata.url ?? '',
-    path: savePath,
-    fileName: downloadInfo.metadata.fileName,
-    method: 'get',
-    proxy,
-    onCompleted() {
-      // if (downloadInfo.progress.progress != '100.00') {
-      //   delete.get(downloadInfo.id)?
-      //   return dispatch('startTask', downloadInfo)
-      // }
-      downloadInfo.isComplate = true
-      downloadInfo.status = DOWNLOAD_STATUS.COMPLETED
-      sendAction(downloadInfo.id, { action: 'complete' })
-      console.log('on complate')
-    },
-    onError(err: any) {
-      console.error(err)
-      if (err.code == 'EPERM') {
-        sendAction(downloadInfo.id, {
-          action: 'error',
-          data: {
-            error: 'download_status_error_write',
-            message: err.message,
-          },
-          // data: `歌曲保存位置被占用或没有写入权限，请尝试更改歌曲保存目录或重启软件或重启电脑，错误详情：${err.message as string}`,
-        })
-        return
-      }
-      // console.log(tryNum[downloadInfo.id])
-      let retryNum = tryNum.get(downloadInfo.id) ?? 0
-      tryNum.set(downloadInfo.id, ++retryNum)
-      if (retryNum > 2) {
-        sendAction(downloadInfo.id, {
-          action: 'error',
-          data: {
-            message: err.message,
-          },
-        })
-        // dispatch('startTask')
-        return
-      }
-      if (err.message?.startsWith('Resume failed')) {
-        removeFile(downloadInfo.metadata.filePath).catch(err => {
-          console.log('删除不匹配的文件失败：', err.message)
-          // commit('onError', { downloadInfo, errorMsg: '删除不匹配的文件失败：' + err.message })
-        }).finally(() => {
-          console.log('正在重试')
-          void dls.get(downloadInfo.id)?.start()
-          // sendAction(downloadInfo.id, {
-          //   action: 'statusText',
-          //   data: 'download_status_error_retrying',
-          // })
-        })
-        return
-      }
-      if (err.code == 'ENOTFOUND') {
-        sendAction(downloadInfo.id, { action: 'refreshUrl' })
-      } else {
-        console.log('Download failed, Attempting Retry')
-        setTimeout(() => {
-          void dls.get(downloadInfo.id)?.start()
-        }, 1000)
-      }
-    },
-    onFail(response) {
-      let retryNum = tryNum.get(downloadInfo.id) ?? 0
-      tryNum.set(downloadInfo.id, ++retryNum)
-      if (retryNum > 2) {
-        if (response.statusCode) {
-          sendAction(downloadInfo.id, {
-            action: 'error',
-            data: {
-              error: 'download_status_error_response',
-              message: String(response.statusCode),
-            },
-          })
-        } else {
-          sendAction(downloadInfo.id, {
-            action: 'error',
-            data: {},
-          })
-        }
-        return
-      }
-      switch (response.statusCode) {
-        case 401:
-        case 403:
-        case 410:
-          sendAction(downloadInfo.id, { action: 'refreshUrl' })
-          // commit('onError', { downloadInfo, errorMsg: '链接失效' })
-          // refreshUrl.call(_this, commit, downloadInfo, rootState.setting.download.isUseOtherSource)
-          break
-        default:
-          void dls.get(downloadInfo.id)?.start()
-          console.log('正在重试')
-          // commit('setStatusText', { downloadInfo, text: '正在重试' })
-          break
-      }
-    },
-    onStart() {
-      sendAction(downloadInfo.id, { action: 'start' })
-      console.log('on start')
-    },
-    onProgress(status) {
-      downloadInfo.total = status.total
-      downloadInfo.downloaded = status.downloaded
-      downloadInfo.progress = status.progress
-      downloadInfo.speed = status.speed
-      downloadInfo.writeQueue = status.writeQueue
-      sendAction(downloadInfo.id, { action: 'progress', data: status })
-      // console.log(status)
-    },
-    onStop() {
-      console.log('on stop')
-      // sendAction(downloadInfo.id, { action: 'pause' })
-      // commit('pauseTask', downloadInfo)
-      // dispatch('startTask')
-    },
-  }
-  // commit('setStatusText', { downloadInfo, text: '获取URL中...' })
-
-  tryNum.set(downloadInfo.id, 0)
-  dls.set(downloadInfo.id, createDownload(downloadOptions))
-}
-
-export const updateUrl = (id: string, url: string) => {
-  const task = tasks.get(id)
-  if (!task) return
-  task.metadata.url = url
-  // commit('setStatusText', { downloadInfo, text: '链接刷新成功' })
-  const dl = dls.get(id)
-  if (!dl) return
-  dl.refreshUrl(url)
-  dl.start().catch(err => {
-    sendAction(id, {
-      action: 'error',
-      data: {
-        message: err.message,
-      },
-    })
+const reportError = (task: Task, error: any) => {
+  send(task, {
+    action: 'error', data: { message: error.message, code: String(error.code ?? error.statusCode ?? ''), kind: classifyDownloadError(error) },
   })
 }
-
-export const startTask = async(downloadInfo: LX.Download.ListItem, savePath: string, skipExistFile: boolean, callback: (action: LX.Download.DownloadTaskActions) => void, proxy?: { host: string, port: number }) => {
-  await pauseTask(downloadInfo.id)
-
-  tasks.set(downloadInfo.id, downloadInfo)
-  taskActions.set(downloadInfo.id, callback)
-  // 检查是否可以开始任务
-  // if (!downloadInfo.isComplate && downloadInfo.status != DOWNLOAD_STATUS.RUN) {
-  //   const result = getStartTask(downloadList, DOWNLOAD_STATUS, rootState.setting.download.maxDownloadNum)
-  //   if (result === false) {
-  //     commit('setStatus', { downloadInfo, status: DOWNLOAD_STATUS.WAITING })
-  //     return
-  //   }
-  // } else {
-  //   const result = getStartTask(downloadList, DOWNLOAD_STATUS, rootState.setting.download.maxDownloadNum)
-  //   if (!result) return
-  //   downloadInfo = result
-  // }
-  // commit('setStatus', { downloadInfo, status: DOWNLOAD_STATUS.RUN })
-
-  let dl = dls.get(downloadInfo.id)
-  if (dl) {
-    // commit('updateFilePath', {
-    //   downloadInfo,
-    //   filePath: path.join(rootState.setting.download.savePath, downloadInfo.metadata.fileName),
-    // })
-    dl.updateSaveInfo(savePath, downloadInfo.metadata.fileName)
-    if (tryNum.has(downloadInfo.id)) tryNum.set(downloadInfo.id, 0)
-    try {
-      await dl.start()
-    } catch (error) {
-      // commit('onError', { downloadInfo, errorMsg: error.message })
-      // commit('setStatusText', error.message)
-      // await dispatch('startTask')
-    }
-  } else {
-    await createTask(downloadInfo, savePath, skipExistFile, proxy)
-    // await dispatch('handleStartTask', downloadInfo)
+const retry = async(task: Task, error: any) => {
+  if (!current(task)) return
+  const kind = classifyDownloadError(error)
+  if (++task.retries > 2 || ['permission', 'disk', 'conflict'].includes(kind) || [400, 404, 429].includes(error.statusCode)) {
+    reportError(task, error)
+    return
   }
+  const downloader = task.downloader
+  task.recovery = (async() => {
+    try {
+      await downloader?.stop()
+      if (!current(task)) return
+      if (error.code === 'ERR_DOWNLOAD_RESUME') {
+        await fs.truncate(task.info.metadata.filePath, 0)
+        if (!current(task)) return
+        task.info.downloaded = 0
+      }
+      if (kind === 'url') { send(task, { action: 'refreshUrl' }); return }
+      task.retryTimer = setTimeout(() => {
+        task.retryTimer = undefined
+        if (current(task) && task.downloader === downloader) void downloader?.start().catch(error => { reportError(task, error) })
+      }, task.retries * 1000)
+    } catch (error) { reportError(task, error) }
+  })()
+  await task.recovery
 }
-
+const stop = async(task: Task) => {
+  task.cancelled = true
+  if (tasks.get(task.info.id) === task) tasks.delete(task.info.id)
+  clearTimeout(task.retryTimer)
+  try {
+    await task.preparing
+    await task.recovery
+    await task.downloader?.stop()
+  } finally { task.lease?.release() }
+}
 export const pauseTask = async(id: string) => {
-  const dl = dls.get(id)
-  if (dl) {
-    dls.delete(id)
-    tasks.delete(id)
-    taskActions.delete(id)
-    tryNum.delete(id)
-
-    try {
-      await dl.stop()
-    } catch (e) {
-      console.log(e)
-    }
-  }
-  // commit('setStatus', { downloadInfo: downloadInfo, status: DOWNLOAD_STATUS.PAUSE })
+  const task = tasks.get(id)
+  if (task) await stop(task)
 }
-
 export const removeTask = async(id: string) => {
-  const dl = dls.get(id)
-  const downloadInfo = tasks.get(id)
-  if (dl) {
-    dls.delete(id)
-    tasks.delete(id)
-    taskActions.delete(id)
-    tryNum.delete(id)
-
+  const task = tasks.get(id)
+  if (!task) return
+  await stop(task)
+  if (!task.info.audioDownloaded && !task.info.isComplate && task.info.downloaded > 1024) await removeFile(task.info.metadata.filePath).catch(() => {})
+}
+export const startTask = async(info: LX.Download.ListItem, savePath: string, skipExisting: boolean, callback: Task['callback'], proxy?: { host: string, port: number }, rateLimit = 0) => {
+  const previous = tasks.get(info.id)
+  const stopped = previous ? stop(previous) : Promise.resolve()
+  const task: Task = { info, callback, cancelled: false, retries: 0 }
+  tasks.set(info.id, task)
+  task.preparing = (async() => {
     try {
-      await dl.stop()
-    } catch (e) {
-      console.log(e)
-    }
-  }
-
-  if (downloadInfo) {
-    // 没有未完成、已下载大于1k
-    if (!downloadInfo.isComplate && downloadInfo.total && downloadInfo.downloaded > 1024) {
-      try {
-        await removeFile(downloadInfo.metadata.filePath)
-      } catch (_) {}
-    }
-  }
+      await stopped
+      if (!current(task)) return
+      const ready = await checkAndCreateDir(savePath)
+      if (!current(task)) return
+      if (!ready) throw Object.assign(new Error('Unable to create download folder'), { code: 'EACCES' })
+      const lease = await reserveDownloadPath(savePath, info.metadata.fileName, !!info.metadata.fileAllocated || info.downloaded > 0, skipExisting, () => current(task))
+      task.lease = lease
+      if (!current(task) || !lease) { await lease?.discard(); return }
+      info.metadata.fileName = lease.fileName
+      info.metadata.filePath = lease.filePath
+      info.metadata.fileAllocated = true
+      send(task, { action: 'filePath', data: { fileName: lease.fileName, filePath: lease.filePath } })
+      if (!current(task)) return
+      task.downloader = createDownload({
+        url: info.metadata.url ?? '',
+        path: savePath,
+        fileName: lease.fileName,
+        proxy,
+        rateLimit,
+        onCompleted() { info.audioDownloaded = true; send(task, { action: 'complete' }) },
+        onStart() { send(task, { action: 'start' }) },
+        onProgress(progress) { if (!current(task)) return; Object.assign(info, progress); send(task, { action: 'progress', data: progress }) },
+        onError(error) { void retry(task, error) },
+        onFail(response) { void retry(task, { statusCode: response.statusCode, message: 'HTTP ' + response.statusCode }) },
+      })
+    } catch (error) { reportError(task, error) }
+  })()
+  await task.preparing
+}
+export const updateUrl = async(id: string, url: string) => {
+  const task = tasks.get(id)
+  if (!task || !current(task) || !task.downloader) return
+  if (!url) { reportError(task, { message: 'Empty download URL', statusCode: 403 }); return }
+  task.info.metadata.url = url
+  task.downloader.refreshUrl(url)
+  await task.downloader.start()
+}
+export const setRateLimit = (bytesPerSecond: number) => {
+  for (const task of tasks.values()) task.downloader?.setRateLimit(bytesPerSecond)
 }

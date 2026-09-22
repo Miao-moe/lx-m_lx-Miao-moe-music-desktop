@@ -9,6 +9,7 @@ import {
 } from './dbHelper'
 
 let list: LX.Download.ListItem[]
+export const resetDownloadCache = () => { list = undefined as any }
 
 const toDBDownloadInfo = (musicInfos: LX.Download.ListItem[], offset: number = 0): LX.DBService.DownloadMusicInfo[] => {
   return musicInfos.map((info, index) => {
@@ -25,6 +26,7 @@ const toDBDownloadInfo = (musicInfos: LX.Download.ListItem[], offset: number = 0
       fileName: info.metadata.fileName,
       filePath: info.metadata.filePath,
       musicInfo: JSON.stringify(info.metadata.musicInfo),
+      taskOptions: JSON.stringify({ priority: info.priority, failure: info.failure, audioDownloaded: info.audioDownloaded, fileAllocated: info.metadata.fileAllocated, listId: info.metadata.listId }),
       position: offset + index,
     }
   })
@@ -33,6 +35,8 @@ const toDBDownloadInfo = (musicInfos: LX.Download.ListItem[], offset: number = 0
 const initDownloadList = () => {
   list = queryDownloadList().map(item => {
     const musicInfo = JSON.parse(item.musicInfo) as LX.Music.MusicInfoOnline
+    let options: Pick<LX.Download.ListItem, 'priority' | 'failure' | 'audioDownloaded'> & { fileAllocated?: boolean, listId?: string } = {}
+    try { options = JSON.parse(item.taskOptions || '{}') ?? {} } catch {}
     return {
       id: item.id,
       isComplate: item.isComplate == 1,
@@ -40,9 +44,12 @@ const initDownloadList = () => {
       statusText: item.statusText,
       downloaded: item.progress_downloaded,
       total: item.progress_total,
-      progress: item.isComplate == 1 || item.status == 'completed' ? 100 : item.progress_total ? parseInt((item.progress_downloaded / item.progress_total).toFixed(2)) * 100 : 0,
+      progress: item.isComplate == 1 || item.status == 'completed' ? 100 : item.progress_total ? Number((item.progress_downloaded / item.progress_total * 100).toFixed(2)) : 0,
       speed: '',
       writeQueue: 0,
+      priority: options.priority,
+      failure: options.failure,
+      audioDownloaded: options.audioDownloaded,
       metadata: {
         musicInfo,
         url: item.url,
@@ -50,6 +57,8 @@ const initDownloadList = () => {
         ext: item.ext,
         fileName: item.fileName,
         filePath: item.filePath,
+        fileAllocated: options.fileAllocated,
+        listId: options.listId,
       },
     }
   })

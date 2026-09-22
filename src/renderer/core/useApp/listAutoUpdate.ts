@@ -1,25 +1,22 @@
 import { getListUpdateInfo } from '@renderer/utils/data'
 import { userLists } from '@renderer/store/list/state'
 import syncSourceList from '@renderer/store/list/syncSourceList'
+import { beginSync, progressSync, finishSync } from '@renderer/store/syncStatus'
+import { showLoadError } from '@common/loadErrorNotice'
 
-const handleSyncSourceList = async(waitUpdateLists: LX.List.UserListInfo[]) => {
-  if (!waitUpdateLists.length) return
-  const targetListInfo = waitUpdateLists.shift()!
-  // console.log(targetListInfo)
+export const updatePlatformLists = async() => {
+  beginSync('platform-auto', '平台歌单自动更新')
   try {
-    await syncSourceList(targetListInfo)
-  } catch {}
-  void handleSyncSourceList(waitUpdateLists)
+    const info = await getListUpdateInfo()
+    const lists = userLists.filter(list => info[list.id]?.isAutoUpdate && list.source && list.sourceListId)
+    let completed = 0
+    const results = await Promise.allSettled(lists.map(async list => {
+      try { await syncSourceList(list) } finally { progressSync('platform-auto', ++completed, lists.length) }
+    }))
+    const failures = results.filter(result => result.status === 'rejected')
+    finishSync('platform-auto', failures.length ? { code: 'PLAYLIST_SYNC_PARTIAL', message: `${failures.length} / ${lists.length} 个歌单更新失败，详情见同步状态` } : undefined)
+    if (failures.length) showLoadError({ code: 'PLAYLIST_SYNC_PARTIAL', message: `${failures.length} 个歌单更新失败，可在设置 → 数据同步 → 同步状态中查看原因和重试` })
+    return results
+  } catch (error) { finishSync('platform-auto', error); showLoadError(error, 'PLAYLIST_SYNC_FAILED'); return [] }
 }
-
-export default () => {
-  void getListUpdateInfo().then(listUpdateInfo => {
-    const waitUpdateLists = Object.entries(listUpdateInfo)
-      .map(([id, info]) => info.isAutoUpdate && userLists.find(l => l.id == id))
-      .filter(_ => _) as LX.List.UserListInfo[]
-    // for (let i = 2; i > 0; i--) {
-    //   void handleSyncSourceList(waitUpdateLists)
-    void handleSyncSourceList(waitUpdateLists)
-    // }
-  })
-}
+export default () => { void updatePlatformLists() }

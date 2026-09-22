@@ -1,3 +1,4 @@
+import { showLoadError } from '@common/loadErrorNotice'
 import { getPlayInfo } from '@renderer/utils/ipc'
 import music from '@renderer/utils/musicSdk'
 import { log } from '@common/utils'
@@ -5,10 +6,10 @@ import { getListMusics, getUserLists, registerAction } from '@renderer/store/lis
 
 
 import useInitUserApi from './useInitUserApi'
-import { play, playList } from '@renderer/core/player'
+import { play, playList, restorePlaybackQueue } from '@renderer/core/player'
 import { onBeforeUnmount } from '@common/utils/vueTools'
 import { appSetting } from '@renderer/store/setting'
-import { playMusicInfo } from '@renderer/store/player/state'
+import { playMusicInfo, playbackReady } from '@renderer/store/player/state'
 import { initDislikeInfo, registerRemoteDislikeAction } from '@renderer/core/dislikeList'
 import { syncCookieListsOnStartup } from '@renderer/utils/cookieSync'
 import { getListPrevSelectId } from '@renderer/utils/data'
@@ -17,11 +18,14 @@ import { initPlaylistWriteback, startPlaylistWriteback, disposePlaylistWriteback
 const initPrevPlayInfo = async() => {
   const info = await getPlayInfo()
   window.lx.restorePlayInfo = null
-  if (!info?.listId || info.index < 0) return
-  const list = await getListMusics(info.listId)
-  if (!list[info.index]) return
-  window.lx.restorePlayInfo = info
-  playList(info.listId, info.index)
+  if (!info) return
+  if (!restorePlaybackQueue(info)) {
+    if (!info.listId || info.index < 0) return
+    const list = await getListMusics(info.listId)
+    if (!list[info.index]) return
+    window.lx.restorePlayInfo = info
+    playList(info.listId, info.index)
+  }
 
   if (appSetting['player.startupAutoPlay']) {
     const musicInfo = playMusicInfo.musicInfo
@@ -45,7 +49,7 @@ export default () => {
     if (unregisterDislikeEvent) unregisterDislikeEvent()
   })
 
-  const resumeWriteback = () => { void startPlaylistWriteback().catch(err => { log.error(err) }) }
+  const resumeWriteback = () => { void startPlaylistWriteback().catch(err => { log.error(err); showLoadError(err, 'LOCAL_DATA_LOAD_FAILED') }) }
 
   return async() => {
     unregister = registerAction((ids, reset) => {
@@ -60,10 +64,10 @@ export default () => {
       await getListMusics(previousId)
     }
     await Promise.all([
-      initUserApi().catch(err => { log.error(err) }), // 自定义API
+      initUserApi().catch(err => { log.error(err); showLoadError(err, 'LOCAL_DATA_LOAD_FAILED') }), // 自定义API
       initLocalLists(),
     ]).catch(err => {
-      log.error(err)
+      log.error(err); showLoadError(err, 'LOCAL_DATA_LOAD_FAILED')
     })
     void music.init() // 初始化音乐sdk
     resumeWriteback()
@@ -71,7 +75,9 @@ export default () => {
     unregisterDislikeEvent = registerRemoteDislikeAction()
     await initDislikeInfo() // 获取不喜欢列表
     await initPrevPlayInfo().catch(err => {
-      log.error(err)
+      log.error(err); showLoadError(err, 'LOCAL_DATA_LOAD_FAILED')
+    }).finally(() => {
+      playbackReady.value = true
     }) // 初始化上次的歌曲播放信息
 
     // 启动时同步一次基于 Cookie 的平台歌单（静默、不阻塞启动）

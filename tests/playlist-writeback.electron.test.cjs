@@ -65,7 +65,7 @@ test('playlist writeback switch validates access, syncs edits, retries and persi
       await row.locator('label[for="list_auto_update_writeback-mg"]').click()
       assert.equal(await page.locator('#list_auto_update_writeback-mg').isChecked(), false)
       await toggle.click()
-      await row.getByText(labels.list_writeback__error_login, { exact: true }).waitFor()
+      await row.getByText(labels.list_writeback__error_login, { exact: false }).waitFor()
       assert.equal(await checkbox.isChecked(), false)
       assert.equal(writes.length, 0)
     })

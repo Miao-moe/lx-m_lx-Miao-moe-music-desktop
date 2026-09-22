@@ -1,5 +1,7 @@
 import path from 'node:path'
 import { BrowserWindow } from 'electron'
+import { observeWindowLoadErrors } from '@main/utils/windowLoadError'
+import { registerIpcWindow } from '@main/utils/ipcPolicy'
 import { getPlatform, isWin } from '@common/utils'
 import { initWindowSize, getMinimumSize, getLyricWindowBounds } from './utils'
 import { mainSend } from '@common/mainIpc'
@@ -216,8 +218,10 @@ export const createWindow = () => {
     },
   })
   lockControls = createLockControls(browserWindow, point => { sendEvent(WIN_LYRIC_RENDERER_EVENT_NAME.pointer_position, point) })
+  observeWindowLoadErrors(browserWindow)
 
   const winURL = process.env.NODE_ENV !== 'production' ? 'http://localhost:9081/lyric.html' : `file://${path.join(encodePath(__dirname), 'lyric.html')}`
+  registerIpcWindow(browserWindow.webContents, 'lyric', winURL)
   void browserWindow.loadURL(winURL + `?os=${getPlatform()}&dark=${shouldUseDarkColors}&theme=${encodeURIComponent(JSON.stringify(theme))}`)
 
   winEvent()

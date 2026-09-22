@@ -119,6 +119,7 @@ export const cancelRequest = (requestKey: string) => {
   request[1](new Error('Cancel request'))
   requestQueue.delete(requestKey)
   clearRequestTimeout(requestKey)
+  sendEvent(USER_API_RENDERER_EVENT_NAME.cancelRequest, requestKey)
 }
 
 export const request = async({ requestKey, data }: LX.UserApi.UserApiRequestParams): Promise<any> => await new Promise((resolve, reject) => {

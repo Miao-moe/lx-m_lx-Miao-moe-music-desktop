@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const childProcess = require('node:child_process')
 const crypto = require('node:crypto')
 const fs = require('node:fs')
-const http = require('node:http')
+const https = require('node:https')
 const os = require('node:os')
 const path = require('node:path')
 const { once } = require('node:events')
@@ -70,7 +70,8 @@ test('update choices require a click, show progress, cancel downloads and silent
   fs.writeFileSync(path.join(f.installDirectory, 'Uninstall LX-M Music.exe'), 'installed-edition test marker')
   const responses = []
   const slice = Math.floor(bytes.length / 3)
-  const server = http.createServer((_req, res) => {
+  const certificate = await require('selfsigned').generate([{ name: 'commonName', value: 'localhost' }], { keySize: 2048, extensions: [{ name: 'subjectAltName', altNames: [{ type: 7, ip: '127.0.0.1' }] }] })
+  const server = https.createServer({ key: certificate.private, cert: certificate.cert }, (_req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length })
     res.write(bytes.subarray(0, slice))
     const timer = setTimeout(() => { if (!res.destroyed) res.write(bytes.subarray(slice, slice * 2)) }, 650)
@@ -81,6 +82,14 @@ test('update choices require a click, show progress, cancel downloads and silent
   await once(server, 'listening')
   const fixtureApp = await launch({ profilePath: path.join(f.root, 'profile'), rendererPath: path.join(project, 'dist/index.html') })
   const { app, page, errors } = fixtureApp
+  // Trust only this fixture's certificate/port; production still verifies TLS.
+  await app.evaluate((_, { cert, port }) => {
+    const tls = process.mainModule.require('node:tls'); const connect = tls.connect
+    tls.connect = function(options, ...args) {
+      if (options.host === '127.0.0.1' && Number(options.port) === port) options = { ...options, ca: cert }
+      return connect.call(this, options, ...args)
+    }
+  }, { cert: certificate.cert, port: server.address().port })
   let closed = false
   let downloadedFiles = []
   app.on('close', () => { closed = true })
@@ -121,7 +130,7 @@ test('update choices require a click, show progress, cancel downloads and silent
     desc: '## v9.0.0\n\n### 修复\n\n- 更新测试',
     history: [],
     fileName: path.basename(f.exe),
-    downloadUrl: `http://127.0.0.1:${server.address().port}/Setup.exe`,
+    downloadUrl: `https://127.0.0.1:${server.address().port}/Setup.exe`,
     size: bytes.length,
     digest: 'sha256:' + crypto.createHash('sha256').update(bytes).digest('hex'),
   })

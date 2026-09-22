@@ -25,6 +25,12 @@ dd
       base-selection.gap-left(:class="$style.selectWidth" :model-value="appSetting['download.maxDownloadNum']" :list="maxNums" item-key="id" item-name="id" @change="handleUpdateMaxNum")
 
 dd
+  h3 {{ $t('setting__download_rate_limit') }}
+  base-selection(:model-value="appSetting['download.rateLimit']" :list="rateLimits" item-key="id" item-name="name" @change="handleRateLimit")
+  .gap-top
+    base-checkbox(id="setting_download_auto_resume" :model-value="appSetting['download.autoResume']" :label="$t('setting__download_auto_resume')" @update:model-value="updateSetting({'download.autoResume': $event})")
+
+dd
   h3#download_use_other_source
     | {{ $t('setting__download_use_other_source') }}
     svg-icon(class="help-icon" name="help-circle-outline" :aria-label="$t('setting__download_use_other_source_tip')")
@@ -37,6 +43,11 @@ dd(:aria-label="$t('setting__download_name_title')")
     base-checkbox.gap-left(
         v-for="item in musicNames" :id="`setting_download_musicName_${item.value}`" :key="item.value" name="setting_download_musicName" :value="item.value"
         need :model-value="appSetting['download.fileName']" :label="item.name" @update:model-value="updateSetting({'download.fileName': $event})")
+  .gap-top
+    base-input(id="setting_download_name_template" :class="$style.nameTemplate" :model-value="appSetting['download.fileName']" :aria-label="$t('setting__download_name_template')" :trim="false" :auto-paste="false" @change="updateSetting({'download.fileName': $event || '歌名 - 歌手'})")
+  p {{ $t('setting__download_name_fields') }}
+  p(data-download-name-preview) {{ $t('setting__download_name_preview') }}{{ namePreview }}
+  p {{ $t('setting__download_collision_rule') }}
 dd
   h3#download_data_embed {{ $t('setting__download_data_embed') }}
   .gap-top
@@ -79,6 +90,8 @@ import { showSelectDialog, openDirInExplorer } from '@renderer/utils/ipc'
 import { useI18n } from '@renderer/plugins/i18n'
 import { appSetting, updateSetting } from '@renderer/store/setting'
 import { dialog } from '@renderer/plugins/Dialog'
+import { formatDownloadFileName } from '@common/utils/download/fileName'
+import { setDownloadRateLimit } from '@renderer/store/download/action'
 
 export default {
   name: 'SettingDownload',
@@ -97,6 +110,14 @@ export default {
     }
 
     const maxNums = new Array(6).fill(null).map((_, i) => ({ id: i + 1 }))
+    const rateLimits = computed(() => [0, 128, 256, 512, 1024, 2048, 5120].map(id => ({ id, name: id ? id + ' KiB/s' : t('setting__download_unlimited') })))
+    const handleRateLimit = ({ id }) => {
+      updateSetting({ 'download.rateLimit': id })
+      void setDownloadRateLimit(id).catch(console.error)
+    }
+    const namePreview = computed(() => formatDownloadFileName(appSetting['download.fileName'], {
+      id: 'kw_12345', source: 'kw', name: t('setting__download_preview_title'), singer: t('setting__download_preview_artist'), meta: { albumName: t('setting__download_preview_album') },
+    }, '320k', 'mp3'))
     const handleUpdateMaxNum = async({ id }) => {
       if (id > 3) {
         if (!await dialog.confirm(window.i18n.t('setting__download_max_num_tip'))) return
@@ -127,6 +148,9 @@ export default {
       musicNames,
       lrcFormatList,
       maxNums,
+      rateLimits,
+      handleRateLimit,
+      namePreview,
       handleUpdateMaxNum,
     }
   },
@@ -139,5 +163,10 @@ export default {
 // }
 .selectWidth {
   width: 60px;
+}
+.nameTemplate {
+  width: 360px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 </style>

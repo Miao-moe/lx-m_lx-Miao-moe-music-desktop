@@ -1,3 +1,4 @@
+import { formatError } from '@common/utils/errorMessage'
 import { onBeforeUnmount } from '@common/utils/vueTools'
 import { useI18n } from '@renderer/plugins/i18n'
 import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
@@ -7,18 +8,24 @@ import { getLastTryQuality, getNextTryQuality } from '@renderer/core/music/utils
 import { removeMusicUrl } from '@renderer/utils/ipc'
 import { setAllStatus } from '@renderer/store/player/action'
 import { appSetting } from '@renderer/store/setting'
+import { playbackSession } from '@renderer/core/player/playbackSession'
+import { libraryCall, libraryError } from '@renderer/utils/library'
 
 export default () => {
   const t = useI18n()
   let retryNum = 0
   let prevTimeoutId: string | null = null
+  let recordedId = ''
 
   let loadingTimeout: NodeJS.Timeout | null = null
   let delayNextTimeout: NodeJS.Timeout | null = null
   const startLoadingTimeout = () => {
     // console.log('start load timeout')
     clearLoadingTimeout()
+    const token = playbackSession.capture()
     loadingTimeout = setTimeout(() => {
+      loadingTimeout = null
+      if (!playbackSession.isCurrent(token) || !playbackSession.canAdvance()) return
       if (window.lx.isPlayedStop) {
         prevTimeoutId = null
         setAllStatus('')
@@ -50,7 +57,10 @@ export default () => {
   }
   const addDelayNextTimeout = () => {
     clearDelayNextTimeout()
+    const token = playbackSession.capture()
     delayNextTimeout = setTimeout(() => {
+      delayNextTimeout = null
+      if (!playbackSession.isCurrent(token) || !playbackSession.canAdvance()) return
       if (window.lx.isPlayedStop) {
         setAllStatus('')
         return
@@ -73,6 +83,12 @@ export default () => {
     setAllStatus('')
     clearLoadingTimeout()
     loadPendingTrackMetadata()
+    const playing = playMusicInfo.musicInfo
+    const song = playing && ('progress' in playing ? playing.metadata.musicInfo : playing)
+    if (song && recordedId !== song.id) {
+      recordedId = song.id
+      void libraryCall('recordListening', song).catch(error => { libraryError.value = formatError(error, '保存听歌记录失败') })
+    }
   }
 
   const handleEmpied = () => {
@@ -115,23 +131,28 @@ export default () => {
       }
     }
 
+    setAllStatus(formatError({ code: errCode ? `MEDIA_${errCode}` : 'AUDIO_LOAD_FAILED' }, t('player__error')))
     if (appSetting['player.autoSkipOnError']) {
       if (document.hidden) {
         console.warn('error skip to next')
         void playNext(true)
       } else {
-        setAllStatus(t('player__error'))
-        setTimeout(addDelayNextTimeout)
+        const token = playbackSession.capture()
+        setTimeout(() => { if (playbackSession.isCurrent(token) && playbackSession.canAdvance()) addDelayNextTimeout() })
       }
     }
   }
 
   const handleSetPlayInfo = () => {
+    recordedId = ''
     retryNum = 0
     prevTimeoutId = null
     clearDelayNextTimeout()
     clearLoadingTimeout()
   }
+  const unsubscribe = playbackSession.subscribe(reason => {
+    if (reason !== 'queue') handleEmpied()
+  })
 
   // const handlePlayedStop = () => {
   //   clearDelayNextTimeout()
@@ -148,6 +169,8 @@ export default () => {
   window.app_event.on('musicToggled', handleSetPlayInfo)
 
   onBeforeUnmount(() => {
+    unsubscribe()
+    handleEmpied()
     window.app_event.off('playerLoadstart', handleLoadstart)
     window.app_event.off('playerLoadeddata', handleLoadeddata)
     window.app_event.off('playerPlaying', handlePlaying)

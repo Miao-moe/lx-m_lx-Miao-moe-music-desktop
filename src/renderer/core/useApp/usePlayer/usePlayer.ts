@@ -11,6 +11,7 @@ import {
 import useMediaSessionInfo from './useMediaSessionInfo'
 import useCover from './useCover'
 import usePlayProgress from './usePlayProgress'
+import usePlaybackPersistence from './usePlaybackPersistence'
 import usePlayEvent from './usePlayEvent'
 
 import {
@@ -47,6 +48,7 @@ export default () => {
   const t = useI18n()
 
   usePlayProgress()
+  usePlaybackPersistence()
   useCover()
   useMediaSessionInfo()
   usePlayEvent()

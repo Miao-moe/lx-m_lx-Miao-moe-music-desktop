@@ -1,4 +1,5 @@
 import { mainSend } from '@common/mainIpc'
+import { registerIpcWindow } from '@main/utils/ipcPolicy'
 import { BrowserWindow } from 'electron'
 import fs from 'fs'
 import path from 'node:path'
@@ -120,7 +121,9 @@ export const createWindow = async(userApi: LX.UserApi.UserApiInfo) => {
 
   // console.log(html.replace('</body>', `<script>${userApi.script}</script></body>`))
   // const randomNum = Math.random().toString().substring(2, 10)
-  await browserWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(html))
+  const url = 'data:text/html;charset=UTF-8,' + encodeURIComponent(html)
+  registerIpcWindow(browserWindow.webContents, 'userApi', url)
+  await browserWindow.loadURL(url)
 
   browserWindow.on('ready-to-show', async() => {
     global.lx.event_app.on('updated_config', handleUpdateProxy)

@@ -17,14 +17,19 @@ const defaultOptions: Options = {
   maxRedirect: 5,
 } as const
 let proxyAgent: ProxyAgent | null = null
+let proxyUrl: string | undefined
 let globalDispatcher = getGlobalDispatcher()
 const buildDispatcher = (maxRedirect = defaultOptions.maxRedirect ?? 5, retryNum = 3) => composeDispatcher(proxyAgent ?? globalDispatcher, maxRedirect, retryNum)
 
 setGlobalDispatcher(buildDispatcher())
 
 export const setProxy = (url?: string) => {
+  if (proxyUrl === url) return
+  const previous = proxyAgent
+  proxyUrl = url
   proxyAgent = url ? new ProxyAgent(url) : null
   setGlobalDispatcher(buildDispatcher())
+  if (previous) void previous.close().catch(() => {})
 }
 export const setProxyByHost = (host?: string, port?: string) => {
   setProxy(host ? `http://${host}:${port}` : undefined)
@@ -184,6 +189,16 @@ export const request = async <T = unknown>(url: string, options: Options = {}): 
   const method = (options.method?.toUpperCase() ?? 'GET') as Dispatcher.RequestOptions['method']
   const timeout = options.timeout ?? defaultOptions.timeout
   const [headers, body] = buildRequestBody(options)
+  // Buffered requests have one deadline for redirects, retries and the body.
+  // Streamed downloads retain their idle timeout while data is flowing.
+  const controller = new AbortController()
+  const abort = () => { controller.abort(options.signal?.reason) }
+  if (options.signal?.aborted) abort()
+  else options.signal?.addEventListener('abort', abort, { once: true })
+  const timer = !options.needBody && timeout && timeout > 0 ? setTimeout(() => {
+    controller.abort(Object.assign(new Error('请求超时'), { code: 'ETIMEDOUT', retryable: false }))
+  }, timeout) : undefined
+  try {
   // console.log(url, {
   //   method,
   //   bodyTimeout: timeout,
@@ -194,41 +209,48 @@ export const request = async <T = unknown>(url: string, options: Options = {}): 
   //   signal: options.signal,
   //   dispatcher: buildRequestDispatcher(options),
   // })
-  return requestWithCompatibility(url, {
-    method,
-    bodyTimeout: timeout,
-    headersTimeout: timeout,
-    headers,
-    query: options.query,
-    body,
-    signal: options.signal,
-    dispatcher: buildRequestDispatcher(options),
-  }, options.maxRedirect ?? defaultOptions.maxRedirect, options.retryNum ?? 3).then(async(response) => {
-    if (options.needBody) {
-      return {
-        headers: response.headers,
-        statusCode: response.statusCode,
-        body: response.body as unknown as T,
-      } satisfies Omit<Response<T>, 'raw'> as Response<T>
-    }
-    if (options.needRaw) {
-      return {
-        headers: response.headers,
-        statusCode: response.statusCode,
-        raw: new Uint8Array(await response.body.arrayBuffer()),
-      } satisfies Omit<Response<T>, 'body'> as Response<T>
-    }
-    // console.log(response)
-    let body = (await response.body.text()) as T
-    if (!headers['Content-Type'] || headers['Content-Type'].includes(CONTENT_TYPE.json)) {
-      try {
-        body = JSON.parse(body as string) as T
-      } catch {}
-    }
-    return {
+    return await requestWithCompatibility(url, {
+      method,
+      bodyTimeout: timeout,
+      headersTimeout: timeout,
+      headers,
+      query: options.query,
       body,
-      headers: response.headers,
-      statusCode: response.statusCode,
-    } satisfies Omit<Response<T>, 'raw'> as Response<T>
-  })
+      signal: options.needBody ? options.signal : controller.signal,
+      dispatcher: buildRequestDispatcher(options),
+    }, options.maxRedirect ?? defaultOptions.maxRedirect, options.retryNum ?? 3).then(async(response) => {
+      if (options.needBody) {
+        return {
+          headers: response.headers,
+          statusCode: response.statusCode,
+          body: response.body as unknown as T,
+        } satisfies Omit<Response<T>, 'raw'> as Response<T>
+      }
+      if (options.needRaw) {
+        return {
+          headers: response.headers,
+          statusCode: response.statusCode,
+          raw: new Uint8Array(await response.body.arrayBuffer()),
+        } satisfies Omit<Response<T>, 'body'> as Response<T>
+      }
+      // console.log(response)
+      let body = (await response.body.text()) as T
+      if (!headers['Content-Type'] || headers['Content-Type'].includes(CONTENT_TYPE.json)) {
+        try {
+          body = JSON.parse(body as string) as T
+        } catch {}
+      }
+      return {
+        body,
+        headers: response.headers,
+        statusCode: response.statusCode,
+      } satisfies Omit<Response<T>, 'raw'> as Response<T>
+    })
+  } catch (error) {
+    if (controller.signal.aborted && controller.signal.reason) throw controller.signal.reason
+    throw error
+  } finally {
+    clearTimeout(timer)
+    options.signal?.removeEventListener('abort', abort)
+  }
 }

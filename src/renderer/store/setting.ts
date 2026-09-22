@@ -1,6 +1,8 @@
+import { formatError } from '@common/utils/errorMessage'
 import { reactive, computed } from '@common/utils/vueTools'
 import defaultSetting from '@common/defaultSetting'
 import { updateSetting as saveSetting } from '@renderer/utils/ipc'
+import { dialog } from '@renderer/plugins/Dialog'
 
 export const appSetting = window.lxData.appSetting = reactive<LX.AppSetting>({ ...defaultSetting })
 
@@ -21,8 +23,9 @@ export const mergeSetting = (newSetting: Partial<LX.AppSetting>) => {
 }
 
 export const updateSetting = window.lxData.updateSetting = (setting: Partial<LX.AppSetting>) => {
-  // console.warn(setting)
-  void saveSetting(setting)
+  const task = saveSetting(setting)
+  void task.catch(error => { void dialog({ message: formatError(error, window.i18n.t('setting__backup_config_failed'), 'CONFIG_SAVE_FAILED') }) })
+  return task
 }
 
 /**

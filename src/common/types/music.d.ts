@@ -32,8 +32,11 @@ declare namespace LX {
     }
 
     interface MusicInfoMeta_local extends MusicInfoMetaBase {
+      webdav?: { path: string, identity: string }
       filePath: string
       ext: string
+      year?: number
+      fileSize?: number
     }
 
 

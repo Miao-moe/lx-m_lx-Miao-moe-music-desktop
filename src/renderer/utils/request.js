@@ -1,62 +1,16 @@
-import needle from 'needle'
+import { createProxyAgentPool, requestWithDeadline as request } from '@common/utils/needleRequest'
 // import progress from 'request-progress'
 import { debugRequest } from './env'
 import { requestMsg } from './message'
 import { bHh } from './musicSdk/options'
 import { deflateRaw } from 'zlib'
 import { proxy } from '@renderer/store'
-import { httpOverHttp, httpsOverHttp } from 'tunnel'
+import { getRequestSignal, throwIfRequestCancelled } from './requestContext'
+import { withRequestMessage } from '@common/utils/requestError'
 // import fs from 'fs'
 
-const httpsRxp = /^https:/
-const getRequestAgent = url => {
-  let options
-  if (proxy.enable && proxy.host) {
-    options = {
-      proxy: {
-        host: proxy.host,
-        port: proxy.port,
-      },
-    }
-  } else if (proxy.envProxy) {
-    options = {
-      proxy: {
-        host: proxy.envProxy.host,
-        port: proxy.envProxy.port,
-      },
-    }
-  }
-  return options ? (httpsRxp.test(url) ? httpsOverHttp : httpOverHttp)(options) : undefined
-}
-
-
-const request = (url, options, callback) => {
-  let data
-  if (options.body) {
-    data = options.body
-  } else if (options.form) {
-    data = options.form
-    // data.content_type = 'application/x-www-form-urlencoded'
-    options.json = false
-  } else if (options.formData) {
-    data = options.formData
-    // data.content_type = 'multipart/form-data'
-    options.json = false
-  }
-  options.response_timeout = options.timeout
-
-  return needle.request(options.method || 'get', url, data, options, (err, resp, body) => {
-    if (!err) {
-      body = resp.body = resp.raw.toString()
-      try {
-        resp.body = JSON.parse(resp.body)
-      } catch (_) {}
-      body = resp.body
-    }
-    callback(err, resp, body)
-  }).request
-}
-
+const proxyAgent = createProxyAgentPool()
+const getRequestAgent = url => proxyAgent(url, proxy.enable && proxy.host ? proxy : proxy.envProxy)
 
 const defaultHeaders = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36',
@@ -74,10 +28,11 @@ const buildHttpPromose = (url, options) => {
     isCancelled: false,
     cancelHttp: () => {
       if (!obj.requestObj) return obj.isCancelled = true
+      const reject = obj.cancelFn
       cancelHttp(obj.requestObj)
       obj.requestObj = null
       obj.promise = obj.cancelHttp = null
-      obj.cancelFn(new Error(requestMsg.cancelRequest))
+      reject?.(new Error(requestMsg.cancelRequest))
       obj.cancelFn = null
     },
   }
@@ -98,7 +53,7 @@ const buildHttpPromose = (url, options) => {
     }).then(ro => {
       obj.requestObj = ro
       if (obj.isCancelled) obj.cancelHttp()
-    })
+    }, reject)
   })
   return obj
 }
@@ -114,14 +69,14 @@ export const httpFetch = (url, options = { method: 'get' }) => {
     // console.log('出错', err)
     if (err.message === 'socket hang up') {
       // window.globalObj.apiSource = 'temp'
-      return Promise.reject(new Error(requestMsg.unachievable))
+      return Promise.reject(withRequestMessage(err, requestMsg.unachievable))
     }
     switch (err.code) {
       case 'ETIMEDOUT':
       case 'ESOCKETTIMEDOUT':
-        return Promise.reject(new Error(requestMsg.timeout))
+        return Promise.reject(withRequestMessage(err, requestMsg.timeout))
       case 'ENOTFOUND':
-        return Promise.reject(new Error(requestMsg.notConnectNetwork))
+        return Promise.reject(withRequestMessage(err, requestMsg.notConnectNetwork))
       default:
         return Promise.reject(err)
     }
@@ -285,32 +240,40 @@ const fetchData = async(url, method, {
   headers = {},
   format = 'json',
   timeout = 15000,
+  signal = getRequestSignal(),
   ...options
 }, callback) => {
-  // console.log(url, options)
-  console.log('---start---', url)
-  headers = Object.assign({}, headers)
-  if (headers[bHh]) {
-    const path = url.replace(/^https?:\/\/[\w.:]+\//, '/')
-    let s = Buffer.from(bHh, 'hex').toString()
-    s = s.replace(s.substr(-1), '')
-    s = Buffer.from(s, 'base64').toString()
-    let v = process.versions.app.split('-')[0].split('.').map(n => n.length < 3 ? n.padStart(3, '0') : n).join('')
-    let v2 = process.versions.app.split('-')[1] || ''
-    headers[s] = !s || `${(await handleDeflateRaw(Buffer.from(JSON.stringify(`${path}${v}`.match(regx), null, 1).concat(v)).toString('base64'))).toString('hex')}&${parseInt(v)}${v2}`
-    delete headers[bHh]
+  try {
+    throwIfRequestCancelled(signal)
+    // console.log(url, options)
+    if (debugRequest) console.log('---start---', url)
+    headers = Object.assign({}, headers)
+    if (headers[bHh]) {
+      const path = url.replace(/^https?:\/\/[\w.:]+\//, '/')
+      let s = Buffer.from(bHh, 'hex').toString()
+      s = s.replace(s.substr(-1), '')
+      s = Buffer.from(s, 'base64').toString()
+      let v = process.versions.app.split('-')[0].split('.').map(n => n.length < 3 ? n.padStart(3, '0') : n).join('')
+      let v2 = process.versions.app.split('-')[1] || ''
+      headers[s] = !s || `${(await handleDeflateRaw(Buffer.from(JSON.stringify(`${path}${v}`.match(regx), null, 1).concat(v)).toString('base64'))).toString('hex')}&${parseInt(v)}${v2}`
+      delete headers[bHh]
+    }
+    return request(url, {
+      ...options,
+      method,
+      headers: Object.assign({}, defaultHeaders, headers),
+      timeout,
+      signal,
+      agent: getRequestAgent(url),
+      json: format === 'json',
+    }, (err, resp, body) => {
+      if (err) return callback(err, null)
+      callback(null, resp, body)
+    })
+  } catch (error) {
+    callback(error, null)
+    return { abort() {} }
   }
-  return request(url, {
-    ...options,
-    method,
-    headers: Object.assign({}, defaultHeaders, headers),
-    timeout,
-    agent: getRequestAgent(url),
-    json: format === 'json',
-  }, (err, resp, body) => {
-    if (err) return callback(err, null)
-    callback(null, resp, body)
-  })
 }
 
 export const checkUrl = (url, options = {}) => {

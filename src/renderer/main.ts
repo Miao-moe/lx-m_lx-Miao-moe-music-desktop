@@ -1,3 +1,4 @@
+import { showLoadError } from '@common/loadErrorNotice'
 import '@common/error'
 import { createApp } from 'vue'
 
@@ -74,6 +75,7 @@ void Promise.all([getSetting(), getEnvParams()]).then(([setting, { appVersion }]
   initSetting(setting)
 
   const app = createApp(App)
+  app.config.errorHandler = error => { console.error(error); showLoadError(error, 'VIEW_LOAD_FAILED') }
   app
     .use(router)
     // .use(store)
@@ -81,6 +83,6 @@ void Promise.all([getSetting(), getEnvParams()]).then(([setting, { appVersion }]
   initPlugins(app)
   mountComponents(app)
   app.mount('#root')
-})
+}).catch(error => { showLoadError(error, 'APP_LOAD_FAILED', () => { window.location.reload() }) })
 
 // bubbleCursor()

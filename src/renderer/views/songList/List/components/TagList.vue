@@ -16,7 +16,7 @@
           <p>{{ $t('list__loading') }}</p>
         </div>
         <div v-else-if="isLoadFailed" class="ui-state ui-state-error" role="status">
-          <p>{{ $t('list__load_failed') }}</p>
+          <p>{{ loadError }}</p>
           <base-btn min @click="loadTags(source)">{{ $t('reload') }}</base-btn>
         </div>
         <dl v-for="tagInfo in list" :key="tagInfo.name">
@@ -29,6 +29,7 @@
 </template>
 
 <script setup>
+import { formatError } from '@common/utils/errorMessage'
 import { watch, shallowReactive, ref, onMounted, onBeforeUnmount, computed, reactive } from '@common/utils/vueTools'
 import { setTags, getTags } from '@renderer/store/songList/action'
 import { tags } from '@renderer/store/songList/state'
@@ -57,6 +58,7 @@ const t = useI18n()
 const list = shallowReactive([])
 const isLoading = ref(false)
 const isLoadFailed = ref(false)
+const loadError = ref('')
 let tagsRequestId = 0
 
 const loadTags = async(source) => {
@@ -75,6 +77,7 @@ const loadTags = async(source) => {
   } catch (error) {
     if (requestId !== tagsRequestId) return
     isLoadFailed.value = true
+    loadError.value = formatError(error, window.i18n.t('list__load_failed'), 'TAGS_LOAD_FAILED')
     console.warn('Load song list tags failed:', error)
   } finally {
     if (requestId === tagsRequestId) isLoading.value = false

@@ -1,4 +1,6 @@
 import { LIST_IDS } from '@common/constants'
+import { BoundedMap } from '@common/utils/boundedMap'
+import { captureListHistory, rememberLibrarySongs } from '../../library'
 import { arrPush, arrPushByPosition, arrUnshift } from '@common/utils/common'
 import { archiveListDeletion, restoreListTrashData } from './recycleBin'
 import {
@@ -25,7 +27,7 @@ import {
 export { getListTrash, deleteListTrash } from './recycleBin'
 
 let userLists: LX.DBService.UserListInfo[]
-let musicLists = new Map<string, LX.Music.MusicInfo[]>()
+let musicLists = new BoundedMap<string, LX.Music.MusicInfo[]>(12, 50000, songs => songs.length)
 
 const toDBMusicInfo = (musicInfos: LX.Music.MusicInfo[], listId: string, offset: number = 0): LX.DBService.MusicInfo[] => {
   return musicInfos.map((info, index) => {
@@ -102,6 +104,7 @@ export const createUserLists = (position: number, lists: LX.List.UserListInfo[])
  */
 export const removeUserLists = (ids: string[], recycle = false): LX.List.TrashEntry[] => {
   ids = ids.filter(id => id !== LIST_IDS.DEFAULT && id !== LIST_IDS.LOVE && id !== LIST_IDS.TEMP)
+  for (const id of ids) captureListHistory(id, '删除歌单前')
   const remove = () => { deleteUserLists(ids) }
   const entries = recycle ? archiveListDeletion('list', ids, undefined, remove) : (remove(), [])
   userLists &&= queryAllUserList()
@@ -197,11 +200,14 @@ export const getListMusics = (listId: string): LX.Music.MusicInfo[] => {
  */
 export const musicOverwrite = (listId: string, musicInfos: LX.Music.MusicInfo[]) => {
   let targetList = getListMusics(listId)
+  captureListHistory(listId, '替换歌曲前', targetList)
   overwriteMusicInfo(listId, toDBMusicInfo(musicInfos, listId))
+  rememberLibrarySongs(musicInfos)
   if (targetList) {
     targetList.splice(0, targetList.length)
     arrPush(targetList, musicInfos)
   }
+  musicLists.prune()
 }
 
 /**
@@ -220,6 +226,8 @@ export const musicsAdd = (listId: string, musicInfos: LX.Music.MusicInfo[], addM
     set.add(item.id)
     return true
   })
+  if (!musicInfos.length) return
+  captureListHistory(listId, '添加歌曲前', targetList)
 
   switch (addMusicLocationType) {
     case 'top':
@@ -234,6 +242,8 @@ export const musicsAdd = (listId: string, musicInfos: LX.Music.MusicInfo[], addM
       break
     }
   }
+  rememberLibrarySongs(musicInfos)
+  musicLists.prune()
 }
 
 /**
@@ -244,6 +254,7 @@ export const musicsAdd = (listId: string, musicInfos: LX.Music.MusicInfo[], addM
 export const musicsRemove = (listId: string, ids: string[], recycle = false): LX.List.TrashEntry[] => {
   let targetList = getListMusics(listId)
   if (!targetList.length) return []
+  captureListHistory(listId, '删除歌曲前', targetList)
   const remove = () => { removeMusicInfos(listId, ids) }
   const entries = recycle ? archiveListDeletion('songs', [listId], ids, remove) : (remove(), [])
   const idsSet = new Set<string>(ids)
@@ -261,6 +272,8 @@ export const musicsRemove = (listId: string, ids: string[], recycle = false): LX
 export const musicsMove = (fromId: string, toId: string, musicInfos: LX.Music.MusicInfo[], addMusicLocationType: LX.AddMusicLocationType) => {
   let fromList = getListMusics(fromId)
   let toList = getListMusics(toId)
+  captureListHistory(fromId, '移出歌曲前', fromList)
+  captureListHistory(toId, '移入歌曲前', toList)
 
   const ids = musicInfos.map(musicInfo => musicInfo.id)
 
@@ -295,6 +308,7 @@ export const musicsMove = (fromId: string, toId: string, musicInfos: LX.Music.Mu
  * @param musicInfos 歌曲&列表信息
  */
 export const musicsUpdate = (musicInfos: LX.List.ListActionMusicUpdate) => {
+  for (const id of new Set(musicInfos.map(item => item.id))) captureListHistory(id, '修改歌曲信息前')
   updateMusicInfos(musicInfos.map(({ id, musicInfo }) => {
     return {
       ...musicInfo,
@@ -321,6 +335,7 @@ export const musicsUpdate = (musicInfos: LX.List.ListActionMusicUpdate) => {
  * @param listId 列表Id
  */
 export const musicsClear = (ids: string[], recycle = false): LX.List.TrashEntry[] => {
+  for (const id of ids) captureListHistory(id, '清空歌曲前')
   const remove = () => { removeMusicInfoByListId(ids) }
   const entries = recycle ? archiveListDeletion('songs', ids, undefined, remove) : (remove(), [])
   for (const id of ids) {
@@ -340,6 +355,7 @@ export const musicsClear = (ids: string[], recycle = false): LX.List.TrashEntry[
 export const musicsPositionUpdate = (listId: string, position: number, ids: string[]) => {
   let targetList = getListMusics(listId)
   if (!targetList.length) return
+  captureListHistory(listId, '调整排序前', targetList)
 
   let newTargetList = [...targetList]
 
@@ -383,7 +399,9 @@ export const listDataOverwrite = (myListData: MakeOptional<LX.List.ListDataFull,
     dbLists.push({ ...listInfo, position: index })
     arrPush(dbMusicInfos, toDBMusicInfo(list, listInfo.id))
   })
+  for (const id of [LIST_IDS.DEFAULT, LIST_IDS.LOVE, ...queryAllUserList().map(list => list.id)]) captureListHistory(id, '批量恢复或替换前')
   overwriteListData(dbLists, dbMusicInfos)
+  rememberLibrarySongs([...listData.defaultList, ...listData.loveList, ...listData.userList.flatMap(list => list.list)])
 
   if (userLists) userLists.splice(0, userLists.length, ...dbLists)
   else userLists = dbLists
@@ -411,6 +429,8 @@ export const checkListExistMusic = (listId: string, musicInfoId: string): boolea
  * @param musicInfoId 音乐id
  * @returns
  */
+export const resetListCache = () => { userLists = queryAllUserList(); musicLists.clear() }
+
 export const getMusicExistListIds = (musicInfoId: string): string[] => {
   const musicInfos = queryMusicInfoByMusicInfoId(musicInfoId)
   return musicInfos.map(m => m.listId)

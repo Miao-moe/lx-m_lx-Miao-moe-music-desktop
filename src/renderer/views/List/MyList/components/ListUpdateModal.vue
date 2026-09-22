@@ -29,8 +29,10 @@
               </span>
             </div>
             <p v-if="errors[list.id] || writebackStatus[list.id]?.error" :class="$style.error" role="status">
-              {{ $t(`list_writeback__error_${errors[list.id] || writebackStatus[list.id].error}`) }}
+              {{ formatError({ code: 'WRITEBACK_' + (errors[list.id] || writebackStatus[list.id].error).toUpperCase(), message: $t(`list_writeback__error_${errors[list.id] || writebackStatus[list.id].error}`) }) }}
             </p>
+            <SyncDiffPanel :diff="writebackStatus[list.id]?.diff?.local" title="本地修改" />
+            <SyncDiffPanel :diff="writebackStatus[list.id]?.diff?.remote" title="平台修改" />
             <p v-if="writebackStatus[list.id]?.enabled" :class="$style.status">
               {{ $t(`list_writeback__scope_${list.source}`) }}
             </p>
@@ -60,6 +62,8 @@
 
 <script>
 import { computed, ref, reactive } from '@common/utils/vueTools'
+import { formatError } from '@common/utils/errorMessage'
+import SyncDiffPanel from '@renderer/components/common/SyncDiffPanel.vue'
 import { userLists, fetchingListStatus, listUpdateTimes } from '@renderer/store/list/state'
 import handleSyncSourceList from '@renderer/store/list/syncSourceList'
 import musicSdk from '@renderer/utils/musicSdk'
@@ -68,6 +72,7 @@ import { getListUpdateInfo, setListAutoUpdate } from '@renderer/utils/data'
 import { isWritebackSupported, setPlaylistWriteback, retryPlaylistWriteback, writebackStatus, WritebackError } from '@renderer/utils/playlistWriteback'
 
 export default {
+  components: { SyncDiffPanel },
   props: {
     visible: {
       type: Boolean,
@@ -123,6 +128,7 @@ export default {
     }
 
     return {
+      formatError,
       lists,
       updateInfo,
       fetchingListStatus,

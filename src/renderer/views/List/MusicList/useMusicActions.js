@@ -25,9 +25,9 @@ export default ({ props, list, selectedList, removeAllSelect }) => {
     })
   }
 
-  const handleOpenMusicDetail = index => {
+  const handleOpenMusicDetail = async(index) => {
     const minfo = list.value[index]
-    const url = musicSdk[minfo.source]?.getMusicDetailPageUrl(toOldMusicInfo(minfo))
+    const url = await musicSdk[minfo.source]?.getMusicDetailPageUrl(toOldMusicInfo(minfo))
     if (!url) return
     openUrl(url)
   }

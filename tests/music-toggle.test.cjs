@@ -52,6 +52,7 @@ function modalFixture(searchSource = searchResults, current = original) {
   const module = { exports: {} }, played = [], emitted = [], queue = [original]
   const state = { musicInfo: current }
   const imports = {
+    '@common/utils/errorMessage': load('src/common/utils/errorMessage.ts'),
     '@common/constants': { LIST_IDS: { PLAY_LATER: 'play_later' } },
     '@common/utils/electron': { openUrl: async() => {} },
     '@renderer/core/player': { playNext: () => { throw Error('preview must not use next-track selection') }, playQueueById: index => played.push(queue[index].id) },

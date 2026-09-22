@@ -110,7 +110,7 @@ test('QQ Smartbox fills exact song details, drops mismatches, and is restricted 
   const f = load(({ url, body }) => {
     if (url === 'qq-signed') return fail()
     if (url.includes('smartbox')) return ok({ code: 0, data: { song: { itemlist: [{ mid: 'right' }, { mid: 'wrong' }, { mid: 'right' }] } } })
-    return ok({ code: 0, req: { code: 0, data: { track_info: txSong(body.req.param.song_mid === 'right' ? 'right' : 'different') } } })
+    return ok({ code: 0, ...Object.fromEntries(Object.entries(body).filter(([key]) => key.startsWith('req_')).map(([key, request]) => [key, { code: 0, data: { track_info: txSong(request.param.song_mid === 'right' ? 'right' : 'different') } }])) })
   })
   const sdk = f.sdk('tx')
   const result = await sdk.search('Talullah', 1, 30)
@@ -191,7 +191,7 @@ test('all platforms stop cancellation and rate limiting, and failures have a fin
         return fail()
       })
       await assert.rejects(f.sdk(source).search('private keyword', 1, 30))
-      assert(f.calls.length <= (mode === 'failure' ? 3 : 1), source + ': ' + mode)
+      assert(f.calls.length <= (mode === 'failure' ? (source === 'mg' ? 5 : 3) : 1), source + ': ' + mode)
       assert(!f.logs.join('').includes('private keyword'))
     }
   }
@@ -211,12 +211,12 @@ test('repeated requests share the complete fallback chain and a new search start
   })
   const sdk = f.sdk('kw')
   const first = sdk.search('same', 1, 10)
-  assert.equal(sdk.search('same', 1, 10), first)
+  const second = sdk.search('same', 1, 10)
   release()
-  await first
+  await Promise.all([first, second])
   assert.equal(f.calls.length, 2)
   primaryWorks = true
-  await sdk.search('same', 1, 10)
+  await sdk.search('same', 1, 10, { refresh: true })
   assert.equal(f.calls.length, 3)
   assert(f.calls[2].url.includes('search.kuwo.cn'))
 })
@@ -242,6 +242,7 @@ test('page two requested while page one is loading waits for the selected backup
   const sdk = f.sdk('kw')
   const first = sdk.search('same', 1, 10)
   const second = sdk.search('same', 2, 10)
+  await new Promise(resolve => setImmediate(resolve))
   assert.equal(f.calls.length, 1)
   release()
   await Promise.all([first, second])
@@ -253,7 +254,7 @@ test('Migu cover lookup returns a URL and retries with the same song ID when sea
   const f = load(({ url, form }, count) => {
     assert.equal(new URL(url).pathname, '/MIGUM2.0/v1.0/content/resourceinfo.do')
     assert.equal(form.resourceId, '42')
-    return ok(count === 1 ? { returnCode: 'failed' } : { returnCode: '000000', resource: [{ songId: '42', albumImgs: [{ img: '//example.test/cover.jpg' }] }] })
+    return count === 1 ? { statusCode: 503, body: {} } : ok({ returnCode: '000000', resource: [{ songId: '42', albumImgs: [{ img: '//example.test/cover.jpg' }] }] })
   })
   const pic = f.load('musicSdk/mg/pic.js').default
   assert.equal(await pic.getPic({ songmid: '42', copyrightId: 'copyright-42' }), 'https://example.test/cover.jpg')

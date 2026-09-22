@@ -47,9 +47,10 @@ test('production search renders all five fallback sources and pages Migu correct
     })
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-  let fixture
+  let fixture, stderr = ''
   try {
     fixture = await launch({ rendererPath: path.resolve('dist/index.html') })
+    fixture.app.process().stderr.on('data', data => { stderr = (stderr + data).slice(-5000) })
     const { page, errors, output } = fixture
     const stacks = []
     page.on('pageerror', error => { if (stacks.length < 4) stacks.push(error.stack) })
@@ -94,6 +95,9 @@ test('production search renders all five fallback sources and pages Migu correct
     await fs.writeFile(path.join(output, 'search-fallback.json'), JSON.stringify({ calls, ids }, null, 2))
     await page.screenshot({ path: path.join(output, 'search-fallback.png') })
     t.diagnostic('Five-platform fallback verification: ' + output)
+  } catch (error) {
+    t.diagnostic(JSON.stringify({ stderr, errors: fixture?.errors }))
+    throw error
   } finally {
     if (fixture) await fixture.app.close()
     server.closeAllConnections()

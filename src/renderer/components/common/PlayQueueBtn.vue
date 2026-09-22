@@ -7,15 +7,18 @@
     </button>
     <teleport to="#root">
       <transition name="queue-panel">
-        <div v-if="isShow" :class="$style.popup" :style="popupStyle" @click.stop>
+        <div v-if="isShow" :class="$style.popup" :style="popupStyle" data-play-queue @click.stop>
         <div :class="$style.header">
           <div :class="$style.titleContent">
             <span :class="$style.title">{{ $t('player__play_list') }}</span>
             <span :class="$style.count">{{ playQueueList.length }}</span>
           </div>
+          <div :class="$style.headerActions">
+          <button :class="$style.clearBtn" :disabled="!playQueueList.length" @click="openSaveQueue">{{ $t('player__queue_save') }}</button>
           <button :class="$style.clearBtn" :disabled="!playQueueList.length" :aria-label="$t('player__play_list_clear')" @click="handleClear">
             {{ $t('player__play_list_clear') }}
           </button>
+          </div>
         </div>
         <div :class="$style.listContent">
           <base-virtualized-list
@@ -30,19 +33,23 @@
             content-class="list"
           >
             <div
-              :class="[$style.item, { [$style.active]: isCurrentItem(item) }]"
+              :class="[$style.item, { [$style.active]: isCurrentItem(item, index), [$style.dropBefore]: dropIndex === index && !dropAfter, [$style.dropAfter]: dropIndex === index && dropAfter }]"
+              :data-queue-index="index"
               :aria-label="getMusicName(item) + ' - ' + getMusicSinger(item)"
               @click="handlePlay(index)"
+              @dragover.prevent="dragOver($event, index)"
+              @drop.prevent.stop="drop($event, index)"
             >
+              <button :ref="element => restoreQueueFocus(element, item, index)" :class="$style.dragHandle" draggable="true" :aria-label="$t('player__queue_move')" :title="$t('player__queue_move')" @click.stop @dragstart="dragStart($event, index)" @dragend="dragEnd" @keydown.alt.up.prevent.stop="moveWithKeyboard(index, -1)" @keydown.alt.down.prevent.stop="moveWithKeyboard(index, 1)">⋮⋮</button>
               <div :class="$style.itemNum">
-                <span v-if="isCurrentItem(item)" class="playing-equalizer" :class="{ paused: !isPlay }" aria-hidden="true"><span /><span /><span /></span>
+                <span v-if="isCurrentItem(item, index)" class="playing-equalizer" :class="{ paused: !isPlay }" aria-hidden="true"><span /><span /><span /></span>
                 <span v-else>{{ index + 1 }}</span>
               </div>
               <div :class="$style.itemImg">
-                <svg v-if="!getCover(item) || imgErrorSet.has(item.key)" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
+                <svg v-if="imgErrorSet.has(item.key)" version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" width="60%" height="60%" viewBox="0 0 24 24" space="preserve">
                   <use xlink:href="#icon-music" />
                 </svg>
-                <common-cover-image v-else :src="getCover(item)" :size="rowHeight" :alt="getMusicName(item)" @error="handleImgError(item.key)" />
+                <common-cover-image v-else :music-info="getMusicInfo(item)" :size="rowHeight" :alt="getMusicName(item)" @error="handleImgError(item.key)" />
               </div>
               <div :class="$style.itemInfo">
                 <div :class="$style.itemName">{{ getMusicName(item) }}</div>
@@ -73,15 +80,15 @@
         </div>
       </transition>
     </teleport>
+    <common-save-queue-modal v-model:show="showSaveQueue" :list="saveQueueItems" />
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from '@common/utils/vueTools'
 import { windowFontSize } from '@renderer/store'
-import { isPlay, playQueueList, playMusicInfo } from '@renderer/store/player/state'
-import { removePlayQueue, clearPlayQueue, updatePlayIndex, setPlayMusicInfo } from '@renderer/store/player/action'
-import { getMusicCoverUrl } from '@renderer/utils/musicCover'
+import { isPlay, playQueueList, playQueueRevision, playMusicInfo, playInfo } from '@renderer/store/player/state'
+import { removePlayQueue, movePlayQueue, clearPlayQueue, updatePlayIndex, setPlayMusicInfo } from '@renderer/store/player/action'
 import { playQueueById, stop } from '@renderer/core/player'
 import useEntityDetailNavigation from '@renderer/utils/compositions/useEntityDetailNavigation'
 
@@ -95,6 +102,78 @@ const headerHeight = computed(() => Math.ceil(uiFontSize.value * 3))
 const dom_btn = ref(null)
 const listRef = ref(null)
 const isShow = ref(false)
+const showSaveQueue = ref(false)
+const saveQueueItems = ref([])
+const openSaveQueue = () => {
+  saveQueueItems.value = playQueueList.map(item => getMusicInfo(item))
+  handleDocumentClick()
+  showSaveQueue.value = true
+}
+const dropIndex = ref(-1)
+const dropAfter = ref(false)
+let draggedItem = null
+let dragRevision = -1
+let scrollFrame = 0
+let pointerY = 0
+const dragEnd = () => {
+  draggedItem = null
+  dropIndex.value = -1
+  cancelAnimationFrame(scrollFrame)
+  scrollFrame = 0
+  document.removeEventListener('dragend', dragEnd)
+  document.removeEventListener('drop', dragEnd)
+  window.removeEventListener('blur', dragEnd)
+}
+const dragStart = (event, index) => {
+  draggedItem = playQueueList[index]
+  dragRevision = playQueueRevision.value
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', String(index))
+  document.addEventListener('dragend', dragEnd)
+  document.addEventListener('drop', dragEnd)
+  window.addEventListener('blur', dragEnd)
+}
+const dragOver = (event, index) => {
+  if (!draggedItem || dragRevision !== playQueueRevision.value) { dragEnd(); return }
+  dropIndex.value = index
+  const targetRect = event.currentTarget.getBoundingClientRect()
+  dropAfter.value = event.clientY > targetRect.top + targetRect.height / 2
+  pointerY = event.clientY
+  event.dataTransfer.dropEffect = 'move'
+  if (scrollFrame) return
+  const scroll = () => {
+    const el = listRef.value?.$el
+    if (!draggedItem || !el) return
+    const rect = el.getBoundingClientRect()
+    if (pointerY >= rect.top && pointerY < rect.top + 35) el.scrollTop -= 8
+    else if (pointerY <= rect.bottom && pointerY > rect.bottom - 35) el.scrollTop += 8
+    scrollFrame = requestAnimationFrame(scroll)
+  }
+  scrollFrame = requestAnimationFrame(scroll)
+}
+const drop = (event, index) => {
+  if (draggedItem && dragRevision === playQueueRevision.value) {
+    const from = playQueueList.indexOf(draggedItem)
+    const rect = event.currentTarget.getBoundingClientRect()
+    const after = event.clientY > rect.top + rect.height / 2
+    const to = Math.max(0, Math.min(playQueueList.length - 1, index + Number(after) - Number(from < index + Number(after))))
+    movePlayQueue(from, to)
+  }
+  dragEnd()
+}
+let pendingFocus = null
+const restoreQueueFocus = (element, item, index) => {
+  // Template refs run after the virtual list has committed its recycled rows.
+  if (!element || pendingFocus !== item.key || queueKeys.get(playQueueList[index]) !== item.key) return
+  element.focus()
+  pendingFocus = null
+}
+const moveWithKeyboard = (index, direction) => {
+  if (index + direction < 0 || index + direction >= playQueueList.length) return
+  const item = playQueueList[index]
+  pendingFocus = queueKeys.get(item)
+  movePlayQueue(index, index + direction)
+}
 const { canOpenEntity, getSingerNames, openEntityDetail } = useEntityDetailNavigation()
 
 const popupStyle = reactive({
@@ -104,11 +183,12 @@ const popupStyle = reactive({
   height: '480px',
 })
 
-const queueList = computed(() => playQueueList.map((item, index) => ({
-  key: `${index}_${item.musicInfo.id}`,
-  musicInfo: item.musicInfo,
-  listId: item.listId,
-})))
+const queueKeys = new WeakMap()
+let queueKey = 0
+const queueList = computed(() => playQueueList.map(item => {
+  if (!queueKeys.has(item)) queueKeys.set(item, ++queueKey)
+  return { key: queueKeys.get(item), musicInfo: item.musicInfo, listId: item.listId }
+}))
 
 const getMusicInfo = (item) => {
   const info = item.musicInfo
@@ -116,29 +196,18 @@ const getMusicInfo = (item) => {
 }
 const getMusicName = (item) => getMusicInfo(item).name
 const getMusicSinger = (item) => getMusicInfo(item).singer
-const isCurrentItem = (item) => playMusicInfo.musicInfo?.id == item.musicInfo.id
+const isCurrentItem = (item, index) => playInfo.playerPlayIndex === index && playMusicInfo.musicInfo?.id == item.musicInfo.id
 
 const imgErrorSet = reactive(new Set())
-const coverMap = reactive(new Map())
 
 const handleImgError = (key) => {
   imgErrorSet.add(key)
 }
 
-const getCover = (item) => {
-  const info = getMusicInfo(item)
-  if (info.img || info.meta?.picUrl) return info.img || info.meta?.picUrl
-  const key = `${item.musicInfo.source}__${item.musicInfo.id}`
-  if (coverMap.has(key)) return coverMap.get(key)
-  getMusicCoverUrl(item.musicInfo).then(url => {
-    if (url) coverMap.set(key, url)
-  })
-  return ''
-}
-
 const currentQueueIndex = () => {
   const id = playMusicInfo.musicInfo?.id
   if (!id) return -1
+  if (playQueueList[playInfo.playerPlayIndex]?.musicInfo.id === id) return playInfo.playerPlayIndex
   return playQueueList.findIndex(item => item.musicInfo.id == id)
 }
 
@@ -183,6 +252,8 @@ watch([() => playQueueList.length, rowHeight], () => {
 })
 
 const handleDocumentClick = () => {
+  pendingFocus = null
+  dragEnd()
   isShow.value = false
   window.removeEventListener('resize', updatePosition)
   document.removeEventListener('click', handleDocumentClick)
@@ -218,7 +289,6 @@ const handlePlay = (index) => {
 
 const handleRemove = (index) => {
   removePlayQueue(index)
-  updatePlayIndex()
 }
 
 const handleClear = () => {
@@ -226,13 +296,12 @@ const handleClear = () => {
   updatePlayIndex()
   if (hasCurrent) {
     stop()
-    setTimeout(() => {
-      setPlayMusicInfo(null, null)
-    })
+    setPlayMusicInfo(null, null)
   }
 }
 
 onBeforeUnmount(() => {
+  dragEnd()
   window.removeEventListener('resize', updatePosition)
   document.removeEventListener('click', handleDocumentClick)
   document.removeEventListener('keydown', handleDocumentKeydown)
@@ -318,6 +387,21 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border-bottom: var(--color-list-header-border-bottom);
 }
+
+.headerActions { display: flex; flex: none; }
+.dragHandle {
+  -webkit-user-drag: element;
+  flex: none;
+  width: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-font-label);
+  cursor: grab;
+  &:focus-visible { box-shadow: var(--focus-ring); }
+}
+.item.dropBefore { box-shadow: inset 0 2px var(--color-primary); }
+.item.dropAfter { box-shadow: inset 0 -2px var(--color-primary); }
 
 .titleContent {
   min-width: 0;

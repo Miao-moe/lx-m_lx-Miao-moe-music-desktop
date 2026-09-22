@@ -1,3 +1,4 @@
+import { formatError } from '@common/utils/errorMessage'
 // import { getSongListSetting } from '@renderer/utils/data'
 import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
 import musicSdk from '@renderer/utils/musicSdk'
@@ -131,7 +132,7 @@ export const getAndSetList = async(source: LX.OnlineSource, tabId: string, sortI
   }).catch((error: any) => {
     if (key != listInfo.key) return
     clearList()
-    listInfo.noItemLabel = window.i18n.t('list__load_failed')
+    listInfo.noItemLabel = formatError(error, window.i18n.t('list__load_failed'), 'LIST_LOAD_FAILED')
     console.log(error)
     throw error
   })
@@ -216,7 +217,7 @@ export const getAndSetListDetail = async(id: string, source: LX.OnlineSource, pa
   }).catch((error: any) => {
     if (key != listDetailInfo.key) return
     clearListDetail()
-    listDetailInfo.noItemLabel = window.i18n.t('list__load_failed')
+    listDetailInfo.noItemLabel = formatError(error, window.i18n.t('list__load_failed'), 'LIST_LOAD_FAILED')
     console.log(error)
     throw error
   })

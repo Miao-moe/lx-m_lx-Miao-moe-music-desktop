@@ -15,7 +15,15 @@ const makeWav = () => {
   buffer.writeUInt32LE(16, 16); buffer.writeUInt16LE(1, 20); buffer.writeUInt16LE(1, 22)
   buffer.writeUInt32LE(rate, 24); buffer.writeUInt32LE(rate * 2, 28); buffer.writeUInt16LE(2, 32); buffer.writeUInt16LE(16, 34)
   buffer.write('data', 36); buffer.writeUInt32LE(buffer.length - 44, 40)
-  return buffer
+  // The fixture deliberately supplies cached artwork, so give the WAV a real
+  // identifying tag. Untagged files must ignore online metadata (separate tests).
+  const title = Buffer.from('Mini player fixture\0')
+  const tags = Buffer.alloc(20 + title.length + title.length % 2)
+  tags.write('LIST'); tags.writeUInt32LE(tags.length - 8, 4); tags.write('INFOINAM', 8)
+  tags.writeUInt32LE(title.length, 16); title.copy(tags, 20)
+  const tagged = Buffer.concat([buffer, tags])
+  tagged.writeUInt32LE(tagged.length - 8, 4)
+  return tagged
 }
 
 test('mini player replaces desktop lyrics and controls the real player in a separate window', { timeout: 150000 }, async t => {
@@ -448,6 +456,8 @@ test('mini player replaces desktop lyrics and controls the real player in a sepa
       const songIndex = songs.findIndex(song => song.id === songId)
       assert.notEqual(songIndex, -1)
       await (await button('mini_player__pin')).click()
+      // The native window updates after the setting has been durably saved.
+      await page.waitForFunction(() => window.lxData.appSetting['desktopLyric.isAlwaysOnTop'])
       const window = await app.browserWindow(mini)
       assert.equal(await window.evaluate(window => window.isAlwaysOnTop()), true)
       await options()

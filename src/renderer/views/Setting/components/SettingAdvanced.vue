@@ -42,6 +42,13 @@ dd
   common-setting-reveal(:show="appSetting['ui.ambientBackground']" depends="setting_advanced_background_enabled")
     .gap-top
       base-checkbox(
+        id="setting_advanced_background_only_play_detail"
+        :model-value="appSetting['ui.ambientBackgroundOnlyPlayDetail']"
+        :label="$t('setting__advanced_background_only_play_detail')"
+        @update:model-value="updateSetting({ 'ui.ambientBackgroundOnlyPlayDetail': $event })"
+      )
+    .gap-top
+      base-checkbox(
         id="setting_advanced_background_auto_contrast"
         :model-value="appSetting['ui.ambientBackgroundAutoContrast']"
         :label="$t('setting__advanced_background_auto_contrast')"

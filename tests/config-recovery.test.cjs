@@ -27,12 +27,12 @@ function fixture(t, contents) {
 }
 
 for (const contents of ['null', '[]', '42', 'true', '"text"', '{invalid']) {
-  test(`invalid configuration ${contents} is backed up and replaced by a usable cached store`, t => {
+  test(`invalid configuration ${contents} is backed up and replaced by a usable cached store`, async t => {
     const f = fixture(t, contents)
     const store = f.default('settings')
     assert.equal(fs.readFileSync(f.filename + '.bak', 'utf8'), contents)
     assert.equal(store.has('volume'), false)
-    store.set('volume', 0.5)
+    await store.set('volume', 0.5)
     assert.equal(f.default('settings'), store)
     assert.deepEqual(JSON.parse(fs.readFileSync(f.filename, 'utf8')), { volume: 0.5 })
     assert.equal(f.alerts.length, 1)

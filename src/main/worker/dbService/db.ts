@@ -3,6 +3,7 @@ import path from 'path'
 import tables, { DB_VERSION } from './tables'
 import verifyDB from './verifyDB'
 import migrateData from './migrate'
+import { cacheStatements } from './statementCache'
 
 let db: Database.Database
 
@@ -56,7 +57,11 @@ export const init = (lxDataPath: string): boolean | null => {
   }
 
   // https://www.sqlite.org/lang_vacuum.html
-  const cleanTrash = () => db.prepare('DELETE FROM list_trash WHERE expires_at <= ?').run(Date.now())
+  const cleanTrash = () => {
+    // A manual restore may await file writes inside a DB transaction.
+    if (!db.inTransaction) db.prepare('DELETE FROM list_trash WHERE expires_at <= ?').run(Date.now())
+  }
+  cacheStatements(db)
   cleanTrash()
   const trashTimer = setInterval(cleanTrash, 60 * 60 * 1000)
   trashTimer.unref()

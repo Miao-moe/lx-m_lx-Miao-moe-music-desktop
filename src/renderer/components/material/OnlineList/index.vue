@@ -1,5 +1,5 @@
 <template>
-  <common-list-loading :load-key="list" :loading="isLoading" :class="$style.songList" :style="columnLayout.style">
+  <common-list-loading :load-key="list" :loading="isLoading" :streaming="streaming" :class="$style.songList" :style="columnLayout.style">
     <!-- <transition enter-active-class="animated-fast fadeIn" leave-active-class="animated-fast fadeOut"> -->
     <div :class="$style.list">
       <common-music-list-header :layout="columnLayout" />
@@ -21,7 +21,7 @@
                 <div class="list-item-cell name" style="flex: 0 0 var(--music-column-name);" data-music-cell="name">
                   <span class="select name" :aria-label="item.name">{{ item.name }}</span>
                   <span v-if="qualityBadgeLabel(item)" class="no-select badge badge-theme-primary">{{ $t(qualityBadgeLabel(item)) }}</span>
-                  <span v-if="sourceTag" class="no-select badge badge-theme-tertiary">{{ item.source }}</span>
+                  <span v-if="sourceTag" class="no-select badge badge-theme-tertiary">{{ sourceLabels[item.id] || item.source }}</span>
                 </div>
                 <div class="list-item-cell" style="flex: 0 0 var(--music-column-singer);" data-music-cell="singer">
                   <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
@@ -69,7 +69,7 @@
                 <div class="list-item-cell name" style="flex: 0 0 var(--music-column-name);" data-music-cell="name">
                   <span class="select name" :aria-label="item.name">{{ item.name }}</span>
                   <span v-if="qualityBadgeLabel(item)" class="no-select badge badge-theme-primary">{{ $t(qualityBadgeLabel(item)) }}</span>
-                  <span v-if="sourceTag" class="no-select badge badge-theme-tertiary">{{ item.source }}</span>
+                  <span v-if="sourceTag" class="no-select badge badge-theme-tertiary">{{ sourceLabels[item.id] || item.source }}</span>
                 </div>
                 <div class="list-item-cell" style="flex: 0 0 var(--music-column-singer);" data-music-cell="singer">
                   <span v-if="canOpenEntity(item) && getSingerNames(item).length" :class="$style.entityLinks" class="select" :aria-label="item.singer">
@@ -172,6 +172,8 @@ export default {
       type: Boolean,
       default: false,
     },
+    streaming: { type: Boolean, default: false },
+    sourceLabels: { type: Object, default: () => ({}) },
     checkApiSource: {
       type: Boolean,
       default: false,
@@ -185,9 +187,9 @@ export default {
     const rightClickSelectedIndex = ref(-1)
     const dom_listContent = ref(null)
     const listRef = ref(null)
-    const isMessage = (text, key) => Object.values(window.i18n.messages).some(messages => messages[key] == text)
+    const isMessage = (text, key) => Object.values(window.i18n.messages).some(messages => messages[key] == text || (key === 'list__load_failed' && text.startsWith(messages[key] + '\n')))
     const isLoading = computed(() => isMessage(props.noItem, 'list__loading'))
-    const immediate = computed(() => appSetting['list.loadingMode'] === 'immediate')
+    const immediate = computed(() => props.streaming || appSetting['list.loadingMode'] === 'immediate')
 
     const {
       selectedList,

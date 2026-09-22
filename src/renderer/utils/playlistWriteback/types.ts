@@ -1,3 +1,5 @@
+import type { SyncDiff } from '@common/syncDiff'
+
 export type WritebackSource = 'wy' | 'tx' | 'kg' | 'mg'
 
 export interface Track {
@@ -43,8 +45,8 @@ export interface RemoteSession {
 export type ErrorCode = 'login' | 'owner' | 'unsupported' | 'incomplete' | 'identity' | 'conflict' | 'verify' | 'pending' | 'storage' | 'failed'
 
 export class WritebackError extends Error {
-  constructor(public readonly code: ErrorCode) {
-    super(code)
+  constructor(public readonly code: ErrorCode, cause?: unknown) {
+    super(code, { cause })
   }
 }
 
@@ -69,4 +71,6 @@ export interface Status {
   ignored?: number
   lastSuccess?: number
   capabilities?: Capabilities
+  diagnostic?: string
+  diff?: { local: SyncDiff, remote: SyncDiff }
 }

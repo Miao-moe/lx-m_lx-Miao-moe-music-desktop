@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
-import tables, { DB_VERSION } from './tables'
+import tables, { DB_VERSION, QUERY_INDEXES } from './tables'
+import { libraryTables } from './libraryTables'
 
 // const migrateV1 = (db: Database.Database) => {
 //   const sql = `
@@ -56,6 +57,13 @@ const migrateV2 = (db: Database.Database) => {
   ensureMusicUrlIndexes(db)
 }
 
+const ensureQueryIndexes = (db: Database.Database) => {
+  const exists = db.prepare('SELECT 1 FROM sqlite_master WHERE type=\'index\' AND name=?')
+  for (const name of Object.keys(QUERY_INDEXES) as Array<keyof typeof QUERY_INDEXES>) {
+    if (!exists.get(name)) db.exec(tables.get(name)!)
+  }
+}
+
 export default (db: Database.Database) => {
   // PRAGMA user_version = x
   // console.log(db.prepare('PRAGMA user_version').get().user_version)
@@ -64,14 +72,50 @@ export default (db: Database.Database) => {
   const version = versionInfo?.field_value
   if (version == DB_VERSION) {
     ensureMusicUrlIndexes(db)
+    ensureQueryIndexes(db)
     return
   }
-  if (version != '1' && version != '2' && version != '3') return
+  if (!['1', '2', '3', '4', '5', '6'].includes(version ?? '')) return
 
   db.transaction(() => {
     if (version == '1') migrateV1(db)
     if (version == '1' || version == '2') migrateV2(db)
-    for (const name of ['list_trash', 'index_list_trash_expires_at'] as const) db.exec(tables.get(name)!)
+    if (Number(version) < 4) {
+      for (const name of ['list_trash', 'index_list_trash_expires_at'] as const) db.exec(tables.get(name)!)
+    }
+    if (Number(version) < 5) {
+      const columns = db.prepare('PRAGMA main.table_info(download_list)').all() as Array<{ name: string }>
+      // Keep the canonical CREATE statement used by verifyDB, including column
+      // order and quoting. ALTER ADD COLUMN alone produces a different schema.
+      const fields = '"id", "isComplate", "status", "statusText", "progress_downloaded", "progress_total", "url", "quality", "ext", "fileName", "filePath", "musicInfo", "position"'
+      db.exec('ALTER TABLE "download_list" RENAME TO "download_list_v4"')
+      db.exec(tables.get('download_list')!)
+      db.exec(`INSERT INTO "download_list" (${fields}, "taskOptions") SELECT ${fields}, ${columns.some(column => column.name === 'taskOptions') ? '"taskOptions"' : "'{}'"} FROM "download_list_v4"`)
+      db.exec('DROP TABLE "download_list_v4"')
+    }
+    const trashColumns = db.prepare('PRAGMA main.table_info(list_trash)').all() as Array<{ name: string }>
+    if (!trashColumns.some(column => column.name === 'summary')) {
+      db.exec('ALTER TABLE list_trash RENAME TO list_trash_v5')
+      db.exec(tables.get('list_trash')!)
+      db.exec('INSERT INTO list_trash (id, deleted_at, expires_at, payload) SELECT id, deleted_at, expires_at, payload FROM list_trash_v5')
+      db.exec('DROP TABLE list_trash_v5')
+      db.exec(tables.get('index_list_trash_expires_at')!)
+    }
+    const updateSummary = db.prepare('UPDATE list_trash SET summary=? WHERE id=?')
+    while (true) {
+      const rows = db.prepare("SELECT id,payload FROM list_trash WHERE summary='{}' LIMIT 50").all() as Array<{ id: string, payload: string }>
+      if (!rows.length) break
+      for (const row of rows) {
+        try {
+          const data = JSON.parse(row.payload)
+          updateSummary.run(JSON.stringify({ kind: data.kind, listId: data.list.id, listName: data.list.name, songName: data.songs[0]?.musicInfo.name ?? '', count: data.songs.length }), row.id)
+        } catch { updateSummary.run(JSON.stringify({ kind: 'songs', listId: '', listName: '损坏的快照', songName: '', count: 0 }), row.id) }
+      }
+    }
+    ensureQueryIndexes(db)
+    for (const [name, sql] of libraryTables) if (!db.prepare('SELECT 1 FROM sqlite_master WHERE name=?').get(name)) db.exec(sql)
+    // Older imports have no trustworthy addition date. Zero means unknown.
+    db.exec('INSERT OR IGNORE INTO library_track (id,added_at) SELECT DISTINCT id,0 FROM my_list_music_info')
     db.prepare('UPDATE "main"."db_info" SET "field_value"=@value WHERE "field_name"=@name').run({ name: 'version', value: DB_VERSION })
   })()
 }

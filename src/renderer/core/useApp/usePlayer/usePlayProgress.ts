@@ -1,68 +1,62 @@
 import { onBeforeUnmount, watch } from '@common/utils/vueTools'
 import { formatPlayTime2, getRandom } from '@common/utils/common'
-import { throttle } from '@common/utils'
-import { savePlayInfo } from '@renderer/utils/ipc'
-import { onTimeupdate, getCurrentTime, getDuration, setCurrentTime, onVisibilityChange } from '@renderer/plugins/player'
+import { onTimeupdate, getCurrentTime, getDuration, getAudioElement, setCurrentTime, onVisibilityChange } from '@renderer/plugins/player'
 import { playProgress, setNowPlayTime, setMaxplayTime } from '@renderer/store/player/playProgress'
-import { musicInfo, playMusicInfo, playInfo } from '@renderer/store/player/state'
+import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
 // import { getList } from '@renderer/store/utils'
 import { appSetting } from '@renderer/store/setting'
 import { playNext } from '@renderer/core/player'
 import { updateListMusics } from '@renderer/store/list/action'
-
-const delaySavePlayInfo = throttle(savePlayInfo, 2000)
+import { getBufferRecoveryPosition } from '@renderer/core/player/bufferRecovery'
+import { playbackSession } from '@renderer/core/player/playbackSession'
 
 export default () => {
   let restorePlayTime = 0
   const mediaBuffer: {
     timeout: NodeJS.Timeout | null
-    playTime: number
+    playTime: number | null
+    attempts: number
   } = {
     timeout: null,
-    playTime: 0,
+    playTime: null,
+    attempts: 0,
   }
 
   // const updateMusicInfo = useCommit('list', 'updateMusicInfo')
 
   const startBuffering = () => {
-    console.log('start t')
-    if (mediaBuffer.timeout) return
+    if (mediaBuffer.timeout != null || !playMusicInfo.musicInfo || !playbackSession.canAdvance()) return
+    const track = playMusicInfo.musicInfo
     mediaBuffer.timeout = setTimeout(() => {
       mediaBuffer.timeout = null
-      if (window.lx.isPlayedStop) return
+      if (!playbackSession.canAdvance() || track !== playMusicInfo.musicInfo) return
       const currentTime = getCurrentTime()
-
-      mediaBuffer.playTime ||= currentTime
-      let skipTime = currentTime + getRandom(3, 6)
-      if (skipTime > playProgress.maxPlayTime) skipTime = (playProgress.maxPlayTime - currentTime) / 2
-      if (skipTime - mediaBuffer.playTime < 1 || playProgress.maxPlayTime - skipTime < 1) {
-        mediaBuffer.playTime = 0
+      mediaBuffer.playTime ??= currentTime
+      if (++mediaBuffer.attempts >= 10) {
+        clearBufferTimeout()
         if (appSetting['player.autoSkipOnError']) {
-          console.warn('buffering end')
           void playNext(true)
         }
         return
       }
+      const skipTime = getBufferRecoveryPosition(currentTime, getDuration() || playProgress.maxPlayTime, getRandom(3, 6))
       startBuffering()
-      setCurrentTime(skipTime)
-      console.log(mediaBuffer.playTime)
-      console.log(currentTime)
+      if (skipTime != null) setCurrentTime(skipTime)
     }, 3000)
   }
   const clearBufferTimeout = () => {
-    console.log('clear t')
-    if (!mediaBuffer.timeout) return
-    clearTimeout(mediaBuffer.timeout)
+    if (mediaBuffer.timeout) clearTimeout(mediaBuffer.timeout)
     mediaBuffer.timeout = null
-    mediaBuffer.playTime = 0
+    mediaBuffer.playTime = null
+    mediaBuffer.attempts = 0
   }
 
   const setProgress = (time: number, maxTime?: number) => {
     if (!musicInfo.id) return
     if (maxTime != null) setMaxplayTime(maxTime)
     console.log('setProgress', time, maxTime)
-    if (time > 0) restorePlayTime = time
-    if (mediaBuffer.playTime) {
+    restorePlayTime = time
+    if (mediaBuffer.timeout != null || mediaBuffer.playTime != null) {
       clearBufferTimeout()
       mediaBuffer.playTime = time
       startBuffering()
@@ -74,16 +68,21 @@ export default () => {
   }
 
   const handlePause = () => {
-    clearBufferTimeout()
+    // `waiting` also emits the UI's pause event, although the media element is
+    // still trying to play. Keep its origin and retry budget across those events.
+    if (getAudioElement().paused || !playbackSession.canAdvance()) clearBufferTimeout()
   }
 
   const handleStop = () => {
+    clearBufferTimeout()
+    restorePlayTime = 0
     setNowPlayTime(0)
     setMaxplayTime(0)
   }
 
   const handleError = () => {
-    restorePlayTime ||= getCurrentTime() // 记录出错的播放时间
+    restorePlayTime ||= mediaBuffer.playTime ?? getCurrentTime() // 记录出错前的播放时间
+    clearBufferTimeout()
     console.log('handleError')
   }
 
@@ -106,23 +105,16 @@ export default () => {
   }
 
   const handlePlaying = () => {
-    console.log('handlePlaying', mediaBuffer.playTime, restorePlayTime)
+    const resumeTime = restorePlayTime || mediaBuffer.playTime
     clearBufferTimeout()
-    if (mediaBuffer.playTime) {
-      let playTime = mediaBuffer.playTime
-      mediaBuffer.playTime = 0
-      setCurrentTime(playTime)
-    } else if (restorePlayTime) {
-      setCurrentTime(restorePlayTime)
-      restorePlayTime = 0
-    }
+    restorePlayTime = 0
+    if (resumeTime != null) setCurrentTime(resumeTime)
   }
   const handleWating = () => {
     startBuffering()
   }
 
   const handleEmpied = () => {
-    mediaBuffer.playTime = 0
     clearBufferTimeout()
   }
 
@@ -130,37 +122,14 @@ export default () => {
     // restorePlayTime = playProgress.nowPlayTime
     setCurrentTime(restorePlayTime = playProgress.nowPlayTime)
     // setMaxplayTime(playProgress.maxPlayTime)
-    handlePause()
-    if (!playMusicInfo.isTempPlay && playMusicInfo.listId) {
-      delaySavePlayInfo({
-        time: playProgress.nowPlayTime,
-        maxTime: playProgress.maxPlayTime,
-        listId: playMusicInfo.listId,
-        index: playInfo.playIndex,
-      })
-    }
+    clearBufferTimeout()
   }
 
   watch(() => playProgress.nowPlayTime, (newValue, oldValue) => {
     if (Math.abs(newValue - oldValue) > 2) window.app_event.activePlayProgressTransition()
-    if (appSetting['player.isSavePlayTime'] && !playMusicInfo.isTempPlay) {
-      delaySavePlayInfo({
-        time: newValue,
-        maxTime: playProgress.maxPlayTime,
-        listId: playMusicInfo.listId as string,
-        index: playInfo.playIndex,
-      })
-    }
   })
-  watch(() => playProgress.maxPlayTime, maxPlayTime => {
-    if (!playMusicInfo.isTempPlay) {
-      delaySavePlayInfo({
-        time: playProgress.nowPlayTime,
-        maxTime: maxPlayTime,
-        listId: playMusicInfo.listId as string,
-        index: playInfo.playIndex,
-      })
-    }
+  const unsubscribe = playbackSession.subscribe(reason => {
+    if (reason !== 'queue') clearBufferTimeout()
   })
 
   // window.app_event.on('play', handlePlay)
@@ -191,6 +160,8 @@ export default () => {
   })
 
   onBeforeUnmount(() => {
+    unsubscribe()
+    clearBufferTimeout()
     rOnTimeupdate()
     rVisibilityChange()
     // window.app_event.off('play', handlePlay)

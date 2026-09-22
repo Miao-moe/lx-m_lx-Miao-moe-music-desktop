@@ -5,6 +5,7 @@ interface EditorState {
   tags: Record<string, string>
   busy: boolean
   error: string
+  errorDetail: string
   saved: boolean
   downloadId: string
   active: boolean
@@ -16,6 +17,7 @@ export const editor = reactive<EditorState>({
   tags: {},
   busy: false,
   error: '',
+  errorDetail: '',
   saved: false,
   downloadId: '',
   active: true,

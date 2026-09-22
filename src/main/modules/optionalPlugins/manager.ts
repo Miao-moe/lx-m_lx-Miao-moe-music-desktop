@@ -1,7 +1,8 @@
+import { errorForTransport } from '@common/utils/errorMessage'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { isPluginId, OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, isPluginApiSupported, pluginPackages, type PluginPackage, type PluginPackageFormat, type PluginDisplayInfo, type PluginCatalog, type PluginCatalogEntry, type PluginId, type PluginManifest, type PluginStoreSnapshot, type PluginTransferErrorCode, type PluginSourceManifest } from '@common/optionalPlugins'
+import { isPluginId, OFFICIAL_PLUGIN_ROOT, PLUGIN_CATALOG_FILE, isPluginApiSupported, pluginPackages, type PluginPackage, type PluginPackageFormat, type PluginDisplayInfo, type PluginCatalog, type PluginCatalogEntry, type PluginId, type PluginManifest, type PluginStoreSnapshot, type PluginTransferErrorCode, type PluginSourceManifest, type PluginLoadFailure } from '@common/optionalPlugins'
 import { MAX_SOURCE_BYTES, MAX_SOURCE_FILES, MAX_SOURCE_UNPACKED, validPath, packSource, unpackSource } from '@common/pluginSource'
 import { MAX_PACKAGE_BYTES, MAX_UNPACKED_BYTES, packPlugin, unpackPlugin } from '@common/pluginPackage'
 import { isBuiltinPlugin } from '@common/builtinPlugins'
@@ -11,7 +12,12 @@ const digest = (data: Buffer) => createHash('sha256').update(data).digest('hex')
 const validVersion = (value: unknown): value is string => typeof value == 'string' && /^\d{1,8}\.\d{1,8}\.\d{1,8}$/.test(value)
 const validHash = (value: unknown): value is string => typeof value == 'string' && /^[a-f0-9]{64}$/.test(value)
 const validFile = (value: unknown): value is string => typeof value == 'string' && value.length < 180 && value.split('/').every(part => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part) && !part.endsWith('.') && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))
-type Registry = Partial<Record<PluginId, { directory: string, manifestHash: string, source?: 'official' | 'local', format?: PluginPackageFormat, sourceManifestHash?: string }>>
+interface PluginVersionRecord { directory: string, manifestHash: string, version?: string, source?: 'official' | 'local', format?: PluginPackageFormat, sourceManifestHash?: string }
+interface PluginRecord extends PluginVersionRecord {
+  enabled?: boolean
+  loadFailure?: PluginLoadFailure
+}
+type Registry = Partial<Record<PluginId, PluginRecord>>
 type FetchBinary = (url: string, maxBytes: number) => Promise<Buffer>
 
 export class PluginTransferError extends Error {
@@ -123,8 +129,30 @@ export class PluginManager {
     if ((await fs.lstat(this.root)).isSymbolicLink()) throw new Error('Plugin directory cannot be a symbolic link')
   }
 
+  private registryMigration?: Promise<void>
+  private async migrateLegacyRegistry() {
+    let registry: Registry
+    try { registry = JSON.parse(await fs.readFile(this.child('installed.json'), 'utf8')) } catch (error: any) { if (error.code === 'ENOENT') return; throw error }
+    if (!registry || typeof registry !== 'object' || Array.isArray(registry)) throw new Error('Invalid plugin registry')
+    let changed = false
+    for (const [id, value] of Object.entries(registry)) {
+      if (!value || typeof value !== 'object' || !isPluginId(id)) continue
+      const record = value as PluginRecord & { previous?: PluginVersionRecord, pending?: boolean }
+      if (record.previous) {
+        if (record.previous.directory !== record.directory) await this.removeDirectory(id, record.previous.directory)
+        delete record.previous
+        changed = true
+      }
+      if ('pending' in record) { delete record.pending; changed = true }
+      if (record.loadFailure && 'restoredVersion' in record.loadFailure) { delete record.loadFailure; changed = true }
+    }
+    if (changed) await this.saveRegistry(registry)
+  }
+
   private async readRegistry(): Promise<Registry> {
     await this.prepare()
+    this.registryMigration ??= this.migrateLegacyRegistry().catch(error => { this.registryMigration = undefined; throw error })
+    await this.registryMigration
     try {
       const registry = JSON.parse(await fs.readFile(this.child('installed.json'), 'utf8')) as Registry
       if (!registry || typeof registry !== 'object' || Array.isArray(registry)) throw new Error('Invalid plugin registry')
@@ -186,6 +214,15 @@ export class PluginManager {
     return task
   }
 
+  async withBackupRegistry<T>(operation: (registry: Registry) => Promise<T>): Promise<T> {
+    return this.exclusive(async() => operation(await this.readRegistry()))
+  }
+
+  async backupRestored() {
+    this.revision++
+    return this.snapshot()
+  }
+
   private async readInstalled(id: PluginId, record: NonNullable<Registry[string]>) {
     const directory = this.installedDirectory(id, record.directory)
     if (!(await fs.lstat(directory)).isDirectory()) throw new Error('Invalid installed plugin directory')
@@ -224,15 +261,16 @@ export class PluginManager {
     await this.loadCatalogCache()
     const revision = this.revision
     const registry = await this.readRegistry()
-    const snapshot: PluginStoreSnapshot = { revision, catalog: this.catalog, installed: {}, errors: {}, sources: {}, catalogError: this.catalogError }
+    const snapshot: PluginStoreSnapshot = { revision, catalog: this.catalog, installed: {}, errors: {}, sources: {}, loadFailures: {}, catalogError: this.catalogError }
     for (const [id, record] of Object.entries(registry)) {
       if (!isPluginId(id) || isBuiltinPlugin(id) || !record) continue
       snapshot.sources![id] = record.source === 'local' ? 'local' : 'official'
+      if (record.loadFailure) snapshot.loadFailures![id] = record.loadFailure
       try {
         const { manifest, directory, source, format } = await this.readInstalled(id, record)
-        snapshot.installed[id] = { manifest, directory, source, format }
+        snapshot.installed[id] = { manifest, directory, source, format, enabled: record.enabled !== false }
       } catch (error: any) {
-        snapshot.errors[id] = error.message
+        snapshot.errors[id] = errorForTransport(error).message
       }
     }
     return revision === this.revision ? snapshot : this.snapshot()
@@ -246,7 +284,7 @@ export class PluginManager {
       this.catalogError = null
       await this.saveCatalogCache(catalog).catch((error: Error) => { console.error('Plugin catalog cache could not be saved:', error.message) })
     } catch (error: any) {
-      this.catalogError = error.message
+      this.catalogError = errorForTransport(error).message
     }
     this.revision++
     return this.snapshot()
@@ -302,11 +340,19 @@ export class PluginManager {
         sourceManifestHash = digest(sourceManifestBytes)
       }
       await fs.rename(temporary, this.child(directoryName))
-      registry[id] = { directory: directoryName, manifestHash: digest(manifestBytes), source, format: archive.source ? 'zip' : 'lxplugin', ...(sourceManifestHash ? { sourceManifestHash } : {}) }
+      registry[id] = {
+        directory: directoryName,
+        manifestHash: digest(manifestBytes),
+        version: archive.manifest.version,
+        source,
+        format: archive.source ? 'zip' : 'lxplugin',
+        ...(sourceManifestHash ? { sourceManifestHash } : {}),
+        enabled: previous?.enabled !== false,
+      }
       await this.saveRegistry(registry)
       this.revision++
       committed = true
-      if (previous) await this.removeDirectory(id, previous.directory).catch(console.error)
+      if (previous) await this.removeDirectory(id, previous.directory)
     } finally {
       await this.removeDirectory('install', temporaryName)
       if (!committed) await this.removeDirectory(id, directoryName)
@@ -318,6 +364,45 @@ export class PluginManager {
     if (!validDisplayInfo(source.manifest)) throw new Error('Invalid plugin source metadata')
     if (!isPluginApiSupported(source.manifest.apiVersion)) throw new PluginTransferError('incompatible')
     return source
+  }
+
+  async setEnabled(id: PluginId, enabled: boolean) {
+    return this.exclusive(async() => {
+      if (isBuiltinPlugin(id)) throw new PluginTransferError('builtin')
+      if (!isPluginId(id) || typeof enabled !== 'boolean') throw new Error('Invalid plugin state')
+      const registry = await this.readRegistry()
+      const record = registry[id]
+      if (!record) throw new PluginTransferError('not_installed')
+      record.enabled = enabled
+      await this.saveRegistry(registry)
+      this.revision++
+      return this.snapshot()
+    })
+  }
+
+  async reportRuntimeResult(id: PluginId, directory: string, error?: string, lyric = false) {
+    return this.exclusive(async() => {
+      if (!isPluginId(id) || isBuiltinPlugin(id) || typeof directory !== 'string' || (error != null && typeof error !== 'string')) throw new Error('Invalid plugin runtime result')
+      const registry = await this.readRegistry()
+      const record = registry[id]
+      // Ignore late reports from an unloaded installation.
+      if (!record || record.enabled === false || this.installedDirectory(id, record.directory) !== directory) return this.snapshot()
+      if (error == null) {
+        if (record.loadFailure && (record.loadFailure.surface ?? 'main') === (lyric ? 'lyric' : 'main')) {
+          delete record.loadFailure
+          await this.saveRegistry(registry)
+          this.revision++
+        }
+        return this.snapshot()
+      }
+      const failedVersion = record.version ?? (await this.readInstalled(id, record).catch(() => null))?.manifest.version ?? '?'
+      const loadFailure: NonNullable<PluginRecord['loadFailure']> = { message: error.slice(0, 2000), failedVersion, surface: lyric ? 'lyric' : 'main' }
+      if (JSON.stringify(record.loadFailure) === JSON.stringify(loadFailure)) return this.snapshot()
+      record.loadFailure = loadFailure
+      await this.saveRegistry(registry)
+      this.revision++
+      return this.snapshot()
+    })
   }
 
   private async readPackage(bytes: Buffer, format: PluginPackageFormat): Promise<PreparedPackage> {

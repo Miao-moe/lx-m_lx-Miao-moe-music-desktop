@@ -1,7 +1,11 @@
 // import { throttle } from '@common/utils'
 
 import { SPLIT_CHAR } from '@common/constants'
-import { filterFileName, sortInsert, similar, arrPushByPosition, arrShuffle } from '@common/utils/common'
+import { filterFileName, arrPushByPosition, arrShuffle } from '@common/utils/common'
+import { searchScore } from '@common/utils/searchScore'
+import { findDuplicateSongs } from '@common/musicIdentity'
+import { createHash } from 'node:crypto'
+import { BoundedMap } from '@common/utils/boundedMap'
 import { joinPath, saveStrToFile } from '@common/utils/nodejs'
 import { createLocalMusicInfo } from '@renderer/utils/music'
 
@@ -40,7 +44,10 @@ export const filterMusicList = async({ playedList, listId, list, playerMusicInfo
   let playerIndex = -1
 
   let canPlayList: Array<LX.Music.MusicInfo | LX.Download.ListItem> = []
-  const filteredPlayedList = playedList.filter(pmInfo => pmInfo.listId == listId && !pmInfo.isTempPlay).map(({ musicInfo }) => musicInfo)
+  const playedCounts = new Map<string, number>()
+  for (const item of playedList) {
+    if (item.listId === listId && !item.isTempPlay) playedCounts.set(item.musicInfo.id, (playedCounts.get(item.musicInfo.id) ?? 0) + 1)
+  }
   const hasDislike = (info: LX.Music.MusicInfo) => {
     const name = info.name?.replaceAll(SPLIT_CHAR.DISLIKE_NAME, SPLIT_CHAR.DISLIKE_NAME_ALIAS).toLocaleLowerCase().trim() ?? ''
     const singer = info.singer?.replaceAll(SPLIT_CHAR.DISLIKE_NAME, SPLIT_CHAR.DISLIKE_NAME_ALIAS).toLocaleLowerCase().trim() ?? ''
@@ -61,9 +68,9 @@ export const filterMusicList = async({ playedList, listId, list, playerMusicInfo
 
     canPlayList.push(s)
 
-    let index = filteredPlayedList.findIndex(m => m.id == s.id)
-    if (index > -1) {
-      filteredPlayedList.splice(index, 1)
+    const count = playedCounts.get(s.id) ?? 0
+    if (count) {
+      playedCounts.set(s.id, count - 1)
       return false
     }
     return true
@@ -195,91 +202,39 @@ export const sortListMusicInfo = async(list: LX.Music.MusicInfo[], sortType: Sor
   return list
 }
 
-const variantRxp = /(\(|（).+(\)|）)/g
-const variantRxp2 = /\s|'|\.|,|，|&|"|、|\(|\)|（|）|`|~|-|<|>|\||\/|\]|\[/g
 /**
  * 过滤列表内重复的歌曲
  * @param list 歌曲列表
  * @param isFilterVariant 是否过滤 Live Explicit 等歌曲名
  * @returns
  */
-export const filterDuplicateMusic = async(list: LX.Music.MusicInfo[], isFilterVariant: boolean = true) => {
-  type ListMapValue = Array<{ id: string, index: number, musicInfo: LX.Music.MusicInfo }>
-  const listMap = new Map<string, ListMapValue>()
-  const duplicateList = new Set<string>()
-  const handleFilter = (name: string, index: number, musicInfo: LX.Music.MusicInfo) => {
-    if (listMap.has(name)) {
-      const targetMusicInfo = listMap.get(name)
-      targetMusicInfo!.push({
-        id: musicInfo.id,
-        index,
-        musicInfo,
-      })
-      duplicateList.add(name)
-    } else {
-      listMap.set(name, [{
-        id: musicInfo.id,
-        index,
-        musicInfo,
-      }])
-    }
-  }
-  if (isFilterVariant) {
-    list.forEach((musicInfo, index) => {
-      let musicInfoName = musicInfo.name.toLowerCase().replace(variantRxp, '').replace(variantRxp2, '')
-      musicInfoName ||= musicInfo.name.toLowerCase().replace(/\s+/g, '')
-      handleFilter(musicInfoName, index, musicInfo)
-    })
-  } else {
-    list.forEach((musicInfo, index) => {
-      const musicInfoName = musicInfo.name.toLowerCase().trim()
-      handleFilter(musicInfoName, index, musicInfo)
-    })
-  }
-  // console.log(duplicateList)
-  const duplicateNames = Array.from(duplicateList)
-  duplicateNames.sort((a, b) => a.localeCompare(b))
-  return duplicateNames.map(name => listMap.get(name)!).flat()
-}
+export const filterDuplicateMusic = async(list: LX.Music.MusicInfo[], _isFilterVariant = true) => findDuplicateSongs(list)
 
 export const searchListMusic = (list: LX.Music.MusicInfo[], text: string) => {
-  const fullMathNameResults = new Set<LX.Music.MusicInfo>()
-  const fullMathSingerResults = new Set<LX.Music.MusicInfo>()
-  const fullMathAlbumResults = new Set<LX.Music.MusicInfo>()
-  const textLower = text.toLowerCase()
-  for (const mInfo of list) {
-    if (mInfo.name?.toLowerCase().includes(textLower)) {
-      fullMathNameResults.add(mInfo)
-    } else if (mInfo.singer?.toLowerCase().includes(textLower)) {
-      fullMathSingerResults.add(mInfo)
-    } else if (mInfo.meta.albumName?.toLowerCase().includes(textLower)) {
-      fullMathAlbumResults.add(mInfo)
+  const hash = createHash('sha256').update(JSON.stringify([text, list.length]))
+  for (const song of list) hash.update(JSON.stringify([song.id, song.name, song.singer, song.meta.albumName]))
+  const key = hash.digest('hex')
+  const cached = searchResults.get(key)
+  if (cached) return cached.map(index => list[index])
+  const query = text.toLowerCase()
+  const exact: number[][] = [[], [], []]
+  const fuzzy: Array<{ index: number, score: number }> = []
+  const rxp = new RegExp(text.split('').map(s => s.replace(/[.*+?^${}()|[\]\\]/, '\\$&')).join('.*'), 'i')
+  list.forEach((song, index) => {
+    const fields = [song.name ?? '', song.singer ?? '', song.meta.albumName ?? '']
+    const matched = fields.findIndex(field => field.toLowerCase().includes(query))
+    if (matched >= 0) exact[matched].push(index)
+    else {
+      const value = fields.join('')
+      if (rxp.test(value)) fuzzy.push({ index, score: searchScore(text, value) })
     }
-  }
-  let result: LX.Music.MusicInfo[] = []
-  let rxp = new RegExp(text.split('').map(s => s.replace(/[.*+?^${}()|[\]\\]/, '\\$&')).join('.*') + '.*', 'i')
-  for (const mInfo of list) {
-    if (fullMathNameResults.has(mInfo) || fullMathSingerResults.has(mInfo) || fullMathAlbumResults.has(mInfo)) continue
-
-    const str = `${mInfo.name}${mInfo.singer}${mInfo.meta.albumName ? mInfo.meta.albumName : ''}`
-    if (rxp.test(str)) result.push(mInfo)
-  }
-
-  const sortedList: Array<{ num: number, data: LX.Music.MusicInfo }> = []
-
-  for (const mInfo of result) {
-    sortInsert(sortedList, {
-      num: similar(text, `${mInfo.name}${mInfo.singer}${mInfo.meta.albumName ? mInfo.meta.albumName : ''}`),
-      data: mInfo,
-    })
-  }
-  return [
-    ...fullMathNameResults.values(),
-    ...fullMathSingerResults.values(),
-    ...fullMathAlbumResults.values(),
-    ...sortedList.map(item => item.data).reverse(),
-  ]
+  })
+  fuzzy.sort((a, b) => b.score - a.score || a.index - b.index)
+  const indexes = [...exact.flat(), ...fuzzy.map(item => item.index)]
+  searchResults.set(key, indexes)
+  return indexes.map(index => list[index])
 }
+const searchResults = new BoundedMap<string, number[]>(16, 100000, indexes => indexes.length)
 
 /**
  * 创建排序后的列表

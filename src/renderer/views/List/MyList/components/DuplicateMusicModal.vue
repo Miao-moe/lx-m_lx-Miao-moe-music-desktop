@@ -2,6 +2,7 @@
   <material-modal :show="visible" bg-close teleport="#view" width="60%" max-width="900px" @close="$emit('update:visible', false)">
     <div :class="$style.header">
       <h2>{{ listName }}</h2>
+      <p>按歌名、歌手、版本、专辑和时长比较。标签不足的歌曲会保留；请核对后删除。</p>
     </div>
     <base-virtualized-list
       v-if="duplicateList.length" v-slot="{ item, index }" :list="duplicateList" key-name="id" :class="$style.list" style="contain: none;"

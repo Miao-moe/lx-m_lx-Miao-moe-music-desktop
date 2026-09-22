@@ -23,6 +23,7 @@ export interface Options {
   headers?: DownloaderOptions['requestOptions']['headers']
   forceResume?: boolean
   proxy?: { host: string, port: number }
+  rateLimit?: number
   onCompleted?: () => void
   onError?: (error: Error) => void
   onFail?: (response: http.IncomingMessage) => void
@@ -38,6 +39,7 @@ export const createDownload = ({
   method = 'get',
   forceResume,
   proxy,
+  rateLimit = 0,
   // resumeTime = 5000,
   onCompleted = noop,
   onError = noop,
@@ -57,12 +59,12 @@ export const createDownload = ({
     },
 
     forceResume,
+    rateLimit,
   })
 
   dl.on('completed', () => {
     onCompleted()
   }).on('error', (err: any) => {
-    if (err.message === 'socket hang up') return
     onError(err)
   }).on('start', () => {
     onStart()

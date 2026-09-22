@@ -76,8 +76,14 @@ test('same-name local covers in different folders and changed files get independ
   })
   const files = [path.join(directory, 'first', 'song.mp3'), path.join(directory, 'second', 'song.mp3')]
   for (const filename of files) { await fs.mkdir(path.dirname(filename)); await fs.writeFile(filename, 'audio') }
-  const pictures = new Map(files.map((filename, i) => [filename, { data: Buffer.alloc(400001, i + 1), format: 'image/jpeg' }]))
+  const picture = fill => {
+    const data = Buffer.alloc(400001, fill)
+    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64').copy(data)
+    return data
+  }
+  const pictures = new Map(files.map((filename, i) => [filename, { data: picture(i + 1), format: 'image/png' }]))
   const worker = loader({
+    'image-size': require('image-size'),
     '@renderer/utils/music': { getLocalMusicFilePic: async filename => pictures.get(filename) },
     '@common/utils/nodejs': { checkPath: async filename => !!await fs.stat(filename).catch(() => null) },
     'node:path': path,
@@ -90,7 +96,7 @@ test('same-name local covers in different folders and changed files get independ
   assert.notEqual(first, second)
   assert.deepEqual(await fs.readFile(first), pictures.get(files[0]).data)
   await fs.writeFile(files[0], 'changed audio')
-  pictures.get(files[0]).data = Buffer.alloc(400001, 3)
+  pictures.get(files[0]).data = picture(3)
   const updated = await worker.getMusicFilePic(files[0])
   assert.notEqual(updated, first)
   assert.deepEqual(await fs.readFile(second), pictures.get(files[1]).data)

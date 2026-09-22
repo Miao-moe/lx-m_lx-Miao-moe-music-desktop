@@ -1,8 +1,10 @@
+import { formatError } from '@common/utils/errorMessage'
 import { ref, shallowRef, nextTick, watch, computed, onBeforeUnmount } from '@common/utils/vueTools'
 import { playMusicInfo, playInfo, isPlay } from '@renderer/store/player/state'
 import { getListMusics } from '@renderer/store/list/action'
 import { appSetting } from '@renderer/store/setting'
 import { allMusicList } from '@renderer/store/list/state'
+import { retainMusicList } from '@renderer/store/list/listManage/state'
 
 
 export default ({ props, onLoadedList }) => {
@@ -16,13 +18,13 @@ export default ({ props, onLoadedList }) => {
 
   const list = shallowRef([])
   const isLoading = ref(false)
-  const loadError = ref(false)
+  const loadError = ref('')
   let generation = 0
   const loadList = (restoreScroll) => {
     const id = props.listId
     const current = ++generation
     isLoading.value = true
-    loadError.value = false
+    loadError.value = ''
     const apply = songs => {
       if (current !== generation || id !== props.listId) return
       list.value = [...songs]
@@ -47,11 +49,16 @@ export default ({ props, onLoadedList }) => {
         if (current !== generation) return
         console.error('Load local playlist failed', error)
         isLoading.value = false
-        loadError.value = true
+        loadError.value = formatError(error, window.i18n.t('list__load_failed'), 'LOCAL_LIST_LOAD_FAILED')
       })
     }
   }
-  watch(() => props.listId, () => { loadList(true) }, { immediate: true })
+  let releaseList
+  watch(() => props.listId, id => {
+    releaseList?.()
+    releaseList = retainMusicList(id)
+    loadList(true)
+  }, { immediate: true })
 
   const playerInfo = computed(() => ({
     isPlayList: playMusicInfo.listId == props.listId,
@@ -74,6 +81,7 @@ export default ({ props, onLoadedList }) => {
 
   onBeforeUnmount(() => {
     generation++
+    releaseList?.()
     window.app_event.off('myListUpdate', handleMyListUpdate)
   })
 

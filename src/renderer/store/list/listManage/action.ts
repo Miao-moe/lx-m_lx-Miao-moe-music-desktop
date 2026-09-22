@@ -31,6 +31,7 @@ const overwriteMusicList = (id: string, list: LX.Music.MusicInfo[]) => {
   } else {
     allMusicList.set(id, list)
   }
+  allMusicList.prune()
 }
 const removeMusicList = (id: string) => {
   allMusicList.delete(id)
@@ -243,6 +244,7 @@ export const listMusicAdd = (id: string, musicInfos: LX.Music.MusicInfo[], addMu
       break
   }
 
+  allMusicList.prune()
   return [id]
 }
 
@@ -261,6 +263,7 @@ export const listMusicRemove = (listId: string, ids: string[]): string[] => {
   const newList = targetList.filter(mInfo => !idsSet.has(mInfo.id))
   targetList.splice(0, targetList.length)
   arrPush(targetList, newList)
+  allMusicList.prune()
 
   return [listId]
 }

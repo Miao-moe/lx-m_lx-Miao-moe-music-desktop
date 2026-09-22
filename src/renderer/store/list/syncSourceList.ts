@@ -5,9 +5,12 @@ import { getListDetailAll as getBoardListAll } from '@renderer/store/leaderboard
 import { dateFormat } from '@common/utils/common'
 import { refreshBoundPlaylist, WritebackError } from '@renderer/utils/playlistWriteback'
 import { dialog } from '@renderer/plugins/Dialog'
+import { beginSync, finishSync } from '@renderer/store/syncStatus'
+import { queuePlaylistSync } from '@renderer/utils/syncQueue'
+import { formatError } from '@common/utils/errorMessage'
 
 export const showSyncError = (error: unknown) => {
-  void dialog({ message: window.i18n.t(`list_writeback__error_${error instanceof WritebackError ? error.code : 'failed'}`) })
+  void dialog({ message: formatError(error, window.i18n.t(`list_writeback__error_${error instanceof WritebackError ? error.code : 'failed'}`), 'PLAYLIST_SYNC_FAILED') })
 }
 
 const fetchList = async(id: string, source: LX.OnlineSource, sourceListId: string) => {
@@ -25,13 +28,21 @@ const fetchList = async(id: string, source: LX.OnlineSource, sourceListId: strin
   })
 }
 
+const active = new Map<string, Promise<void>>()
 export default async(targetListInfo: LX.List.UserListInfo) => {
   // console.log(targetListInfo)
   if (!targetListInfo.source || !targetListInfo.sourceListId) return
-  await refreshBoundPlaylist(targetListInfo.id, async() => fetchList(targetListInfo.id, targetListInfo.source!, targetListInfo.sourceListId!), async list => {
-    await overwriteListMusics({ listId: targetListInfo.id, musicInfos: list }, true)
-  })
-  const now = Date.now()
-  void setListUpdateTime(targetListInfo.id, now)
-  setUpdateTime(targetListInfo.id, dateFormat(now))
+  if (active.has(targetListInfo.id)) return active.get(targetListInfo.id)
+  const key = 'playlist:' + targetListInfo.id
+  beginSync(key, `${targetListInfo.name} · ${targetListInfo.source}`)
+  const task = queuePlaylistSync(targetListInfo.source, async() => {
+    await refreshBoundPlaylist(targetListInfo.id, async() => fetchList(targetListInfo.id, targetListInfo.source!, targetListInfo.sourceListId!), async list => {
+      await overwriteListMusics({ listId: targetListInfo.id, musicInfos: list }, true)
+    })
+    const now = Date.now()
+    await setListUpdateTime(targetListInfo.id, now)
+    setUpdateTime(targetListInfo.id, dateFormat(now))
+  }).then(() => { finishSync(key) }, error => { finishSync(key, error); throw error }).finally(() => active.delete(targetListInfo.id))
+  active.set(targetListInfo.id, task)
+  return task
 }

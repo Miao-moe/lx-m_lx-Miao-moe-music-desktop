@@ -20,6 +20,7 @@
         </button>
       </div>
     </div>
+    <button :class="$style.libraryButton" aria-label="歌单与本地曲库" @click="isShowLibrary = true">曲库管理<span v-if="libraryMissingCount"> · {{ libraryMissingCount }} 个失效文件</span></button>
     <ul ref="dom_lists_list" class="scroll" :class="[$style.listsContent, { [$style.sortable]: isModDown || isDragging }]">
       <li
         class="default-list" :class="[$style.listsItem, {[$style.active]: defaultList.id == listId}, {[$style.clicked]: rightClickItemIndex == -2}, {[$style.fetching]: fetchingListStatus[defaultList.id]}]"
@@ -51,9 +52,9 @@
         </span>
       </li>
       <template v-for="group in listGroups" :key="group.id">
-        <li v-if="group.source" :class="$style.folderHeader">
-          <button type="button" :aria-expanded="!!expandedFolders[group.source]" @click="handleFolderToggle(group.source)">
-            <svg-icon name="angle-right-solid" :class="[$style.folderArrow, { [$style.folderExpanded]: expandedFolders[group.source] }]" />
+        <li v-if="group.name" :class="$style.folderHeader">
+          <button type="button" :aria-expanded="!!expandedFolders[group.id]" @click="handleFolderToggle(group.id)">
+            <svg-icon name="angle-right-solid" :class="[$style.folderArrow, { [$style.folderExpanded]: expandedFolders[group.id] }]" />
             <svg :class="$style.folderIcon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 5h7l2 2h9v13H3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
             </svg>
@@ -61,11 +62,11 @@
             <span :class="$style.folderCount">{{ group.lists.length }}</span>
           </button>
         </li>
-        <template v-if="!group.source || expandedFolders[group.source]">
+        <template v-if="!group.name || expandedFolders[group.id]">
           <li
             v-for="{ item, index, name } in group.lists"
             :key="item.id" class="user-list"
-            :class="[$style.listsItem, {[$style.folderListItem]: group.source}, {[$style.active]: item.id == listId}, {[$style.clicked]: rightClickItemIndex == index}, {[$style.fetching]: fetchingListStatus[item.id]}]"
+            :class="[$style.listsItem, {[$style.folderListItem]: group.name}, {[$style.active]: item.id == listId}, {[$style.clicked]: rightClickItemIndex == index}, {[$style.fetching]: fetchingListStatus[item.id]}]"
             :data-id="item.id" :data-index="index" :data-group="group.id" :aria-label="item.name" :aria-selected="item.id == listId" @contextmenu="handleListsItemRigthClick($event, index)"
           >
             <span :class="$style.listsLabel" @click="handleListToggle(item.id)">
@@ -79,9 +80,9 @@
               :placeholder="item.name" @keyup.enter="handleSaveListName(index, $event)" @blur="handleSaveListName(index, $event)"
             />
           </li>
-          <li v-if="group.source && !group.lists.length" :class="$style.folderEmpty">{{ $t('lists__folder_empty') }}</li>
+          <li v-if="group.name && !group.lists.length" :class="$style.folderEmpty">{{ $t('lists__folder_empty') }}</li>
         </template>
-        <transition v-if="!group.source" enter-active-class="animated-fast slideInLeft" leave-active-class="animated-fast fadeOut" @after-leave="isNewListLeave = false" @after-enter="focusNewListInput">
+        <transition v-if="group.id === 'local'" enter-active-class="animated-fast slideInLeft" leave-active-class="animated-fast fadeOut" @after-leave="isNewListLeave = false" @after-enter="focusNewListInput">
           <li v-if="isShowNewList" :class="[$style.listsItem, $style.listsNew, {[$style.newLeave]: isNewListLeave}]">
             <base-input
               :class="$style.listsInput" type="text" :placeholder="$t('lists__new_list_input')"
@@ -96,6 +97,7 @@
     <ListSortModal v-model:visible="isShowListSortModal" :list-info="sortListInfo" />
     <ListUpdateModal v-model:visible="isShowListUpdateModal" />
     <RecycleBinModal v-model:visible="isShowRecycleBin" />
+    <LibraryManager v-if="isShowLibrary" v-model:visible="isShowLibrary" :list-id="listId" />
   </div>
 </template>
 
@@ -107,6 +109,8 @@ import DuplicateMusicModal from './components/DuplicateMusicModal.vue'
 import ListSortModal from './components/ListSortModal.vue'
 import ListUpdateModal from './components/ListUpdateModal.vue'
 import RecycleBinModal from './components/RecycleBinModal.vue'
+import LibraryManager from './components/LibraryManager.vue'
+import { libraryMissingCount } from '@renderer/utils/libraryMaintenance'
 
 import { defaultList, loveList, userLists, fetchingListStatus } from '@renderer/store/list/state'
 import { removeUserList } from '@renderer/store/list/action'
@@ -135,6 +139,7 @@ import useFolders from './useFolders'
 export default {
   name: 'MyLists',
   components: {
+    LibraryManager,
     RecycleBinModal,
     DuplicateMusicModal,
     ListSortModal,
@@ -255,6 +260,8 @@ export default {
 
     return {
       isShowRecycleBin: ref(false),
+      isShowLibrary: ref(false),
+      libraryMissingCount,
       rightClickItemIndex,
       defaultList,
       loveList,
@@ -292,6 +299,7 @@ export default {
 @import '@renderer/assets/styles/layout.less';
 
 @lists-item-height: 36px;
+.libraryButton { flex: none; padding: 7px; color: var(--color-primary); border-bottom: var(--color-list-header-border-bottom); &:hover { background: var(--color-primary-light-100-alpha-700); } }
 .lists {
   flex: auto;
   width: 100%;

@@ -1,4 +1,6 @@
 import { BrowserWindow, dialog, screen, session } from 'electron'
+import { observeWindowLoadErrors } from '@main/utils/windowLoadError'
+import { registerIpcWindow } from '@main/utils/ipcPolicy'
 import path from 'node:path'
 import { type WindowState, windowSizeList } from '@common/config'
 import { WIN_MAIN_RENDERER_EVENT_NAME } from '@common/ipcNames'
@@ -207,8 +209,10 @@ export const createWindow = () => {
     if (isLinux) options.resizable = true
   }
   browserWindow = new BrowserWindow(options)
+  observeWindowLoadErrors(browserWindow)
 
   const winURL = process.env.NODE_ENV !== 'production' ? 'http://localhost:9080' : `file://${path.join(encodePath(__dirname), 'index.html')}`
+  registerIpcWindow(browserWindow.webContents, 'main', winURL)
   void browserWindow.loadURL(winURL + `?os=${getPlatform()}&dt=${global.envParams.cmdParams.dt}&dark=${shouldUseDarkColors}&theme=${encodeURIComponent(JSON.stringify(theme))}`)
 
   winEvent()

@@ -123,6 +123,8 @@ const defaultSetting: LX.AppSetting = {
   'download.savePath': path.join(os.homedir(), 'Desktop'),
   'download.fileName': '歌名 - 歌手',
   'download.maxDownloadNum': 3,
+  'download.rateLimit': 0,
+  'download.autoResume': true,
   'download.skipExistFile': true,
   'download.isDownloadLrc': false,
   'download.isDownloadLxLrc': true,
@@ -188,11 +190,13 @@ const defaultSetting: LX.AppSetting = {
   'cookie.mg': '',
   'cookie.enablePlayHistorySync': false,
   'cookie.enableFavListSync': false,
+  'sync.platform.selection': '{}',
 
   // ===== UI 增强 =====
   'ui.smoothAnimation': true,
   'ui.animationSpeed': 1.0,
   'ui.ambientBackground': true,
+  'ui.ambientBackgroundOnlyPlayDetail': false,
   'ui.ambientBackgroundAutoContrast': false,
   'ui.ambientBackgroundQuality': 'gentle',
   'ui.sidebar.width': 0,

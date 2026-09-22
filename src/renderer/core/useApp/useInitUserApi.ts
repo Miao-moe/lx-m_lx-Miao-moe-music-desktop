@@ -1,3 +1,5 @@
+import { formatError } from '@common/utils/errorMessage'
+import { showLoadError } from '@common/loadErrorNotice'
 import { onBeforeUnmount, watch } from '@common/utils/vueTools'
 import { useI18n } from '@renderer/plugins/i18n'
 import { onUserApiStatus, getUserApiList, sendUserApiRequest as sendUserApiRequestRemote, userApiRequestCancel, onShowUserApiUpdateAlert } from '@renderer/utils/ipc'
@@ -25,7 +27,7 @@ export default () => {
   const rUserApiStatus = onUserApiStatus(({ params: { status, message, apiInfo } }) => {
     // console.log({ status, message, apiInfo })
     userApi.status = status
-    userApi.message = message
+    userApi.message = status || message === 'initing' ? message : formatError(message, '', 'SOURCE_LOAD_FAILED')
 
     if (!apiInfo || apiInfo.id !== appSetting['common.apiSource']) return
     if (status) {
@@ -133,7 +135,7 @@ export default () => {
     } else {
       if (message) {
         void dialog({
-          message: `${t('user_api__init_failed_alert', { name: apiInfo.name })}\n${message}`,
+          message: formatError(message, t('user_api__init_failed_alert', { name: apiInfo.name }), 'SOURCE_LOAD_FAILED'),
           selection: true,
           confirmButtonText: t('ok'),
         })
@@ -182,6 +184,7 @@ export default () => {
       userApi.list = list
     }).catch(err => {
       console.log(err)
+      showLoadError(err, 'SOURCE_LIST_LOAD_FAILED')
     })
   }
 }

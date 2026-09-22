@@ -1,4 +1,5 @@
-import { mergeOrder, planChanges, recoverAppliedChanges, sameKeys, snapshotEqual } from './plan'
+import { describeChanges, mergeOrder, planChanges, recoverAppliedChanges, sameKeys, snapshotEqual } from './plan'
+import { errorForTransport } from '@common/utils/errorMessage'
 import { WritebackError, type Binding, type LocalPlaylist, type RemoteSession, type SavedState, type Status } from './types'
 
 interface Dependencies {
@@ -17,11 +18,14 @@ export const createWritebackEngine = (deps: Dependencies) => {
   const tasks = new Map<string, Promise<unknown>>()
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
   const refreshing = new Set<string>()
+  const differences = new Map<string, Status['diff']>()
   let initialization: Promise<void> | undefined
-  let saves: Promise<void> = Promise.resolve()
+  let saves: Promise<void> | undefined
+  let requestedSave = 0
+  let persistedSave = 0
   let disposed = false
 
-  const report = (id: string, state: Status['state'], error?: Status['error']) => {
+  const report = (id: string, state: Status['state'], error?: Status['error'], cause?: unknown) => {
     const binding = bindings[id]
     deps.status(id, {
       enabled: Boolean(binding?.enabled),
@@ -30,13 +34,26 @@ export const createWritebackEngine = (deps: Dependencies) => {
       ignored: binding?.local.ignored,
       lastSuccess: binding?.lastSuccess,
       capabilities: binding?.capabilities,
+      diagnostic: cause ? errorForTransport(cause).message : undefined,
+      diff: error === 'conflict' ? differences.get(id) : undefined,
     })
+    if (error !== 'conflict') differences.delete(id)
   }
   const save = async() => {
-    const snapshot: SavedState = copy({ version: 1, lists: bindings })
-    const task = saves.then(async() => deps.save(snapshot), async() => deps.save(snapshot))
-    saves = task
-    try { await task } catch { throw new WritebackError('storage') }
+    const requested = ++requestedSave
+    while (persistedSave < requested) {
+      saves ??= Promise.resolve().then(async() => {
+        while (persistedSave !== requestedSave) {
+          const version = requestedSave
+          await deps.save(copy({ version: 1, lists: bindings }))
+          // eslint-disable-next-line require-atomic-updates -- This single save loop owns the persisted version.
+          persistedSave = version
+        }
+      }).finally(() => { saves = undefined })
+      try { await saves } catch (cause) { throw new WritebackError('storage', cause) }
+      // A request arriving between the loop's exit and its finally must start
+      // another save before its caller is allowed to issue remote mutations.
+    }
   }
   const init = async() => {
     initialization ??= (async() => {
@@ -48,7 +65,7 @@ export const createWritebackEngine = (deps: Dependencies) => {
         bindings[id] = binding
         report(id, binding.enabled ? 'pending' : 'idle')
       }
-    })()
+    })().catch(error => { initialization = undefined; throw error })
     await initialization
   }
   const serialize = async<T>(id: string, task: () => Promise<T>): Promise<T> => {
@@ -75,8 +92,7 @@ export const createWritebackEngine = (deps: Dependencies) => {
     const desired = copy(local.snapshot)
     let changes = planChanges(binding.local, desired, binding.capabilities)
     if (!changes.changed && !binding.inFlight) {
-      binding.local = desired
-      await save()
+      if (!snapshotEqual(binding.local, desired)) { binding.local = desired; await save() }
       report(id, binding.lastSuccess ? 'success' : 'idle')
       return
     }
@@ -87,6 +103,7 @@ export const createWritebackEngine = (deps: Dependencies) => {
     })
     assertEnabled(id, binding, session)
     const remote = await session.read()
+    differences.set(id, { local: describeChanges(binding.local, desired), remote: describeChanges(binding.remote, remote) })
     if (binding.inFlight) {
       const previous = copy(binding)
       binding.local = recoverAppliedChanges(binding.local, binding.inFlight, remote, binding.capabilities)
@@ -107,7 +124,8 @@ export const createWritebackEngine = (deps: Dependencies) => {
     }
     if (changes.rename && remote.name !== binding.remote.name && remote.name !== desired.name) throw new WritebackError('conflict')
     if (changes.order) {
-      const common = new Set(binding.remote.tracks.filter(track => desired.tracks.some(item => item.key === track.key)).map(track => track.key))
+      const desiredKeys = new Set(desired.tracks.map(track => track.key))
+      const common = new Set(binding.remote.tracks.filter(track => desiredKeys.has(track.key)).map(track => track.key))
       const previousOrder = binding.remote.tracks.map(track => track.key).filter(key => common.has(key))
       const remoteOrder = remote.tracks.map(track => track.key).filter(key => common.has(key))
       const wantedOrder = desired.tracks.map(track => track.key).filter(key => common.has(key))
@@ -168,7 +186,7 @@ export const createWritebackEngine = (deps: Dependencies) => {
     timers.delete(id)
     await serialize(id, async() => {
       try { await sync(id) } catch (error) {
-        report(id, 'failed', error instanceof WritebackError ? error.code : 'failed')
+        report(id, 'failed', error instanceof WritebackError ? error.code : 'failed', error)
       }
     })
   }
@@ -252,9 +270,11 @@ export const createWritebackEngine = (deps: Dependencies) => {
             const after = await getLocal(id, binding)
             if (!session || !remote) throw new WritebackError('pending')
             assertEnabled(id, binding, session)
-            binding.remote = remote
-            binding.local = copy(after.snapshot)
-            await save()
+            if (!snapshotEqual(binding.remote, remote) || !snapshotEqual(binding.local, after.snapshot)) {
+              binding.remote = remote
+              binding.local = copy(after.snapshot)
+              await save()
+            }
             report(id, 'idle')
           }
         } finally { refreshing.delete(id) }
@@ -269,6 +289,7 @@ export const createWritebackEngine = (deps: Dependencies) => {
     disposed = true
     for (const timer of timers.values()) clearTimeout(timer)
     timers.clear()
+    differences.clear()
   }
   return { init, start, changed, run, setEnabled, refresh, dispose }
 }

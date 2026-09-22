@@ -101,6 +101,8 @@
 //   'table_download_list',
 // ]
 
+import { libraryTables } from './libraryTables'
+
 type Tables = 'db_info'
 | 'my_list'
 | 'my_list_music_info'
@@ -117,8 +119,14 @@ type Tables = 'db_info'
 | 'dislike_list'
 | 'list_trash'
 | 'index_list_trash_expires_at'
+| 'index_list_trash_deleted_at'
+| 'index_lyric_id_source_type'
+| 'index_lyric_source'
+| 'index_my_list_music_info_list'
+| 'index_my_list_music_info_order_sort'
+| 'index_my_list_position'
 
-const tables = new Map<Tables, string>()
+const tables = new Map<string, string>()
 
 
 tables.set('db_info', `
@@ -229,6 +237,7 @@ tables.set('download_list', `
     "fileName" TEXT NOT NULL,
     "filePath" TEXT NOT NULL,
     "musicInfo" TEXT NOT NULL,
+    "taskOptions" TEXT NOT NULL DEFAULT '{}',
     "position" INTEGER NOT NULL,
     PRIMARY KEY("id")
   );
@@ -246,6 +255,7 @@ tables.set('list_trash', `
     "id" TEXT NOT NULL PRIMARY KEY,
     "deleted_at" INTEGER NOT NULL,
     "expires_at" INTEGER NOT NULL,
+    "summary" TEXT NOT NULL DEFAULT '{}',
     "payload" TEXT NOT NULL
   );
 `)
@@ -255,4 +265,15 @@ tables.set('index_list_trash_expires_at', `
 
 export default tables
 
-export const DB_VERSION = '4'
+export const QUERY_INDEXES = {
+  index_lyric_id_source_type: '"lyric" ("id", "source", "type")',
+  index_lyric_source: '"lyric" ("source")',
+  index_my_list_music_info_list: '"my_list_music_info" ("listId", "id")',
+  index_my_list_music_info_order_sort: '"my_list_music_info_order" ("listId", "order")',
+  index_my_list_position: '"my_list" ("position")',
+  index_list_trash_deleted_at: '"list_trash" ("deleted_at" DESC)',
+} as const
+for (const [name, columns] of Object.entries(QUERY_INDEXES)) tables.set(name as Tables, `CREATE INDEX "${name}" ON ${columns};`)
+
+for (const [name, sql] of libraryTables) tables.set(name, sql)
+export const DB_VERSION = '7'

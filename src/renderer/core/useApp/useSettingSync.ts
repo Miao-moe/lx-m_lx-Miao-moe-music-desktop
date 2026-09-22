@@ -4,6 +4,7 @@ import { appSetting } from '@renderer/store/setting'
 import { sendSyncAction, setWindowSize } from '@renderer/utils/ipc'
 import { setLanguage } from '@root/lang'
 import { setUserApi } from '../apiSource'
+import { applyAppFont } from '@renderer/utils/fonts'
 // import { applyTheme, getThemes } from '@renderer/store/utils'
 
 
@@ -22,8 +23,8 @@ export default () => {
     void setUserApi(apiSource)
   })
 
-  watch(() => appSetting['common.font'], (val) => {
-    document.documentElement.style.fontFamily = val
+  watch(() => [appSetting['common.font'], appSetting['common.langId']], () => {
+    void applyAppFont(appSetting['common.font'])
   }, {
     immediate: true,
   })

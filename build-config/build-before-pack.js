@@ -55,10 +55,17 @@ module.exports = async(context) => {
   const { electronPlatformName, arch } = context
   const electronVersion = context.packager?.info?._framework?.version ?? require('../package.json').devDependencies.electron.replace(/^[^\d]*?(\d+)/, '$1')
   const electronNodeAbi = nodeAbi.getAbi(electronVersion, 'electron')
-  await replaceQrcDecodeLib(electronNodeAbi, electronPlatformName, arch)
+  // The normal edition uses the portable MIT QRC decoder, independent of ABI.
+  if (require('../package.json').lxBuildTarget === 'win7') await replaceQrcDecodeLib(electronNodeAbi, electronPlatformName, arch)
   if (electronPlatformName !== 'linux' || process.env.FORCE) return
   const bindingFilePath = path.join(__dirname, '../node_modules/better-sqlite3/binding.gyp')
   const bindingBakFilePath = path.join(__dirname, '../node_modules/better-sqlite3/binding.gyp.bak')
+  const prebuilt = path.join(__dirname, `./lib/better_sqlite3_electron-v${electronNodeAbi}-${better_sqlite3_fileNameMap[arch]}.node`)
+  if (!fs.existsSync(prebuilt)) {
+    // Allow electron-builder to rebuild for the selected, supported Electron ABI.
+    if (!fs.existsSync(bindingFilePath) && fs.existsSync(bindingBakFilePath)) await fsPromises.rename(bindingBakFilePath, bindingFilePath)
+    return
+  }
   switch (arch) {
     case Arch.x64:
     case Arch.arm64:

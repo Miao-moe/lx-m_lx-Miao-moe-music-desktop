@@ -37,7 +37,11 @@ declare namespace LX {
       downloaded: Section[]
       error?: ErrorCode
       statusCode?: number
+      diagnostic?: string
       sections?: Section[]
+      // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- Keep this file an ambient namespace declaration.
+      diff?: import('../syncDiff').SyncDiff
+      lastSuccess?: number
     }
   }
 }

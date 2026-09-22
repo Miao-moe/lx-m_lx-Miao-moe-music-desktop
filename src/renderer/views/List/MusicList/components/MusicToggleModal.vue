@@ -28,9 +28,9 @@
           </div>
         </template>
         <div v-else :class="$style.noItem">
-          <p v-text="noItemLabel" />
+          <p v-if="!isError" v-text="noItemLabel" />
           <template v-if="isError">
-            <p>{{ $t('list__load_failed') }}</p>
+            <p class="load-error-detail">{{ loadErrors[source] }}</p>
             <base-btn class="ui-state-retry" min @click="retrySource">{{ $t('reload') }}</base-btn>
           </template>
         </div>
@@ -68,6 +68,7 @@
 </template>
 
 <script>
+import { formatError } from '@common/utils/errorMessage'
 import { LIST_IDS } from '@common/constants'
 import { openUrl } from '@common/utils/electron'
 import { playQueueById } from '@renderer/core/player'
@@ -104,6 +105,7 @@ export default {
       lists: {},
       source: 'kw',
       loadStates: {},
+      loadErrors: {},
       searchKey: 0,
       toggleMusicInfo: null,
       onlyMatches: true,
@@ -166,10 +168,11 @@ export default {
         if (!this.show || this.searchKey !== searchKey) return
         this.lists[source] = list
         this.loadStates[source] = 'ready'
-      } catch {
+      } catch (error) {
         if (!this.show || this.searchKey !== searchKey) return
         this.lists[source] = []
         this.loadStates[source] = 'error'
+        this.loadErrors[source] = formatError(error, this.$t('list__load_failed'), 'MATCH_LOAD_FAILED')
       }
     },
     async loadList() {
@@ -204,8 +207,8 @@ export default {
       if (!this.show || !this.toggleMusicInfo || this.toggleMusicInfo.id === this.musicInfo.id || !this.list.some(item => item.id === this.toggleMusicInfo.id)) return
       this.$emit('toggle', this.toggleMusicInfo)
     },
-    openDetail(minfo) {
-      const url = musicSdk[minfo.source]?.getMusicDetailPageUrl(toOldMusicInfo(minfo))
+    async openDetail(minfo) {
+      const url = await musicSdk[minfo.source]?.getMusicDetailPageUrl(toOldMusicInfo(minfo))
       if (!url) return
       void openUrl(url)
     },

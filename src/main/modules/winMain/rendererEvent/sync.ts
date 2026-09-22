@@ -13,11 +13,14 @@ import {
 } from '@main/modules/sync'
 import { sendEvent } from '../main'
 import { getWebDAVLastResult, runWebDAV } from '@main/modules/webdav'
+import { browseWebDAVAudio, getWebDAVAudioURL } from '@main/modules/webdav/media'
 
 
 let selectModeListenr: ((mode: LX.Sync.ModeTypes[keyof LX.Sync.ModeTypes] | null) => void) | null = null
 
 export default () => {
+  mainHandle<string, Awaited<ReturnType<typeof browseWebDAVAudio>>>(WIN_MAIN_RENDERER_EVENT_NAME.webdav_browse, async({ params }) => browseWebDAVAudio(params))
+  mainHandle<{ path: string, identity: string }, string>(WIN_MAIN_RENDERER_EVENT_NAME.webdav_audio_url, async({ params }) => getWebDAVAudioURL(params))
   mainHandle<LX.WebDAV.Operation, LX.WebDAV.Result>(WIN_MAIN_RENDERER_EVENT_NAME.webdav_action, async({ params }) => runWebDAV(params))
   mainHandle<LX.WebDAV.Result | null>(WIN_MAIN_RENDERER_EVENT_NAME.webdav_last_result, async() => getWebDAVLastResult())
   mainHandle<LX.Sync.SyncServiceActions, any>(WIN_MAIN_RENDERER_EVENT_NAME.sync_action, async({ params: data }) => {

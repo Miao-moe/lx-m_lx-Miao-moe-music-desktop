@@ -1,3 +1,4 @@
+import { formatError } from '@common/utils/errorMessage'
 // import { getLeaderboardSetting } from '@renderer/utils/data'
 import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
 import musicSdk from '@renderer/utils/musicSdk'
@@ -121,7 +122,7 @@ export const getAndSetListDetail = async(id: string, page: number, isRefresh = f
   }).catch((error: any) => {
     if (key != listDetailInfo.key) return
     clearListDetail()
-    listDetailInfo.noItemLabel = window.i18n.t('list__load_failed')
+    listDetailInfo.noItemLabel = formatError(error, window.i18n.t('list__load_failed'), 'LIST_LOAD_FAILED')
     console.log(error)
     throw error
   })

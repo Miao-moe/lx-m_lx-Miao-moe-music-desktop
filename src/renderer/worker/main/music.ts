@@ -1,31 +1,19 @@
 import { getLocalMusicFileLyric, getLocalMusicFilePic } from '@renderer/utils/music'
-import path from 'node:path'
-import os from 'node:os'
-import fs from 'node:fs/promises'
-import { createHash } from 'node:crypto'
-import { checkPath } from '@common/utils/nodejs'
+import { saveTemporaryArtwork } from '@common/utils/temporaryArtwork'
+import { validateArtwork } from '@common/utils/imageLimits'
+export { clearLocalMetadataCache, getLocalMetadataCacheSize } from '@renderer/utils/music'
+export { getTemporaryArtworkSize, clearTemporaryArtwork } from '@common/utils/temporaryArtwork'
 
-const getTempDir = async() => {
-  const tempDir = path.join(os.tmpdir(), 'lx_m_music_temp')
-  if (!await checkPath(tempDir)) {
-    await fs.mkdir(tempDir, { recursive: true })
-  }
-  return tempDir
-}
+export { hasLocalMusicFileTags as hasMusicFileTags } from '@renderer/utils/music'
 
 export const getMusicFilePic = async(filePath: string) => {
   const picture = await getLocalMusicFilePic(filePath)
   if (!picture) return ''
   if (typeof picture == 'string') return picture
+  validateArtwork(picture.data)
   if (picture.data.length > 400_000) {
     try {
-      const tempDir = await getTempDir()
-      const stats = await fs.stat(filePath)
-      const key = createHash('sha256').update(JSON.stringify([path.resolve(filePath), stats.size, stats.mtimeMs, stats.ctimeMs])).update(picture.data).digest('hex')
-      const extension = picture.format.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'img'
-      const tempFile = path.join(tempDir, `${key}.${extension}`)
-      await fs.writeFile(tempFile, picture.data)
-      return tempFile
+      return await saveTemporaryArtwork(picture.data, picture.format)
     } catch (err) {
       console.log(err)
     }

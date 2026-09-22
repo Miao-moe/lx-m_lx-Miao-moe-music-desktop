@@ -3,6 +3,10 @@
     <div :class="$style.header">
       <base-tab v-model="activeTab" :class="$style.tab" :list="tabs" />
     </div>
+    <div v-if="activeTab === 'error'" :class="$style.failureTools" data-download-failure-tools>
+      <base-selection v-model="failureKind" :list="failureOptions" item-key="id" item-name="name" />
+      <base-btn min :disabled="!list.length" @click="retryVisibleFailures">{{ $t('download__retry_filtered') }} ({{ list.length }})</base-btn>
+    </div>
     <common-list-loading :load-key="list" :loading="isLoading" :class="$style.content">
       <common-music-list-header :layout="columnLayout" />
       <div v-if="list.length" ref="dom_listContent" :class="$style.content">
@@ -31,13 +35,14 @@
             </div>
             <div class="list-item-cell name" style="flex: 0 0 var(--music-column-name);" data-music-cell="name">
               <span class="select name" :aria-label="getName(item)">{{ getName(item) }}</span>
+              <span v-if="item.priority" class="no-select badge badge-theme-primary">{{ $t('download__priority_label') }}</span>
             </div>
             <div class="list-item-cell" style="flex: 0 0 var(--music-column-progress);" data-music-cell="progress">{{ item.total > 0 || item.isComplate ? `${Math.max(0, item.progress)}%` : $t('download__downloaded_size', { size: sizeFormate(item.downloaded) }) }}<span v-if="item.status == downloadStatus.RUN && item.speed"> - {{ item.speed }}/s</span></div>
             <div class="list-item-cell" style="flex: 0 0 var(--music-column-status);" :aria-label="item.statusText" data-music-cell="status">{{ item.statusText }}</div>
             <div class="list-item-cell" style="flex: 0 0 var(--music-column-quality);" data-music-cell="quality">{{ getTypeName(item.metadata.quality) }}</div>
             <div class="list-item-cell" style="flex: 0 0 var(--music-column-action); padding-left: 0; padding-right: 0;" data-music-cell="action">
               <material-list-buttons
-                :index="index" :download-btn="false" :file-btn="item.status != downloadStatus.ERROR" remove-btn="remove-btn"
+                :index="index" :download-btn="false" :file-btn="item.audioDownloaded || item.status != downloadStatus.ERROR" remove-btn="remove-btn"
                 :start-btn="!item.isComplate && item.status != downloadStatus.WAITING && (item.status != downloadStatus.RUN)"
                 :pause-btn="!item.isComplate && (item.status == downloadStatus.RUN || item.status == downloadStatus.WAITING)"
                 :list-add-btn="false" :play-btn="item.status == downloadStatus.COMPLETED"
@@ -48,7 +53,7 @@
         </base-virtualized-list>
       </div>
       <div v-else :class="[$style.noItem, 'ui-state', { 'ui-state-error': loadError }]" role="status">
-        <p>{{ $t(loadError ? 'list__load_failed' : 'no_item') }}</p>
+        <p>{{ loadError || $t('no_item') }}</p>
         <base-btn v-if="loadError" class="ui-state-retry" min @click="loadList">{{ $t('reload') }}</base-btn>
       </div>
       <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
@@ -63,7 +68,7 @@
 <script>
 // import { checkPath, openDirInExplorer, openUrl } from '@common/utils/electron'
 
-import { ref, reactive } from '@common/utils/vueTools'
+import { ref, reactive, computed } from '@common/utils/vueTools'
 import useListInfo from './useListInfo'
 import useList from './useList'
 import useTab from './useTab'
@@ -75,7 +80,10 @@ import { downloadStatus } from '@renderer/store/download/state'
 import { appSetting } from '@renderer/store/setting'
 import useMusicListColumns from '@renderer/utils/compositions/useMusicListColumns'
 import { isPlay } from '@renderer/store/player/state'
-import { formatMusicName, sizeFormate } from '@renderer/utils'
+import { sizeFormate } from '@renderer/utils'
+import { retryFailedDownloads } from '@renderer/store/download/action'
+import { downloadFailureKinds } from '@common/utils/download/errors'
+import { formatDownloadFileName } from '@common/utils/download/fileName'
 import TagEditorModal from './TagEditorModal.vue'
 
 export default {
@@ -85,6 +93,8 @@ export default {
     const columnLayout = useMusicListColumns('download')
     const listRef = ref()
     const { tabs, activeTab } = useTab()
+    const failureKind = ref('all')
+    const failureOptions = computed(() => ['all', ...downloadFailureKinds].map(id => ({ id, name: window.i18n.t(id === 'all' ? 'download__failure_all' : 'download__failure_' + id) })))
 
     const {
       rightClickSelectedIndex,
@@ -95,7 +105,8 @@ export default {
       loadError,
       loadList,
       playTaskId,
-    } = useListInfo(activeTab)
+    } = useListInfo(activeTab, failureKind)
+    const retryVisibleFailures = () => { void retryFailedDownloads(undefined, [...list.value]) }
 
     const {
       selectedList,
@@ -213,7 +224,11 @@ export default {
     }
 
     const getName = (downloadInfo) => {
-      return formatMusicName(appSetting['download.fileName'], downloadInfo.metadata.musicInfo.name, downloadInfo.metadata.musicInfo.singer)
+      const { metadata } = downloadInfo
+      const name = metadata.fileAllocated
+        ? metadata.fileName
+        : formatDownloadFileName(appSetting['download.fileName'], metadata.musicInfo, metadata.quality, metadata.ext ?? 'mp3')
+      return name.replace(/\.[^.]+$/, '')
     }
     const getTypeName = (quality) => {
       switch (quality) {
@@ -238,6 +253,9 @@ export default {
       dom_listContent,
       tabs,
       activeTab,
+      failureKind,
+      failureOptions,
+      retryVisibleFailures,
       selectedList,
       listItemHeight,
       playTaskId,
@@ -275,6 +293,7 @@ export default {
 
 <style lang="less" module>
 @import '@renderer/assets/styles/layout.less';
+.failureTools { display: flex; align-items: center; gap: 12px; padding: 8px 15px; }
 
 .download {
   position: relative;

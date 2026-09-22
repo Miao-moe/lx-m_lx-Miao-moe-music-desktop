@@ -26,6 +26,12 @@ const openHotkeys = async page => {
   }))
   await page.getByRole('tab', { name: labels.title, exact: true }).click()
   await settled(page)
+  // Disabled shortcut groups are collapsed until their enable switch is checked.
+  if (!await page.locator('#setting_download_hotKeyGlobal').isChecked()) {
+    await page.locator('label[for="setting_download_hotKeyGlobal"]').click()
+    await page.waitForFunction(() => window.lx.appHotKeyConfig.global.enable)
+    await settled(page)
+  }
   return page.getByRole('heading', { name: labels.fullscreen, exact: true }).locator('..').locator('input')
 }
 const editKey = async(page, input, shortcut) => {
@@ -49,9 +55,10 @@ const toggleTwice = async(page, shortcut) => {
 }
 
 test('fullscreen shortcuts can be edited, disabled, cleared and retained after restart', { timeout: 90000 }, async() => {
-  let fixture = await launch()
+  const rendererPath = path.resolve(__dirname, '../dist/index.html')
+  let fixture = await launch({ rendererPath })
   const output = fixture.output
-  const restart = async() => { fixture = await launch({ profilePath: output }) }
+  const restart = async() => { fixture = await launch({ profilePath: output, rendererPath }) }
   const close = async() => {
     const current = fixture
     fixture = null

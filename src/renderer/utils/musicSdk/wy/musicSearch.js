@@ -5,6 +5,7 @@ import { sizeFormate, formatPlayTime } from '../../index'
 import { eapiRequest } from './utils/index'
 import { assertSearch, readSearchBody, withSearchFallback } from '../searchFallback'
 import { cloudSearch, suggestionSearch } from './searchFallback'
+import { providerError } from '../requestErrors'
 
 export default {
   limit: 30,
@@ -100,7 +101,7 @@ export default {
     if (limit == null) limit = this.limit
     return this.musicSearch(str, page, limit).then(result => {
       // console.log(result)
-      if (!result || result.code !== 200) return this.searchPrimary(str, page, limit, retryNum)
+      if (!result || result.code !== 200) throw providerError('wy', result?.code)
       assertSearch(result.data && (Array.isArray(result.data.resources) || result.data.totalCount === 0))
       let list = this.handleResult(result.data.resources || [])
       // console.log(list)

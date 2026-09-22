@@ -29,6 +29,8 @@ export const PLAY_QUEUE_LIST_ID = '@play_queue'
 export const playQueueList = window.lxData.playQueueList = shallowReactive<LX.Player.PlayMusicInfo[]>([])
 // Increment once per completed queue edit, including replacement with the same length.
 export const playQueueRevision = ref(0)
+export const playbackReady = ref(false)
+export const playQueueSource = ref<string | null>(null)
 
 export const musicInfo = window.lxData.musicInfo = reactive<PlayerMusicInfo>({
   id: null,

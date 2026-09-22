@@ -6,7 +6,7 @@ import getStore from '@main/utils/store'
 export default () => {
   // Acknowledge durable storage before the renderer sends any platform writes.
   mainHandle<unknown>(WIN_MAIN_RENDERER_EVENT_NAME.playlist_writeback_save, async({ params }) => {
-    getStore(STORE_NAMES.DATA).set(DATA_KEYS.playlistWriteback, params)
+    await getStore(STORE_NAMES.DATA).set(DATA_KEYS.playlistWriteback, params)
   })
   mainHandle<string, any>(WIN_MAIN_RENDERER_EVENT_NAME.get_data, ({ params: path }) => {
     return getStore(STORE_NAMES.DATA).get(path) as any
@@ -16,6 +16,6 @@ export default () => {
     path: string
     data: any
   }>(WIN_MAIN_RENDERER_EVENT_NAME.save_data, ({ params: { path, data } }) => {
-    getStore(STORE_NAMES.DATA).set(path, data)
+    void getStore(STORE_NAMES.DATA).set(path, data)
   })
 }

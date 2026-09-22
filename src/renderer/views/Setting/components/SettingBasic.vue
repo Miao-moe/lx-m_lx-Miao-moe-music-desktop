@@ -73,12 +73,7 @@ dd
       name="setting_basic_font_size" need :model-value="appSetting['common.fontSize']" :value="item.id"
       :label="item.label" :disabled="isFullscreen" @update:model-value="updateSetting({'common.fontSize': $event})")
 
-dd
-  h3#basic_font {{ $t('setting__basic_font') }}
-  div.setting-row(style="--selection-width: 12rem;")
-    base-selection.gap-left(:list="fontList" :model-value="fonts[0]" item-key="id" item-name="label" @update:model-value="updateFonts($event, fonts[1])")
-    base-selection.gap-left(v-if="fonts[0]" :list="fontList" :model-value="fonts[1]" item-key="id" item-name="label" @update:model-value="updateFonts(fonts[0], $event)")
-    //- base-selection.gap-teft(:list="fontList" :model-value="appSetting['common.font']" item-key="id" item-name="label" @update:model-value="updateSetting({'common.font': $event})")
+setting-fonts
 
 dd
   h3#basic_lang {{ $t('setting__basic_lang') }}
@@ -120,10 +115,11 @@ quality-check-modal(v-model="isShowQualityCheckModal")
 </template>
 
 <script>
+import { formatError } from '@common/utils/errorMessage'
 import { computed, ref, watch, reactive, shallowReactive } from '@common/utils/vueTools'
 import { windowSizeList, userApi, isFullscreen, themeId, themeInfo } from '@renderer/store'
 import { langList, useI18n } from '@root/lang'
-import { getSystemFonts, saveTheme, showSelectDialog } from '@renderer/utils/ipc'
+import { saveTheme, showSelectDialog } from '@renderer/utils/ipc'
 import apiSourceInfo from '@renderer/utils/musicSdk/api-source-info'
 import { useTimeout } from '@renderer/core/player/timeoutStop'
 import { dialog } from '@renderer/plugins/Dialog'
@@ -135,6 +131,7 @@ import ThemeEditModal from './ThemeEditModal/index.vue'
 import PlayTimeoutModal from './PlayTimeoutModal.vue'
 import UserApiModal from './UserApiModal.vue'
 import QualityCheckModal from './QualityCheckModal.vue'
+import SettingFonts from './SettingFonts.vue'
 import { appSetting, updateSetting } from '@renderer/store/setting'
 import { getThemes, applyTheme, findTheme, buildBgUrl } from '@renderer/store/utils'
 
@@ -146,6 +143,7 @@ export default {
     PlayTimeoutModal,
     UserApiModal,
     QualityCheckModal,
+    SettingFonts,
   },
   props: {
     searchKeyword: { type: String, default: '' },
@@ -255,15 +253,17 @@ export default {
       })
       if (result.canceled || !result.filePaths.length) return
       let theme
+      let importError
       try {
         const data = await readLxConfigFile(result.filePaths[0])
         theme = data?.type == 'theme' ? data.theme : data
       } catch (err) {
+        importError = err
         theme = null
       }
       if (!theme?.config?.themeColors || !theme?.config?.extInfo) {
         void dialog({
-          message: t('theme_import_failed'),
+          message: formatError(importError ?? { code: 'THEME_INVALID_DATA', message: t('theme_import_failed') }, '', 'THEME_LOAD_FAILED'),
           confirmButtonText: t('alert_button_text'),
         })
         return
@@ -291,6 +291,7 @@ export default {
             await saveStrToFile(joinPath(dataPath, fileName), Buffer.from(match[2], 'base64'))
             newTheme.config.extInfo['--background-image'] = fileName
           } catch (err) {
+            importError = err
             newTheme.config.extInfo['--background-image'] = 'none'
           }
         } else {
@@ -303,7 +304,7 @@ export default {
       await saveTheme(newTheme)
       init()
       void dialog({
-        message: t('theme_import_success'),
+        message: importError ? formatError(importError, t('theme_import_success'), 'THEME_BACKGROUND_LOAD_FAILED') : t('theme_import_success'),
         confirmButtonText: t('alert_button_text'),
       })
     }
@@ -312,7 +313,7 @@ export default {
       if (themeId.value == theme.id) return
       themeId.value = theme.id
       applyTheme(theme.id, appSetting['theme.lightId'], appSetting['theme.darkId'], dataPath)
-      updateSetting({ 'theme.id': theme.id })
+      void updateSetting({ 'theme.id': theme.id })
     }
 
     watch(() => [appSetting['theme.lightId'], appSetting['theme.darkId']], () => {
@@ -341,7 +342,7 @@ export default {
       let status
       if (userApi.status) status = t('setting__basic_source_status_success')
       else if (userApi.message == 'initing') status = t('setting__basic_source_status_initing')
-      else status = `${t('setting__basic_source_status_failed')}`
+      else status = `${t('setting__basic_source_status_failed')}\n${userApi.message ? userApi.message : formatError(null, '', 'SOURCE_LOAD_FAILED')}`
 
       return status
     }
@@ -381,25 +382,6 @@ export default {
       ]
     })
 
-    const systemFontList = ref([])
-    const fontList = computed(() => {
-      return [{ id: '', label: t('setting__desktop_lyric_font_default') }, ...systemFontList.value]
-    })
-    void getSystemFonts().then(fonts => {
-      systemFontList.value = fonts.map(f => ({ id: f, label: f.replace(/(^"|"$)/g, '') }))
-    })
-
-    const fonts = computed(() => {
-      if (!appSetting['common.font']) return ['', '']
-      let [f1 = '', f2 = ''] = appSetting['common.font'].split(',')
-      return [f1.trim(), f2.trim()]
-    })
-    const updateFonts = (font1, font2) => {
-      let font = []
-      if (font1) font.push(font1)
-      if (font2) font.push(font2)
-      updateSetting({ 'common.font': font.join(', ') })
-    }
     const fontSizeList = computed(() => {
       return [
         { id: 14, label: t('setting__basic_font_size_14px') },
@@ -420,8 +402,6 @@ export default {
       showAllTheme,
       showThemeOptions,
       themeList,
-      fonts,
-      updateFonts,
       // currentStting,
       // themes,
       // themeClassName,
@@ -437,7 +417,6 @@ export default {
       langList,
       sourceNameTypes,
       controlBtnPositionList,
-      fontList,
       isFullscreen,
       toggleTheme,
       themeId,

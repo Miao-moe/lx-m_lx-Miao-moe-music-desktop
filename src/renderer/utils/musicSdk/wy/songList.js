@@ -9,6 +9,10 @@ import { formatPlayTime, sizeFormate, dateFormat, formatPlayCount } from '../../
 import musicDetailApi from './musicDetail'
 import { eapiRequest } from './utils/index'
 import { formatSingerName } from '../utils'
+import { createRequestCache } from '../requestCache'
+import { providerError, retryProviderRequest } from '../requestErrors'
+
+const cachedPlaylist = createRequestCache(30000, 8)
 
 export default {
   _requestObj_tags: null,
@@ -65,47 +69,45 @@ export default {
     }
     return { id, cookie }
   },
-  async getListDetail(rawId, page, tryNum = 0) { // 获取歌曲列表内的音乐
+  async getListDetail(rawId, page, tryNum = 0, isRefresh = false) { // 获取歌曲列表内的音乐
     if (tryNum > 2) return Promise.reject(new Error('try max num'))
 
     const { id, cookie } = await this.getListId(rawId)
     if (cookie) this.cookie = cookie
+    const requestCookie = this.cookie
 
-    const requestObj_listDetail = httpFetch('https://music.163.com/api/linux/forward', {
-      method: 'post',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
-        Cookie: this.cookie,
-      },
-      form: linuxapi({
-        method: 'POST',
-        url: 'https://music.163.com/api/v3/playlist/detail',
-        params: {
-          id,
-          n: this.limit_song,
-          s: 8,
+    const body = await cachedPlaylist(JSON.stringify([id, requestCookie]), () => retryProviderRequest(async() => {
+      const requestObj_listDetail = httpFetch('https://music.163.com/api/linux/forward', {
+        method: 'post',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
+          Cookie: requestCookie,
         },
-      }),
-    })
-    const { statusCode, body } = await requestObj_listDetail.promise
-    if (statusCode !== 200 || body.code !== this.successCode) return this.getListDetail(id, page, ++tryNum)
+        form: linuxapi({
+          method: 'POST',
+          url: 'https://music.163.com/api/v3/playlist/detail',
+          params: {
+            id,
+            n: this.limit_song,
+            s: 8,
+          },
+        }),
+      })
+      const { statusCode, body } = await requestObj_listDetail.promise
+      if (statusCode !== 200 || body?.code !== this.successCode) throw providerError('wy', body?.code, statusCode)
+      return body
+    }), isRefresh)
     let limit = 1000
     let rangeStart = (page - 1) * limit
     // console.log(body)
     let list
-    if (body.playlist.trackIds.length == body.privileges.length) {
-      list = this.filterListDetail(body)
+    const selectedIds = body.playlist.trackIds.slice(rangeStart, limit * page).map(track => track.id)
+    const tracks = new Map((body.playlist.tracks ?? []).map(track => [track.id, track]))
+    const privileges = new Map((body.privileges ?? []).map(privilege => [privilege.id, privilege]))
+    if (selectedIds.every(id => tracks.has(id) && privileges.has(id))) {
+      list = this.filterListDetail({ playlist: { tracks: selectedIds.map(id => tracks.get(id)) }, privileges: body.privileges })
     } else {
-      try {
-        list = (await musicDetailApi.getList(body.playlist.trackIds.slice(rangeStart, limit * page).map(trackId => trackId.id))).list
-      } catch (err) {
-        console.log(err)
-        if (err.message == 'try max num') {
-          throw err
-        } else {
-          return this.getListDetail(id, page, ++tryNum)
-        }
-      }
+      list = (await musicDetailApi.getList(selectedIds)).list
     }
     // console.log(list)
     return {
@@ -126,12 +128,12 @@ export default {
   filterListDetail({ playlist: { tracks }, privileges }) {
     // console.log(tracks, privileges)
     const list = []
-    tracks.forEach((item, index) => {
+    const privilegeMap = new Map((privileges ?? []).map(item => [item.id, item]))
+    tracks.forEach(item => {
       const types = []
       const _types = {}
       let size
-      let privilege = privileges[index]
-      if (privilege.id !== item.id) privilege = privileges.find(p => p.id === item.id)
+      const privilege = privilegeMap.get(item.id)
       if (!privilege) return
 
       if (privilege.maxBrLevel == 'hires') {

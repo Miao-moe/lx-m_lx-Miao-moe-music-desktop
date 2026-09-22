@@ -17,6 +17,7 @@ export interface RemoteFile {
   content: string | null
   etag?: string
   lastModified?: string
+  unchanged?: boolean
 }
 
 export const resolveConfig = (config: LX.WebDAV.Config) => {
@@ -65,13 +66,13 @@ export const createClient = (config: LX.WebDAV.Config) => {
           }
           chunks.push(chunk)
         })
-        res.on('error', () => { reject(new WebDAVError('network')) })
+        res.on('error', error => { reject(new WebDAVError('network', undefined, undefined, error)) })
         res.on('end', () => { resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }) })
       })
       // A wall-clock deadline also covers DNS, TLS and servers that drip bytes forever.
       const deadline = setTimeout(() => { req.destroy(new WebDAVError('timeout')) }, TIMEOUT)
       req.on('close', () => { clearTimeout(deadline) })
-      req.on('error', error => { reject(error instanceof WebDAVError ? error : new WebDAVError('network')) })
+      req.on('error', error => { reject(error instanceof WebDAVError ? error : new WebDAVError('network', undefined, undefined, error)) })
       req.end(body)
     })
     if ([301, 302, 307, 308].includes(response.status)) {
@@ -110,8 +111,22 @@ export const createClient = (config: LX.WebDAV.Config) => {
 
   return {
     identity: `${paths.file.href}\n${config.username}`,
-    async read(): Promise<RemoteFile> {
-      const response = await request('GET', paths.file)
+    async browse(relative: string) {
+      const url = resolveMediaURL(config, relative)
+      if (!url.pathname.endsWith('/')) url.pathname += '/'
+      const response = await request('PROPFIND', url, '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>', { Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' })
+      expectStatus(response, [207])
+      if (Buffer.byteLength(response.body) > 2 * 1024 * 1024) throw new WebDAVError('too_large')
+      return { xml: response.body, url: url.href, root: paths.base.href }
+    },
+    async read(previous?: RemoteFile): Promise<RemoteFile> {
+      const headers: Record<string, string> = {}
+      if (previous?.content != null) {
+        if (previous.etag) headers['If-None-Match'] = previous.etag
+        else if (previous.lastModified) headers['If-Modified-Since'] = previous.lastModified
+      }
+      const response = await request('GET', paths.file, '', headers)
+      if (response.status === 304 && previous?.content != null) return { ...previous, etag: response.headers.etag ?? previous.etag, lastModified: response.headers['last-modified'] ?? previous.lastModified, unchanged: true }
       if (response.status == 404) return { content: null }
       expectStatus(response, [200])
       return { content: response.body, etag: response.headers.etag, lastModified: response.headers['last-modified'] }
@@ -124,7 +139,9 @@ export const createClient = (config: LX.WebDAV.Config) => {
       } else if (previous.etag && !previous.etag.startsWith('W/')) headers['If-Match'] = previous.etag
       else if (previous.lastModified) headers['If-Unmodified-Since'] = previous.lastModified
       else throw new WebDAVError('missing_validator')
-      expectStatus(await request('PUT', paths.file, content, headers), [200, 201, 204])
+      const response = await request('PUT', paths.file, content, headers)
+      expectStatus(response, [200, 201, 204])
+      return { content, etag: response.headers.etag, lastModified: response.headers['last-modified'] }
     },
     async test() {
       await ensureDirectory()
@@ -142,4 +159,21 @@ export const createClient = (config: LX.WebDAV.Config) => {
       }
     },
   }
+}
+
+export const resolveMediaURL = (config: LX.WebDAV.Config, relative: string) => {
+  const { base } = resolveConfig(config)
+  if (typeof relative !== 'string' || relative.length > 8192) throw new WebDAVError('invalid_config')
+  let url: URL
+  try {
+    url = new URL(relative, base)
+    for (const part of url.pathname.split('/')) {
+      const text = decodeURIComponent(part)
+      // Encoded separators and dot segments cannot change the server's root.
+      // eslint-disable-next-line no-control-regex -- Remote paths must not contain control characters.
+      if (text === '.' || text === '..' || /[/\\\u0000-\u001f]/.test(text)) throw new Error('path')
+    }
+  } catch { throw new WebDAVError('invalid_config') }
+  if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname) || url.username || url.password || url.search || url.hash) throw new WebDAVError('invalid_config')
+  return url
 }

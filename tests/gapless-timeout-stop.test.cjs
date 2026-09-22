@@ -55,6 +55,7 @@ function fixture(t, fade, waitPlayEndStop = true) {
     'player.waitPlayEndStop': waitPlayEndStop,
   }
   const window = { lx: { isPlayedStop: false }, setTimeout, clearTimeout, setInterval, clearInterval }
+  const session = require('./helpers/playback-session.cjs')(window)
   const load = (code, dependencies) => {
     const exports = {}
     vm.runInNewContext(code, {
@@ -67,6 +68,7 @@ function fixture(t, fade, waitPlayEndStop = true) {
       performance: { now: () => Date.now() },
       console: { log() {}, warn() {} },
       require: name => {
+        if (name.endsWith('playbackSession')) return session
         assert(Object.hasOwn(dependencies, name), `Unexpected dependency: ${name}`)
         return dependencies[name]
       },

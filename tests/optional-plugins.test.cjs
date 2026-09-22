@@ -236,7 +236,7 @@ test('plugins compile independently, restart offline and uninstall only their ow
   const reopened = restart()
   assert.equal(Object.keys((await reopened.snapshot()).installed).length, 2)
   assert.equal(state.compilations, 2, 'Restart uses saved compiled files')
-  assert.equal((await reopened.refresh()).catalogError, 'Offline')
+  assert.match((await reopened.refresh()).catalogError, /\[LOAD_FAILED\] Offline/)
   assert.deepEqual(Object.keys((await reopened.uninstall('test-effects')).installed), ['audio-visualizer'])
   await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
   assert.equal(await fs.readFile(path.join(root, 'preserved-settings.json'), 'utf8'), '{"eq":6}')
@@ -531,4 +531,102 @@ test('nested junctions cannot smuggle external files into exports or uninstall',
   assert.ok((await manager.snapshot()).errors[id])
   await manager.uninstall(id)
   assert.equal(await fs.readFile(path.join(files, 'external-assets/data.txt'), 'utf8'), 'asset')
+})
+
+test('plugin updates remove the old version and runtime failures retain only the new installation', async t => {
+  const { manager, state, restart, root } = await fixture(t)
+  await manager.refresh()
+  const id = 'test-effects', first = (await manager.install(id)).installed[id]
+  await manager.reportRuntimeResult(id, first.directory)
+  await fs.mkdir(path.join(root, 'preferences'))
+  await fs.writeFile(path.join(root, 'preferences', id + '.json'), '{"amount":7}')
+  state.packages[0] = await bundle(id, '1.1.0'); await manager.refresh()
+  const next = (await manager.install(id)).installed[id]
+  await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
+  const reopened = restart(), failed = await reopened.reportRuntimeResult(id, next.directory, '[MODULE_NOT_FOUND] fixture missing dependency')
+  assert.equal(failed.installed[id].directory, next.directory)
+  assert.equal(failed.loadFailures[id].failedVersion, '1.1.0')
+  assert.match(failed.loadFailures[id].message, /MODULE_NOT_FOUND/)
+  assert.equal(await fs.readFile(path.join(root, 'preferences', id + '.json'), 'utf8'), '{"amount":7}')
+  assert.equal((await restart().snapshot()).installed[id].directory, next.directory)
+  assert.equal((await reopened.reportRuntimeResult(id, first.directory, 'late failure')).revision, failed.revision)
+  const record = JSON.parse(await fs.readFile(path.join(root, 'installed.json')))[id]
+  assert.equal(record.previous, undefined)
+  assert.equal(record.pending, undefined)
+})
+
+test('consecutive updates keep one version, and a main success cannot erase a desktop load error', async t => {
+  const { manager, state } = await fixture(t)
+  await manager.refresh()
+  const id = 'test-effects', first = (await manager.install(id)).installed[id]
+  state.packages[0] = await bundle(id, '1.1.0'); await manager.refresh()
+  const second = (await manager.install(id)).installed[id]
+  state.packages[0] = await bundle(id, '1.2.0'); await manager.refresh()
+  const third = (await manager.install(id)).installed[id]
+  for (const item of [first, second]) await assert.rejects(fs.stat(item.directory), { code: 'ENOENT' })
+  await manager.reportRuntimeResult(id, third.directory, 'lyric failed', true)
+  const reported = await manager.reportRuntimeResult(id, third.directory)
+  assert.equal(reported.installed[id].directory, third.directory)
+  assert.equal(reported.loadFailures[id].surface, 'lyric')
+  assert.equal((await manager.reportRuntimeResult(id, second.directory, 'stale')).revision, reported.revision)
+})
+
+test('legacy backup versions are removed on startup while the current version and preferences survive', async t => {
+  const { manager, state, root, files, restart } = await fixture(t)
+  await manager.refresh()
+  const id = 'test-effects', first = (await manager.install(id)).installed[id]
+  const previous = JSON.parse(await fs.readFile(path.join(root, 'installed.json')))[id]
+  const saved = path.join(files, 'legacy-copy')
+  await fs.cp(first.directory, saved, { recursive: true })
+  state.packages[0] = await bundle(id, '1.1.0'); await manager.refresh()
+  const next = (await manager.install(id)).installed[id]
+  await fs.cp(saved, first.directory, { recursive: true })
+  const registryPath = path.join(root, 'installed.json'), registry = JSON.parse(await fs.readFile(registryPath))
+  registry[id].previous = previous; registry[id].pending = true
+  await fs.writeFile(registryPath, JSON.stringify(registry))
+  const snapshot = await restart().snapshot()
+  assert.equal(snapshot.installed[id].directory, next.directory)
+  await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
+  assert.equal(JSON.parse(await fs.readFile(registryPath))[id].previous, undefined)
+})
+
+test('failed failure-record writes never select another plugin version', async t => {
+  const { manager, state, root } = await fixture(t)
+  await manager.refresh()
+  const id = 'test-effects', first = (await manager.install(id)).installed[id]
+  state.packages[0] = await bundle(id, '1.1.0'); await manager.refresh()
+  const next = (await manager.install(id)).installed[id]
+  const rename = fs.rename
+  fs.rename = async(source, destination) => {
+    if (destination === path.join(root, 'installed.json')) throw Object.assign(Error('locked'), { code: 'EPERM' })
+    return rename(source, destination)
+  }
+  try { await assert.rejects(manager.reportRuntimeResult(id, next.directory, 'failed'), { code: 'EPERM' }) } finally { fs.rename = rename }
+  assert.equal((await manager.snapshot()).installed[id].directory, next.directory)
+  await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
+  const snapshot = await manager.reportRuntimeResult(id, next.directory, 'retry')
+  assert.equal(snapshot.installed[id].directory, next.directory)
+  assert.equal((await manager.reportRuntimeResult(id, next.directory, 'retry')).revision, snapshot.revision)
+})
+
+test('G06: disable persists offline, preserves settings and versions, ignores late failures and survives updates', async t => {
+  const { manager, state, restart, root } = await fixture(t)
+  await manager.refresh()
+  const id = 'test-effects', first = (await manager.install(id)).installed[id]
+  await manager.reportRuntimeResult(id, first.directory)
+  await manager.setEnabled(id, false)
+  assert.equal((await manager.reportRuntimeResult(id, first.directory, 'late failure')).loadFailures[id], undefined)
+  state.offline = true
+  assert.equal((await restart().snapshot()).installed[id].enabled, false)
+  const bytes = (await manager.createExport(id)).bytes
+  assert.deepEqual(bytes, state.packages[0].archive)
+  state.offline = false; state.packages[0] = await bundle(id, '1.1.0'); await manager.refresh()
+  const updated = (await manager.install(id)).installed[id]
+  assert.equal(updated.enabled, false)
+  await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
+  assert.equal((await manager.setEnabled(id, true)).installed[id].enabled, true)
+  await manager.uninstall(id)
+  await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
+  await assert.rejects(fs.stat(updated.directory), { code: 'ENOENT' })
+  assert.deepEqual((await fs.readdir(root)).sort(), ['catalog-cache.json', 'installed.json'])
 })

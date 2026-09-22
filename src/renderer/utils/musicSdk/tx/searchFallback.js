@@ -1,8 +1,8 @@
 import { randomBytes, randomInt } from 'node:crypto'
 import { httpFetch } from '../../request'
-import { assertSearch, readSearchBody, searchResult, isSearchStopped } from '../searchFallback'
+import { assertSearch, readSearchBody, searchResult } from '../searchFallback'
 import { signRequest } from './utils'
-import musicInfo from './musicInfo'
+import { getMusicInfos } from './musicInfo'
 
 export const buildDesktopSearchRequest = (str, page, limit, searchType = 0) => ({
   comm: {
@@ -43,8 +43,8 @@ export async function desktopSearch(str, page, limit) {
   return searchResult('tx', this.handleResult(result.data.body.song.list), result.data.meta?.sum, page, limit)
 }
 
-export function mobileSearch(str, page, limit) {
-  return this.searchPrimary(str, page, limit, false)
+export function mobileSearch(str, page, limit, context) {
+  return this.searchPrimary(str, page, limit, false, context)
 }
 
 export async function smartboxSearch(str, page, limit) {
@@ -56,17 +56,7 @@ export async function smartboxSearch(str, page, limit) {
   }).promise)
   assertSearch(body?.code == 0 && Array.isArray(body?.data?.song?.itemlist))
   const mids = [...new Set(body.data.song.itemlist.map(item => item.mid).filter(mid => typeof mid == 'string' && mid))].slice(0, Math.min(limit, 10))
-  const details = await Promise.all(mids.map(async mid => {
-    try {
-      const song = await musicInfo(mid)
-      // A successful detail request must still refer to the exact suggested song.
-      return song?.songmid === mid && song.strMediaMid ? song : null
-    } catch (error) {
-      if (isSearchStopped(error)) throw error
-      return null
-    }
-  }))
-  const list = details.filter(Boolean)
+  const list = await getMusicInfos(mids)
   assertSearch(!mids.length || list.length)
   return searchResult('tx', list, list.length, page, limit, { limited: true })
 }

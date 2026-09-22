@@ -1,3 +1,4 @@
+import { showLoadError } from '@common/loadErrorNotice'
 import { ipcRenderer } from 'electron'
 import { PLUGIN_IPC, type PluginStoreSnapshot } from '@common/optionalPlugins'
 import { createPluginRuntime } from '@common/optionalPluginRuntime'
@@ -7,11 +8,12 @@ import { useEvent, getAnalyserDataArray } from '@lyric/core/mainWindowChannel'
 export const pluginRuntime = createPluginRuntime({
   lyricState: { isPlay, setting },
   lyricChannel: { useEvent, getAnalyserDataArray },
-}, true)
+}, true, async(id, directory, error) => ipcRenderer.invoke(PLUGIN_IPC.runtimeResult, id, directory, error))
 export const initOptionalPlugins = () => {
-  const onChange = (_event: Electron.IpcRendererEvent, snapshot: PluginStoreSnapshot) => { void pluginRuntime.sync(snapshot).catch(console.error) }
+  const reportError = (error: unknown) => { console.error(error); showLoadError(error, 'PLUGIN_LOAD_FAILED') }
+  const onChange = (_event: Electron.IpcRendererEvent, snapshot: PluginStoreSnapshot) => { void pluginRuntime.sync(snapshot).catch(reportError) }
   ipcRenderer.on(PLUGIN_IPC.changed, onChange)
-  void ipcRenderer.invoke(PLUGIN_IPC.list).then(snapshot => pluginRuntime.sync(snapshot)).catch(console.error)
+  void ipcRenderer.invoke(PLUGIN_IPC.list).then(snapshot => pluginRuntime.sync(snapshot)).catch(reportError)
   return () => {
     ipcRenderer.removeListener(PLUGIN_IPC.changed, onChange)
     void pluginRuntime.dispose()

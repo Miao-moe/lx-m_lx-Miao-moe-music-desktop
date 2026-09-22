@@ -3,6 +3,7 @@ import { isPlay } from '@renderer/store/player/state'
 import { appSetting } from '@renderer/store/setting'
 // import { interval, intervalCancel } from '@renderer/utils/ipc'
 import { pause } from './action'
+import { playbackSession } from './playbackSession'
 
 const time = ref(-1)
 
@@ -23,7 +24,7 @@ const timeoutTools: {
   endTime: 0,
   interval: null,
   exit() {
-    window.lx.isPlayedStop = true
+    playbackSession.timedStop()
     if (!appSetting['player.waitPlayEndStop'] && isPlay.value) {
       pause()
     }
@@ -67,12 +68,12 @@ const timeoutTools: {
 }
 
 export const startTimeoutStop = (time: number) => {
-  window.lx.isPlayedStop &&= false
+  playbackSession.clearTimedStop()
   timeoutTools.start(time)
 }
 export const stopTimeoutStop = () => {
   console.warn('stopTimeoutStop')
-  window.lx.isPlayedStop &&= false
+  playbackSession.clearTimedStop()
   timeoutTools.clearTimeout()
 }
 

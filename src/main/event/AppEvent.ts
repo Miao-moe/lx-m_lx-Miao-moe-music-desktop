@@ -2,6 +2,7 @@ import { EventEmitter } from 'events'
 
 import { saveAppHotKeyConfig, updateSetting } from '@main/utils'
 import type { BrowserWindow } from 'electron'
+import { log } from '@common/utils'
 
 export class Event extends EventEmitter {
   // closeAll() {
@@ -33,12 +34,19 @@ export class Event extends EventEmitter {
    * @param setting 新设置
    */
   update_config(setting: Partial<LX.AppSetting>) {
-    const { setting: newSetting, updatedSettingKeys, updatedSetting } = updateSetting(setting)
-    global.lx.appSetting = newSetting
-    if (!updatedSettingKeys.length) return
-    this.emit('update_config', newSetting)
-    // console.log(updatedSetting)
-    this.updated_config(updatedSettingKeys, updatedSetting)
+    const task = updateSetting(setting).then(({ setting: newSetting, updatedSettingKeys, updatedSetting }) => {
+      this.config_committed(newSetting, updatedSettingKeys, updatedSetting)
+    })
+    void task.catch(error => { log.error(error) })
+    return task
+  }
+
+  config_committed(setting: LX.AppSetting, keys: Array<keyof LX.AppSetting>, changed: Partial<LX.AppSetting>) {
+    global.lx.appSetting = setting
+    if (!keys.length) return
+    // Listener failures must not turn a committed save into an apparent disk failure.
+    try { this.emit('update_config', setting) } catch (error) { log.error(error) }
+    try { this.updated_config(keys, changed) } catch (error) { log.error(error) }
   }
 
   system_theme_change(isDark: boolean) {
@@ -65,8 +73,8 @@ export class Event extends EventEmitter {
     this.emit('hot_key_down', keyInfo)
   }
 
-  hot_key_config_update(config: LX.HotKeyConfigAll) {
-    saveAppHotKeyConfig(config)
+  async hot_key_config_update(config: LX.HotKeyConfigAll) {
+    await saveAppHotKeyConfig(config)
     this.emit('hot_key_config_update', config)
   }
 
@@ -114,9 +122,9 @@ export class Event extends EventEmitter {
 
 type EventMethods = Omit<EventType, keyof EventEmitter>
 declare class EventType extends Event {
-  on<K extends keyof EventMethods>(event: K, listener: EventMethods[K]): this
-  once<K extends keyof EventMethods>(event: K, listener: EventMethods[K]): this
-  off<K extends keyof EventMethods>(event: K, listener: EventMethods[K]): this
+  on<K extends keyof EventMethods>(event: K, listener: (...args: Parameters<EventMethods[K]>) => unknown): this
+  once<K extends keyof EventMethods>(event: K, listener: (...args: Parameters<EventMethods[K]>) => unknown): this
+  off<K extends keyof EventMethods>(event: K, listener: (...args: Parameters<EventMethods[K]>) => unknown): this
 }
 
 export type Type = Omit<EventType, keyof Omit<EventEmitter, 'on' | 'off' | 'once'>>

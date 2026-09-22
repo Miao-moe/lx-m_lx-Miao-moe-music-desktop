@@ -74,6 +74,7 @@ function fixture(t, { fade = false, mode = 'listLoop' } = {}) {
   const appEvent = new EventEmitter()
   for (const name of ['musicToggled', 'playerEnded', 'pause', 'stop']) appEvent[name] = () => appEvent.emit(name)
   const window = { lx: { isPlayedStop: false }, lxData: {}, i18n: { t: key => key }, app_event: appEvent, setTimeout, clearTimeout }
+  const session = require('./helpers/playback-session.cjs')(window)
   const cleanups = []
   const common = { ...vue, onBeforeUnmount: callback => cleanups.push(callback) }
   const load = (file, imports) => {
@@ -82,13 +83,21 @@ function fixture(t, { fade = false, mode = 'listLoop' } = {}) {
       exports,
       window,
       Audio,
+      AbortController,
       Date,
       setTimeout,
       clearTimeout,
       setImmediate,
       queueMicrotask,
       console: { log() {}, warn() {} },
-      require(name) { assert(Object.hasOwn(imports, name), `Unexpected dependency: ${name}`); return imports[name] },
+      require(name) {
+        if (name === '@common/loadErrorNotice') return require('./helpers/load-typescript.cjs')()('src/common/loadErrorNotice.ts')
+        if (name === '@common/utils/errorMessage') return require('./helpers/load-typescript.cjs')()('src/common/utils/errorMessage.ts')
+        if (name.endsWith('playbackSession')) return session
+        if (name.endsWith('queueSession')) return require('./helpers/load-typescript.cjs')()('src/renderer/core/player/queueSession.ts')
+        if (name.endsWith('requestContext')) return require('./helpers/load-typescript.cjs')()('src/renderer/utils/requestContext.js')
+        assert(Object.hasOwn(imports, name), `Unexpected dependency: ${name}`); return imports[name]
+      },
     }, { filename: file })
     return exports
   }
@@ -130,6 +139,7 @@ function fixture(t, { fade = false, mode = 'listLoop' } = {}) {
     '@renderer/plugins/player': player,
     '@renderer/store/player/state': state,
     '@renderer/store/player/action': store,
+    '@renderer/store/player/playProgress': { setProgress() {} },
     '@renderer/store/setting': { appSetting },
     '../music/index': music,
     './utils': {
@@ -189,6 +199,79 @@ function fixture(t, { fade = false, mode = 'listLoop' } = {}) {
     end() { primary.ended = true; primary.paused = true; primary.emit('ended') },
   }
 }
+
+test('B13: changing tracks aborts the old playback URL and ignores its late completion', async t => {
+  const f = fixture(t), pending = deferred()
+  f.hooks.url = request => request.musicInfo.id === 'a' ? pending.promise : urlFor(request.musicInfo.id)
+  f.core.setMusicUrl(f.state.playQueueList[0].musicInfo)
+  await flush()
+  const old = f.requests[0]
+  f.store.setPlayMusicInfo('source', f.state.playQueueList[1].musicInfo)
+  f.core.setMusicUrl(f.state.playQueueList[1].musicInfo)
+  await flush()
+  assert.equal(old.signal.aborted, true)
+  assert.deepEqual(f.resources, [urlFor('b')])
+  pending.resolve(urlFor('a'))
+  await flush()
+  assert.deepEqual(f.resources, [urlFor('b')])
+})
+
+test('A04: moving queue rows keeps the same current occurrence and invalidates old preload', async t => {
+  const f = fixture(t)
+  await f.preload()
+  f.store.movePlayQueue(0, 2)
+  assert.deepEqual(Array.from(f.state.playQueueList, item => item.musicInfo.id), ['b', 'c', 'a'])
+  assert.equal(f.state.playInfo.playerPlayIndex, 2)
+  assert.equal(f.state.playMusicInfo.musicInfo.id, 'a')
+  assert.equal(f.secondary.src, '')
+  const revision = f.state.playQueueRevision.value
+  f.store.movePlayQueue(-1, 0); f.store.movePlayQueue(0, 30); f.store.movePlayQueue(0, 0)
+  assert.equal(f.state.playQueueRevision.value, revision)
+})
+
+for (const action of ['pause', 'stop', 'edit']) {
+  test(`A05: ${action} invalidates ordinary next-song selection while filtering is pending`, async t => {
+    const f = fixture(t), pending = deferred()
+    f.hooks.filter = () => pending.promise
+    const next = f.core.playNext(true)
+    await flush()
+    if (action === 'edit') f.store.movePlayQueue(1, 2)
+    else f.core[action]()
+    pending.resolve()
+    await next
+    assert.equal(f.state.playMusicInfo.musicInfo.id, 'a')
+    assert.deepEqual(f.resources, [])
+  })
+}
+
+test('A05: pause aborts an in-flight URL load and resume requests a fresh resource', async t => {
+  const f = fixture(t), pending = deferred()
+  f.hooks.url = () => pending.promise
+  f.core.setMusicUrl(f.state.playQueueList[0].musicInfo)
+  await flush()
+  const request = f.requests[0]
+  f.core.pause()
+  assert.equal(request.signal.aborted, true)
+  pending.resolve(urlFor('old'))
+  await flush()
+  assert.deepEqual(f.resources, [])
+  f.primary.src = ''
+  f.hooks.url = () => urlFor('resumed')
+  f.core.play()
+  await flush()
+  assert.deepEqual(f.resources, [urlFor('resumed')])
+})
+
+test('A05: delayed stop notifications cannot clear a newly selected track', async t => {
+  const f = fixture(t)
+  f.store.setPlayMusicInfo(null, null)
+  const stopped = f.core.playNext()
+  f.core.playQueueById(1)
+  await stopped
+  await f.advance(1)
+  assert.equal(f.state.playMusicInfo.musicInfo.id, 'b')
+  assert.deepEqual(f.resources, [urlFor('b')])
+})
 
 for (const fade of [false, true]) {
   const mode = fade ? 'crossfade' : 'gapless'

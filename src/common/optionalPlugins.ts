@@ -62,6 +62,13 @@ export interface InstalledPlugin {
   directory: string
   source?: 'official' | 'local'
   format?: PluginPackageFormat
+  enabled?: boolean
+}
+
+export interface PluginLoadFailure {
+  message: string
+  failedVersion: string
+  surface?: 'main' | 'lyric'
 }
 
 export interface PluginStoreSnapshot {
@@ -70,6 +77,7 @@ export interface PluginStoreSnapshot {
   installed: Partial<Record<PluginId, InstalledPlugin>>
   errors: Partial<Record<PluginId, string>>
   sources?: Partial<Record<PluginId, 'official' | 'local'>>
+  loadFailures?: Partial<Record<PluginId, PluginLoadFailure>>
   catalogError: string | null
 }
 
@@ -92,6 +100,8 @@ export const PLUGIN_IPC = {
   refresh: 'optional_plugins:refresh',
   install: 'optional_plugins:install',
   uninstall: 'optional_plugins:uninstall',
+  setEnabled: 'optional_plugins:set_enabled',
+  runtimeResult: 'optional_plugins:runtime_result',
   import: 'optional_plugins:import',
   export: 'optional_plugins:export',
   progress: 'optional_plugins:progress',

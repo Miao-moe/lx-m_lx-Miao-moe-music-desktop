@@ -58,7 +58,11 @@ function App() {
   const [, setPausedTime] = useState(0)
   const stateRef = useRef(state)
   // Renderer layout/scene caches depend on theme identity, not only its values.
-  const rendererTheme = useMemo(() => ({ ...theme, fontFamily: state?.config.fontFamily || undefined }), [state?.config.fontFamily])
+  const rendererTheme = useMemo(() => ({
+    ...theme,
+    fontFamily: state?.config.fontFamilies?.[0] || state?.config.fontFamily || undefined,
+    fontFamilyStack: state?.config.fontFamilies?.slice(1),
+  }), [state?.config.fontFamily])
   useEffect(() => {
     let frameId = 0
     let clock: FoliaFrame | null = null

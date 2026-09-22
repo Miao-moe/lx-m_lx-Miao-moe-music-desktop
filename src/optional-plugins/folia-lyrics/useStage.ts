@@ -1,5 +1,6 @@
-import { nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from '@common/utils/vueTools'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from '@common/utils/vueTools'
 import { appSetting } from '@renderer/store/setting'
+import { parseFontStack } from '@common/fonts'
 import { musicInfo, isPlay, isShowPlayerDetail } from '@renderer/store/player/state'
 import { lyric } from '@renderer/store/player/lyric'
 import { playProgress } from '@renderer/store/player/playProgress'
@@ -23,6 +24,7 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
   let disposed = false
   let buffering = false
   const audio = getAudioElement()
+  const fontFamilies = computed(() => parseFontStack(appSetting['common.font']))
   const demoStart = performance.now()
   const offset = () => (lyric.offset + lyric.tempOffset) / 1000
   const send = (type: string, data: unknown) => {
@@ -61,6 +63,7 @@ export default (element: Ref<HTMLIFrameElement | null>, preview: boolean) => {
       mode: preferences.mode,
       language: window.i18n.locale,
       fontFamily: appSetting['common.font'],
+      fontFamilies: fontFamilies.value,
       fontScale: Math.max(0.5, Math.min(2, appSetting['playDetail.style.fontSize'] / 140)),
       reducedMotion: document.documentElement.dataset.motionEnabled === 'false',
       bottomInset: controls?.offsetHeight ?? 0,

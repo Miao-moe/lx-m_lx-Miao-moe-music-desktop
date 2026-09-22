@@ -128,10 +128,10 @@ export default () => {
     return getAllThemes()
   })
   mainHandle<LX.Theme>(WIN_MAIN_RENDERER_EVENT_NAME.save_theme, async({ params: theme }) => {
-    saveTheme(theme)
+    await saveTheme(theme)
   })
   mainHandle<string>(WIN_MAIN_RENDERER_EVENT_NAME.remove_theme, async({ params: id }) => {
-    removeTheme(id)
+    await removeTheme(id)
   })
 }
 

@@ -1,4 +1,8 @@
 import { ipcRenderer } from 'electron'
+import { restoreTransportError } from './utils/errorMessage'
+import { createIpcListeners } from './ipcListeners'
+
+const listeners = createIpcListeners(ipcRenderer)
 
 export function rendererSend(name: string): void
 export function rendererSend<T>(name: string, params: T): void
@@ -17,29 +21,25 @@ export async function rendererInvoke<V>(name: string): Promise<V>
 export async function rendererInvoke<T>(name: string, params: T): Promise<void>
 export async function rendererInvoke<T, V>(name: string, params: T): Promise<V>
 export async function rendererInvoke <T, V>(name: string, params?: T): Promise<V> {
-  return ipcRenderer.invoke(name, params)
+  try { return await ipcRenderer.invoke(name, params) } catch (error) { throw restoreTransportError(error) }
 }
 
 export function rendererOn(name: string, listener: LX.IpcRendererEventListener): void
 export function rendererOn<T>(name: string, listener: LX.IpcRendererEventListenerParams<T>): void
 export function rendererOn<T>(name: string, listener: LX.IpcRendererEventListenerParams<T>): void {
-  ipcRenderer.on(name, (event, params) => {
-    listener({ event, params })
-  })
+  listeners.on(name, listener)
 }
 
 export function rendererOnce(name: string, listener: LX.IpcRendererEventListener): void
 export function rendererOnce<T>(name: string, listener: LX.IpcRendererEventListenerParams<T>): void
 export function rendererOnce<T>(name: string, listener: LX.IpcRendererEventListenerParams<T>): void {
-  ipcRenderer.once(name, (event, params) => {
-    listener({ event, params })
-  })
+  listeners.on(name, listener, true)
 }
 
 export const rendererOff = (name: string, listener: (...args: any[]) => any) => {
-  ipcRenderer.removeListener(name, listener)
+  listeners.off(name, listener)
 }
 
 export const rendererOffAll = (name: string) => {
-  ipcRenderer.removeAllListeners(name)
+  listeners.offAll(name)
 }

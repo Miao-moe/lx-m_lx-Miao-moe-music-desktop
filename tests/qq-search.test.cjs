@@ -3,6 +3,7 @@ const fs = require('node:fs')
 const vm = require('node:vm')
 const { test } = require('node:test')
 const ts = require('typescript')
+const requestContext = require('./helpers/load-typescript.cjs')()('src/renderer/utils/requestContext.js')
 
 const load = (filename, imports, globals = {}) => {
   const module = { exports: {} }
@@ -13,10 +14,14 @@ const load = (filename, imports, globals = {}) => {
     module,
     exports: module.exports,
     console,
+    AbortController,
     setTimeout,
     window: { i18n: { t: key => key } },
     ...globals,
-    require: name => { assert(Object.hasOwn(imports, name), name); return imports[name] },
+    require: name => {
+      if (name.endsWith('requestContext')) return globals.setTimeout ? { ...requestContext, requestDelay: ms => new Promise(resolve => globals.setTimeout(resolve, ms)) } : requestContext
+      assert(Object.hasOwn(imports, name), name); return imports[name]
+    },
   }, { filename })
   return module.exports
 }
@@ -91,7 +96,7 @@ test('repeated clicks share one pending SDK request, including its retries', asy
   const f = sdkFixture(count => count === 1 ? gate.promise : success())
   const first = f.sdk.musicSearch('same', 1, 30)
   const second = f.sdk.musicSearch('same', 1, 30)
-  assert.equal(first, second)
+  await flush()
   assert.equal(f.calls.length, 1)
   gate.resolve(rejected())
   await Promise.all([first, second])

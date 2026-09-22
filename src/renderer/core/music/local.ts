@@ -1,7 +1,9 @@
 import { encodePath } from '@common/utils/common'
 import { updateListMusics } from '@renderer/store/list/action'
-import { saveLyric, saveMusicUrl } from '@renderer/utils/ipc'
+import { getLyricEdited, saveLyric, saveMusicUrl } from '@renderer/utils/ipc'
 import { getLocalFilePath } from '@renderer/utils/music'
+import { rendererInvoke } from '@common/rendererIpc'
+import { WIN_MAIN_RENDERER_EVENT_NAME } from '@common/ipcNames'
 
 import {
   buildLyricInfo,
@@ -16,9 +18,9 @@ import {
 } from './utils'
 
 
-const getOtherSourceByLocal = async<T>(musicInfo: LX.Music.MusicInfoLocal, handler: (infos: LX.Music.MusicInfoOnline[]) => Promise<T>) => {
+const getOtherSourceByLocal = async<T>(musicInfo: LX.Music.MusicInfoLocal, handler: (infos: LX.Music.MusicInfoOnline[]) => Promise<T>, isRefresh = false) => {
   let result: LX.Music.MusicInfoOnline[] = []
-  result = await getOtherSource(musicInfo)
+  result = await getOtherSource(musicInfo, isRefresh)
   if (result.length) try { return await handler(result) } catch {}
   if (musicInfo.name.includes('-')) {
     const [name, singer] = musicInfo.name.split('-').map(val => val.trim())
@@ -72,6 +74,7 @@ export const getMusicUrl = async({ musicInfo, isRefresh, allowToggleSource = tru
   allowToggleSource?: boolean
   onToggleSource?: (musicInfo?: LX.Music.MusicInfoOnline) => void
 }): Promise<string> => {
+  if (musicInfo.meta.webdav) return rendererInvoke<{ path: string, identity: string }, string>(WIN_MAIN_RENDERER_EVENT_NAME.webdav_audio_url, musicInfo.meta.webdav)
   if (!isRefresh) {
     const path = await getLocalFilePath(musicInfo)
     if (path) return encodePath(path)
@@ -88,14 +91,14 @@ export const getMusicUrl = async({ musicInfo, isRefresh, allowToggleSource = tru
 
   onToggleSource()
   return getOtherSourceByLocal(musicInfo, async(otherSource) => {
-    return getOnlineOtherSourceMusicUrl({ musicInfos: [...otherSource], onToggleSource, isRefresh }).then(({ url, quality: targetQuality, musicInfo: targetMusicInfo, isFromCache }) => {
+    return getOnlineOtherSourceMusicUrl({ musicInfos: [...otherSource], onToggleSource, isRefresh, origin: musicInfo }).then(({ url, quality: targetQuality, musicInfo: targetMusicInfo, isFromCache }) => {
       // saveLyric(musicInfo, data.lyricInfo)
       if (!isFromCache) void saveMusicUrl(targetMusicInfo, targetQuality, url)
 
       // TODO: save url ?
       return url
     })
-  })
+  }, isRefresh)
 }
 
 export const getPicUrl = async({ musicInfo, listId, isRefresh, onToggleSource = () => {} }: {
@@ -104,10 +107,14 @@ export const getPicUrl = async({ musicInfo, listId, isRefresh, onToggleSource = 
   isRefresh: boolean
   onToggleSource?: (musicInfo?: LX.Music.MusicInfoOnline) => void
 }): Promise<string> => {
-  if (!isRefresh) {
+  if (musicInfo.meta.webdav) return ''
+  const hasTags = await window.lx.worker.main.hasMusicFileTags(musicInfo.meta.filePath)
+  if (!isRefresh || !hasTags) {
     const pic = await window.lx.worker.main.getMusicFilePic(musicInfo.meta.filePath)
     if (pic) return pic
 
+    // 旧歌单也按文件当前的标签判断，避免继续使用曾经误匹配的在线封面。
+    if (!hasTags) return ''
     if (musicInfo.meta.picUrl) return musicInfo.meta.picUrl
   }
 
@@ -119,7 +126,7 @@ export const getPicUrl = async({ musicInfo, listId, isRefresh, onToggleSource = 
 
   onToggleSource()
   return getOtherSourceByLocal(musicInfo, async(otherSource) => {
-    return getOnlineOtherSourcePicUrl({ musicInfos: [...otherSource], onToggleSource, isRefresh }).then(({ url, musicInfo: targetMusicInfo, isFromCache }) => {
+    return getOnlineOtherSourcePicUrl({ musicInfos: [...otherSource], onToggleSource, isRefresh, origin: musicInfo }).then(({ url, musicInfo: targetMusicInfo, isFromCache }) => {
       if (listId) {
         musicInfo.meta.picUrl = url
         void updateListMusics([{ id: listId, musicInfo }])
@@ -127,7 +134,7 @@ export const getPicUrl = async({ musicInfo, listId, isRefresh, onToggleSource = 
 
       return url
     })
-  })
+  }, isRefresh)
 }
 
 export const getLyricInfo = async({ musicInfo, isRefresh, onToggleSource = () => {} }: {
@@ -135,6 +142,19 @@ export const getLyricInfo = async({ musicInfo, isRefresh, onToggleSource = () =>
   isRefresh: boolean
   onToggleSource?: (musicInfo?: LX.Music.MusicInfoOnline) => void
 }): Promise<LX.Player.LyricInfo> => {
+  if (musicInfo.meta.webdav) return buildLyricInfo({ lyric: '' })
+  if (!await window.lx.worker.main.hasMusicFileTags(musicInfo.meta.filePath)) {
+    const [editedLyricInfo, fileLyricInfo] = await Promise.all([
+      getLyricEdited(musicInfo),
+      window.lx.worker.main.getMusicFileLyric(musicInfo.meta.filePath),
+    ])
+    if (editedLyricInfo?.lyric) {
+      return buildLyricInfo({ ...editedLyricInfo, rawlrcInfo: fileLyricInfo ?? editedLyricInfo })
+    }
+    // 没有歌曲标签时只读本地歌词，不读取或新增自动匹配的在线缓存。
+    return buildLyricInfo(fileLyricInfo ?? { lyric: '' })
+  }
+
   if (!isRefresh) {
     const [lyricInfo, fileLyricInfo] = await Promise.all([getCachedLyricInfo(musicInfo), window.lx.worker.main.getMusicFileLyric(musicInfo.meta.filePath)])
     // console.log(lyricInfo, fileLyricInfo)
@@ -157,7 +177,7 @@ export const getLyricInfo = async({ musicInfo, isRefresh, onToggleSource = () =>
 
   onToggleSource()
   return getOtherSourceByLocal(musicInfo, async(otherSource) => {
-    return getOnlineOtherSourceLyricInfo({ musicInfos: [...otherSource], onToggleSource, isRefresh }).then(async({ lyricInfo, musicInfo: targetMusicInfo, isFromCache }) => {
+    return getOnlineOtherSourceLyricInfo({ musicInfos: [...otherSource], onToggleSource, isRefresh, origin: musicInfo }).then(async({ lyricInfo, musicInfo: targetMusicInfo, isFromCache }) => {
       void saveLyric(musicInfo, lyricInfo)
 
       if (isFromCache) return buildLyricInfo(lyricInfo)
@@ -165,5 +185,5 @@ export const getLyricInfo = async({ musicInfo, isRefresh, onToggleSource = () =>
 
       return buildLyricInfo(lyricInfo)
     })
-  })
+  }, isRefresh)
 }

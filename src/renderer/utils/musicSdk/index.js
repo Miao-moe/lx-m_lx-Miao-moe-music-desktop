@@ -8,6 +8,7 @@ import xm from './xm'
 import { supportQuality } from './api-source'
 import { versionChars } from './versionChars'
 import { loadLocalSourcePlugins, loadRemoteSourcePlugins } from './plugins/loader'
+import { getRequestSignal, withRequestScope, withRequestDeadline } from '../requestContext'
 
 
 /**
@@ -86,20 +87,43 @@ const musicSdk = {
   },
   supportQuality,
 
-  async searchMusic({ name, singer, source: s, limit = 25 }) {
+  async searchMusic({ name, singer, source: s, limit = 25, onResult, excludeSources = [], refresh = false }) {
     const trimStr = str => typeof str == 'string' ? str.trim() : str
     const musicName = trimStr(name)
     const tasks = []
     const excludeSource = ['xm']
     for (const source of buildSourceList()) {
-      if (!sourcesMap[source.id] || !sourcesMap[source.id].musicSearch || source.id == s || excludeSource.includes(source.id)) continue
-      tasks.push(sourcesMap[source.id].musicSearch.search(`${musicName} ${singer || ''}`.trim(), 1, limit).catch(_ => null))
+      if (!sourcesMap[source.id] || !sourcesMap[source.id].musicSearch || source.id == s || excludeSource.includes(source.id) || excludeSources.includes(source.id)) continue
+      tasks.push(sourcesMap[source.id].musicSearch.search(`${musicName} ${singer || ''}`.trim(), 1, limit, { refresh }).then(result => {
+        onResult?.(result)
+        return result
+      }).catch(_ => null))
     }
     return (await Promise.all(tasks)).filter(s => s)
   },
 
-  async findMusic({ name, singer, albumName, interval, source: s }) {
-    const lists = await this.searchMusic({ name, singer, source: s, limit: 25 })
+  async findMusic(info, options = {}) {
+    return withRequestDeadline(15000, async() => {
+      const signal = getRequestSignal()
+      const controller = new AbortController()
+      const abort = () => controller.abort(signal.reason)
+      signal.addEventListener('abort', abort, { once: true })
+      try {
+        return await new Promise((resolve, reject) => {
+          const onResult = result => {
+            const matches = this.matchMusic(info, [result])
+            if (matches.length) resolve(matches)
+          }
+          withRequestScope(controller.signal, async() => this.searchMusic({ ...info, ...options, onResult })).then(lists => resolve(this.matchMusic(info, lists)), reject)
+        })
+      } finally {
+        controller.abort()
+        signal.removeEventListener('abort', abort)
+      }
+    })
+  },
+
+  matchMusic({ name, singer, albumName, interval }, lists) {
     // console.log(lists)
     // console.log({ name, singer, albumName, interval, source: s })
 
@@ -154,7 +178,8 @@ const musicSdk = {
     const isEqualsAlbum = (album) => fAlbumName ? fAlbumName == album : true
 
     const result = lists.map(source => {
-      for (const item of source.list) {
+      const list = source.list.map(item => ({ ...item }))
+      for (const item of list) {
         item.name = trimStr(item.name)
         item.singer = trimStr(item.singer)
         item.fSinger = filterStr(sortSingle(item.singer).toLowerCase())
@@ -168,11 +193,11 @@ const musicSdk = {
         }
         if (item.fMusicName == fMusicName && isIncludesSinger(item.fSinger)) return item
       }
-      for (const item of source.list) {
+      for (const item of list) {
         if (item.name == null) continue
         if (item.fSinger == fSinger && isIncludesName(item.fMusicName)) return item
       }
-      for (const item of source.list) {
+      for (const item of list) {
         if (item.name == null) continue
         if (isEqualsAlbum(item.fAlbumName) && isIncludesSinger(item.fSinger) && isIncludesName(item.fMusicName)) return item
       }

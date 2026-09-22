@@ -2,6 +2,11 @@ import { EventEmitter } from 'events'
 
 
 export class Event extends EventEmitter {
+  dislike_data_restored(data: LX.Dislike.DislikeRules) {
+    this.emit('dislike_data_overwrite', data, true)
+    this.dislike_changed()
+  }
+
   dislike_changed() {
     this.emit('dislike_changed')
   }

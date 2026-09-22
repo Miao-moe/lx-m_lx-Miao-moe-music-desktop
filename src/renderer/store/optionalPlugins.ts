@@ -1,3 +1,4 @@
+import { errorForTransport, formatError, getErrorInfo } from '@common/utils/errorMessage'
 import { ipcRenderer } from 'electron'
 import { computed, reactive, shallowRef } from '@common/utils/vueTools'
 import { PLUGIN_IPC, type PluginPackageFormat, type PluginId, type PluginStoreSnapshot, type PluginTransferLabels, type PluginTransferResult } from '@common/optionalPlugins'
@@ -25,7 +26,7 @@ export const pluginRuntime = createPluginRuntime({
   dialog: { dialog },
   lyric: { setDesktopAnalyserProvider, getRawLyricLines },
   ipc: { getUserSoundEffectConvolutionPresetList, getUserSoundEffectEQPresetList, saveUserSoundEffectConvolutionPresetList, saveUserSoundEffectEQPresetList },
-})
+}, false, async(id, directory, error) => ipcRenderer.invoke(PLUGIN_IPC.runtimeResult, id, directory, error))
 export const pluginStore = shallowRef<PluginStoreSnapshot>({ revision: -1, catalog: [], installed: {}, errors: {}, catalogError: null })
 export const pluginBusy = reactive<Partial<Record<PluginId, boolean>>>({})
 export const pluginOperationErrors = reactive<Partial<Record<PluginId, string>>>({})
@@ -49,7 +50,7 @@ export const changePluginInstallation = async(id: PluginId, install: boolean, fo
   Reflect.deleteProperty(pluginOperationErrors, id)
   try {
     if (!install) await pluginRuntime.unload(id)
-    await applySnapshot(await ipcRenderer.invoke(install ? PLUGIN_IPC.install : PLUGIN_IPC.uninstall, id, format))
+    await applySnapshot(await (install ? ipcRenderer.invoke(PLUGIN_IPC.install, id, format) : ipcRenderer.invoke(PLUGIN_IPC.uninstall, id)))
   } catch (error: any) {
     pluginOperationErrors[id] = error.message
     await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.list)).catch(console.error)
@@ -59,11 +60,28 @@ export const changePluginInstallation = async(id: PluginId, install: boolean, fo
   }
 }
 
+export const changePluginEnabled = async(id: PluginId, enabled: boolean) => {
+  if (isBuiltinPlugin(id) || pluginBusy[id] || pluginTransferBusy.value) return
+  pluginBusy[id] = true
+  Reflect.deleteProperty(pluginOperationErrors, id)
+  try { await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.setEnabled, id, enabled)) } catch (error: any) {
+    pluginOperationErrors[id] = error.message
+    await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.list)).catch(console.error)
+  } finally { pluginBusy[id] = false }
+}
+
 export const transferPlugin = async(id?: PluginId) => {
   if ((id && isBuiltinPlugin(id)) || pluginTransferBusy.value || Object.values(pluginBusy).some(Boolean)) return
   pluginTransferBusy.value = true
   pluginTransferNotice.value = null
   const t = useI18n()
+  const transferError = (result: Extract<PluginTransferResult<unknown>, { status: 'error' }>) => {
+    const message = t(`setting__plugins_transfer_${result.code}`)
+    if (!result.detail) return formatError({ code: result.code, message })
+    const info = getErrorInfo(result.detail, result.code)
+    const detail = info.reason !== info.code && info.reason !== message ? ` ${info.reason}` : ''
+    return formatError({ code: info.code, message: message + detail })
+  }
   const labels: PluginTransferLabels = {
     title: t(id ? 'setting__plugins_export' : 'setting__plugins_import'),
     filter: t('setting__plugins_package'),
@@ -80,22 +98,22 @@ export const transferPlugin = async(id?: PluginId) => {
       const result = await ipcRenderer.invoke(PLUGIN_IPC.export, id, labels) as PluginTransferResult<{ id: PluginId, filename: string }>
       if (result.status === 'cancelled') return
       pluginTransferNotice.value = result.status === 'error'
-        ? { message: t(`setting__plugins_transfer_${result.code}`), error: true }
+        ? { message: transferError(result), error: true }
         : { message: t('setting__plugins_export_success', { path: result.value.filename }), error: false }
     } else {
       const result = await ipcRenderer.invoke(PLUGIN_IPC.import, labels) as PluginTransferResult<{ id: PluginId, snapshot: PluginStoreSnapshot }>
       if (result.status === 'cancelled') return
       if (result.status === 'error') {
-        pluginTransferNotice.value = { message: t(`setting__plugins_transfer_${result.code}`) + (result.detail ? '\n' + result.detail : ''), error: true }
+        pluginTransferNotice.value = { message: transferError(result), error: true }
         return
       }
       Reflect.deleteProperty(pluginOperationErrors, result.value.id)
       await applySnapshot(result.value.snapshot)
-      const failed = !!pluginRuntime.errors[result.value.id]
-      pluginTransferNotice.value = { message: t(failed ? 'setting__plugins_import_load_failed' : 'setting__plugins_import_success'), error: failed }
+      const failed = !!pluginRuntime.errors[result.value.id] || !!pluginStore.value.loadFailures?.[result.value.id]
+      pluginTransferNotice.value = { message: failed ? formatError(pluginRuntime.errors[result.value.id] || pluginStore.value.loadFailures?.[result.value.id]?.message, t('setting__plugins_import_load_failed'), 'PLUGIN_LOAD_FAILED') : t('setting__plugins_import_success'), error: failed }
     }
-  } catch {
-    pluginTransferNotice.value = { message: t('setting__plugins_transfer_write_failed'), error: true }
+  } catch (error) {
+    pluginTransferNotice.value = { message: formatError(error, t('setting__plugins_transfer_write_failed'), 'PLUGIN_TRANSFER_FAILED'), error: true }
   } finally { pluginTransferBusy.value = false }
 }
 
@@ -104,7 +122,9 @@ export const initOptionalPlugins = async() => {
   const onProgress = () => {
     pluginTransferNotice.value = { message: useI18n()('setting__plugins_compiling'), error: false }
   }
-  const onChange = (_event: Electron.IpcRendererEvent, snapshot: PluginStoreSnapshot) => { void applySnapshot(snapshot).catch(console.error) }
+  const onChange = (_event: Electron.IpcRendererEvent, snapshot: PluginStoreSnapshot) => {
+    void applySnapshot(snapshot).catch(error => { pluginStoreError.value = errorForTransport(error).message })
+  }
   ipcRenderer.on(PLUGIN_IPC.changed, onChange)
   ipcRenderer.on(PLUGIN_IPC.progress, onProgress)
   try { await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.list)) } catch (error: any) { pluginStoreError.value = error.message }

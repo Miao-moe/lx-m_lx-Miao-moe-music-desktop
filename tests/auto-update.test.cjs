@@ -16,21 +16,21 @@ const sample = Buffer.from('MZ test update payload; never executed by the unit t
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex')
 const fileName = 'LX-M Music-v9.0.0-x64-Setup.exe'
 
-function loadSource(filename, overrides = {}, appProcess = process) {
+function loadSource(filename, overrides = {}, appProcess = process, schedule = setTimeout) {
   const code = ts.transpileModule(fs.readFileSync(path.join(project, filename), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText
   const module = { exports: {} }
-  vm.runInThisContext('(function(require,module,exports,process){' + code + '\n})', { filename })(name => {
+  vm.runInThisContext('(function(require,module,exports,process,setTimeout){' + code + '\n})', { filename })(name => {
     if (Object.hasOwn(overrides, name)) return overrides[name]
     throw Error('Unexpected dependency: ' + name)
-  }, module, module.exports, appProcess)
+  }, module, module.exports, appProcess, schedule)
   return module.exports
 }
 
 const assetUtils = loadSource('src/common/utils/update.ts')
 
-function fixture(t, { request, launch, installed = true, openError = '' } = {}) {
+function fixture(t, { request, launch, installed = true, openError = '', deadlineMs } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lx-update-test-'))
   const installDirectory = path.join(root, "应用 & player's music")
   fs.mkdirSync(installDirectory)
@@ -86,8 +86,9 @@ function fixture(t, { request, launch, installed = true, openError = '' } = {}) 
     '@main/app': { quitApp() { quits++; app.emit('will-quit') } },
     '@common/constants': { APP_NAME: 'LX-M Music' },
     '@common/utils/update': assetUtils,
+    '@common/utils/errorMessage': require('./helpers/load-typescript.cjs')()('src/common/utils/errorMessage.ts'),
     './updateInstaller': { async launchWindowsInstaller(...args) { launches.push(args); await launch?.(...args) } },
-  }, { platform: 'win32', arch: 'x64', resourcesPath: path.join(installDirectory, 'resources'), env: {} }).default()
+  }, { platform: 'win32', arch: 'x64', resourcesPath: path.join(installDirectory, 'resources'), env: {} }, (callback, ms) => setTimeout(callback, ms === 30 * 60_000 && deadlineMs ? deadlineMs : ms)).default()
   const emit = (name, params) => handlers.get(name)({ params })
   const wait = async(name) => (await once(bus, name, { signal: AbortSignal.timeout(5000) }))[0]
   const findFile = () => fs.readdirSync(root).filter(name => name.startsWith('lx-m-update-'))
@@ -211,7 +212,7 @@ test('cancel followed immediately by retry cannot install the cancelled download
       return { statusCode: 200, headers: {}, body: firstBody }
     },
   })
-  f.emit('update_download_update', { downloadUrl: 'https://example.test/first.exe', fileName, size: sample.length, digest: '', installAfterDownload: true })
+  f.emit('update_download_update', { downloadUrl: 'https://example.test/first.exe', fileName, size: sample.length, digest: sha256(sample), installAfterDownload: true })
   await delay(10)
   f.emit('update_download_update', null)
   await f.download({ installAfterDownload: true })
@@ -322,7 +323,7 @@ test('launch failure keeps the app and verified package available for retry', as
 for (const [name, bytes, info, expected] of [
   ['wrong digest', sample, { digest: 'sha256:' + '0'.repeat(64) }, /SHA-256/],
   ['short download', sample.subarray(0, 3), {}, /不完整/],
-  ['empty download', Buffer.alloc(0), { size: 0, digest: '' }, /不完整/],
+  ['empty download', Buffer.alloc(0), { size: 0 }, /不完整/],
   ['wrong architecture', sample, { fileName: 'LX-M-v9-arm64-Setup.exe' }, /系统架构/],
   ['portable binary', sample, { fileName: 'LX-M-v9-x64-portable.exe' }, /Setup/],
   ['path traversal', sample, { fileName: '../' + fileName }, /文件名无效/],
@@ -337,11 +338,11 @@ for (const [name, bytes, info, expected] of [
   })
 }
 
-test('packages without a Release digest are still rechecked against their downloaded bytes', async(t) => {
+test('H11: packages without an upstream digest are rejected before downloading', async(t) => {
   const f = fixture(t)
-  await f.download({ digest: '' })
-  fs.writeFileSync(f.findFile(), Buffer.alloc(sample.length, 42))
-  assert.match(await f.installError(), /发生变化/)
+  assert.match(await f.download({ digest: '' }, 'update_error'), /UPDATE_DIGEST_REQUIRED/)
+  assert.equal(f.requests, 0)
+  assert.equal(f.findFile(), undefined)
   assert.equal(f.quits, 0)
 })
 
@@ -355,7 +356,7 @@ test('cancelling an active download never publishes a late completed update', as
       return { statusCode: 200, headers: {}, body }
     },
   })
-  f.emit('update_download_update', { downloadUrl: 'https://example.test/update.exe', fileName, size: sample.length, digest: '' })
+  f.emit('update_download_update', { downloadUrl: 'https://example.test/update.exe', fileName, size: sample.length, digest: sha256(sample) })
   await delay(10)
   f.emit('update_download_update', null)
   await delay(30)
@@ -440,4 +441,27 @@ test('invalid installer or target paths are rejected without starting a process'
     await assert.rejects(f.launchWindowsInstaller('C:\\Temp\\Setup.exe', dir, 'D:\\LX\\resources'), /路径无效/)
     assert.equal(f.calls.length, 0)
   }
+})
+
+test('H10: response body stalls terminate the update and remove partial files', async t => {
+  const http = require('node:http'); const undici = require('undici')
+  const server = http.createServer((_req, res) => { res.writeHead(200, { 'content-length': sample.length }); res.write(sample.subarray(0, 4)) }).listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  t.after(() => { server.closeAllConnections(); server.close() })
+  const f = fixture(t, {
+    request: async(_url, options) => {
+      assert.equal(options.bodyTimeout, 30000)
+      return undici.request(`http://127.0.0.1:${server.address().port}`, { signal: options.signal, bodyTimeout: 50, headersTimeout: 1000 })
+    },
+  })
+  assert.match(await f.download({}, 'update_error'), /UND_ERR_BODY_TIMEOUT/)
+  assert.equal(f.findFile(), undefined)
+})
+
+test('H10: total deadline aborts a body and reports a distinct reason', async t => {
+  const body = new PassThrough()
+  const f = fixture(t, { deadlineMs: 50, request: async() => ({ statusCode: 200, headers: {}, body }) })
+  assert.match(await f.download({}, 'update_error'), /UPDATE_TOTAL_TIMEOUT/)
+  assert.equal(body.destroyed, true)
+  assert.equal(f.findFile(), undefined)
 })

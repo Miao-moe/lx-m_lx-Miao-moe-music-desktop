@@ -3,9 +3,25 @@ import { onSyncAction, sendSyncAction } from '@renderer/utils/ipc'
 import { sync } from '@renderer/store'
 import { appSetting } from '@renderer/store/setting'
 import { SYNC_CODE } from '@common/constants_sync'
+import { recordSync, syncStatuses } from '@renderer/store/syncStatus'
+import { formatError } from '@common/utils/errorMessage'
 
 export default () => {
   const handleSyncList = (event: LX.Sync.SyncMainWindowActions) => {
+    if (event.action === 'server_status' || event.action === 'client_status') {
+      const key = 'device:' + event.action
+      const status = event.data
+      const running = status.message === SYNC_CODE.connecting || status.message === 'Wait syncing...' || status.message === 'stoping...' || status.message.startsWith('Try reconnnect...')
+      const failed = Boolean(status.message) && !running
+      const successful = status.status && !status.message
+      recordSync(key, {
+        label: event.action === 'server_status' ? '设备同步服务' : '设备同步连接',
+        state: running ? 'running' : failed ? 'failed' : successful ? 'success' : 'idle',
+        time: Date.now(),
+        lastSuccess: successful && syncStatuses[key]?.state !== 'success' ? Date.now() : syncStatuses[key]?.lastSuccess,
+        error: failed ? formatError(new Error(status.message), '连接失败', 'DEVICE_SYNC_FAILED') : undefined,
+      })
+    }
     // console.log(event)
     switch (event.action) {
       case 'select_mode':

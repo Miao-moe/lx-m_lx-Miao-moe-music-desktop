@@ -1,15 +1,17 @@
 import { onBeforeRouteLeave } from '@common/utils/vueRouter'
-import { ref, nextTick } from '@common/utils/vueTools'
+import { ref, nextTick, onBeforeUnmount } from '@common/utils/vueTools'
 import { addHistoryWord } from '@renderer/store/search/action'
 // import { useI18n } from '@renderer/plugins/i18n'
 // import { } from '@renderer/store/search/state'
 import type { SearchListInfo, ListInfoItem } from '@renderer/store/search/songlist'
-import { search as searchSongList, listInfos } from '@renderer/store/search/songlist'
+import { search as searchSongList, resetListInfo, listInfos } from '@renderer/store/search/songlist'
 
 export type SearchSource = LX.OnlineSource | 'all'
 
 export default () => {
   const listRef = ref<any>(null)
+  let activeSource: SearchSource | undefined
+  onBeforeUnmount(() => { if (activeSource) resetListInfo(activeSource) })
 
   const listInfo = ref<SearchListInfo>({
     page: 1,
@@ -23,6 +25,8 @@ export default () => {
   })
 
   const search = (text: string, source: SearchSource, page: number) => {
+    if (activeSource && activeSource !== source) resetListInfo(activeSource)
+    activeSource = source
     // console.log(text, source, page)
     listInfo.value = listInfos[source]!
     if (text.length) void addHistoryWord(text)

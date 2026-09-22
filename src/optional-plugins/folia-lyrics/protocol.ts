@@ -23,6 +23,7 @@ export interface FoliaConfig {
   mode: FoliaMode
   language: string
   fontFamily: string
+  fontFamilies?: string[]
   fontScale: number
   reducedMotion: boolean
   bottomInset: number

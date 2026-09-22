@@ -13,7 +13,7 @@
         <h4>{{ text.downloads }} <span>{{ downloads.length }}</span></h4>
         <input v-model="search" type="search" :class="$style.search" :placeholder="text.search" :aria-label="text.search" @input="visibleCount = 50">
         <p v-if="loadingDownloads" :class="$style.empty" role="status">{{ text.loading }}</p>
-        <p v-else-if="downloadError" :class="$style.empty" role="alert">{{ text.downloadError }}</p>
+        <p v-else-if="downloadError" :class="$style.empty" role="alert">{{ downloadError }}</p>
         <ul v-else-if="filteredDownloads.length" :class="$style.fileList">
           <li v-for="item in filteredDownloads.slice(0, visibleCount)" :key="item.id">
             <button
@@ -58,6 +58,7 @@
 </template>
 
 <script setup>
+import { formatError } from '@common/utils/errorMessage'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ipcRenderer } from 'electron'
 import path from 'node:path'
@@ -72,7 +73,7 @@ import { dirty, errorText, confirmDiscard, report, loadFile, openDownload, valid
 
 const downloads = ref([])
 const loadingDownloads = ref(false)
-const downloadError = ref(false)
+const downloadError = ref('')
 const selectedId = computed(() => editor.downloadId)
 const search = ref('')
 const visibleCount = ref(50)
@@ -86,11 +87,11 @@ watch(() => JSON.stringify(editor.tags), () => { editor.saved = false })
 const refreshDownloads = async() => {
   if (loadingDownloads.value) return
   loadingDownloads.value = true
-  downloadError.value = false
+  downloadError.value = ''
   try {
     const list = await getDownloads()
     downloads.value = list.filter(canEditDownload)
-  } catch { downloadError.value = true } finally { loadingDownloads.value = false }
+  } catch (error) { downloadError.value = formatError(error, text.value.downloadError, 'DOWNLOAD_LIST_LOAD_FAILED') } finally { loadingDownloads.value = false }
 }
 const chooseFile = async() => withEditorAction(async() => {
   const result = await ipcRenderer.invoke(WIN_MAIN_RENDERER_EVENT_NAME.show_select_dialog, {

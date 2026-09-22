@@ -3,14 +3,14 @@ import { WebDAVError } from './errors'
 
 export type Baseline = Partial<Record<LX.WebDAV.Section, { local: string, remote: string }>>
 
-export const planSync = (operation: Exclude<LX.WebDAV.Operation, 'test'>, local: LX.WebDAV.Data, remote: LX.WebDAV.Data, baseline: Baseline, sections: LX.WebDAV.Section[]) => {
+export const planSync = (operation: Exclude<LX.WebDAV.Operation, 'test'>, local: LX.WebDAV.Data, remote: LX.WebDAV.Data, baseline: Baseline, sections: LX.WebDAV.Section[], hashes?: Baseline) => {
   const upload: LX.WebDAV.Section[] = []
   const download: LX.WebDAV.Section[] = []
   const conflicts: LX.WebDAV.Section[] = []
   const missing: LX.WebDAV.Section[] = []
   for (const section of sections) {
-    const localHash = hash(local[section])
-    const remoteHash = hash(remote[section])
+    const localHash = hashes?.[section]?.local ?? hash(local[section])
+    const remoteHash = hashes?.[section]?.remote ?? hash(remote[section])
     if (operation == 'download' && remote[section] === undefined) {
       missing.push(section)
       continue

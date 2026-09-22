@@ -1,7 +1,9 @@
+import { formatError } from '@common/utils/errorMessage'
 import { markRawList } from '@common/utils/vueTools'
 import music from '@renderer/utils/musicSdk'
 import { sortInsert, similar } from '@common/utils/common'
 import { createAggregateSearch } from '../aggregate'
+import { withRequestDeadline } from '@renderer/utils/requestContext'
 import type { EntityType, ListInfoItem, SearchSource } from './state'
 import { listInfos, sources } from './state'
 
@@ -14,9 +16,11 @@ interface SearchResult {
 }
 
 const aggregateSearch = createAggregateSearch<SearchResult>()
-export const retryFailedSources = async(type: EntityType) => aggregateSearch.retry(listInfos[type].all)
+const cacheExpires = new WeakMap<object, number>()
+export const retryFailedSources = async(type: EntityType, source?: LX.OnlineSource) => aggregateSearch.retry(listInfos[type].all, source)
 
 const requests = new WeakMap<object, symbol>()
+const controllers = new WeakMap<object, AbortController>()
 
 const handleSortList = (list: ListInfoItem[], keyword: string) => {
   const result: Array<{ num: number, data: ListInfoItem }> = []
@@ -55,6 +59,7 @@ const setLists = (type: EntityType, results: SearchResult[], page: number, text:
   listInfo.page = page
   listInfo.list = handleSortList(list, text)
   listInfo.noItemLabel = pending ? window.i18n.t('list__loading') : text && !list.length && page == 1 ? window.i18n.t('no_item') : ''
+  if (!pending) cacheExpires.set(listInfo, Date.now() + 30000)
   return listInfo.list
 }
 
@@ -66,12 +71,16 @@ const setList = (type: EntityType, data: SearchResult, page: number, text: strin
   listInfo.page = page
   listInfo.limit = data.limit
   listInfo.noItemLabel = text && !data.list.length && page == 1 ? window.i18n.t('no_item') : ''
+  cacheExpires.set(listInfo, Date.now() + 30000)
   return listInfo.list
 }
 
 export const resetListInfo = (type: EntityType, sourceId: SearchSource): [] => {
   const listInfo = listInfos[type][sourceId]
   if (!listInfo) return []
+  controllers.get(listInfo)?.abort()
+  controllers.delete(listInfo)
+  cacheExpires.delete(listInfo)
   aggregateSearch.reset(listInfo)
   requests.delete(listInfo)
   listInfo.page = 1
@@ -86,7 +95,10 @@ export const search = async(type: EntityType, text: string, page: number, source
   const listInfo = listInfos[type][sourceId]!
   if (!text) return resetListInfo(type, sourceId)
   const key = `${type}__${page}__${sourceId}__${text}`
-  if (!requests.has(listInfo) && listInfo.key == key && listInfo.list.length) return listInfo.list
+  if (!requests.has(listInfo) && listInfo.key == key && listInfo.list.length && (cacheExpires.get(listInfo) ?? 0) > Date.now()) return listInfo.list
+  controllers.get(listInfo)?.abort()
+  const controller = new AbortController()
+  controllers.set(listInfo, controller)
   const requestId = Symbol('search')
   requests.set(listInfo, requestId)
   const isCurrent = () => requests.get(listInfo) === requestId
@@ -101,13 +113,13 @@ export const search = async(type: EntityType, text: string, page: number, source
     }).then(() => isCurrent() ? listInfo.list : []).finally(finish)
   }
 
-  return (music[sourceId]?.entitySearch?.search(type, text, page, listInfo.limit).then((data: SearchResult) => {
+  return (withRequestDeadline(20000, async() => music[sourceId]?.entitySearch?.search(type, text, page, listInfo.limit), controller.signal).then((data: SearchResult) => {
     if (!isCurrent()) return []
     return setList(type, data, page, text)
   }) ?? Promise.reject(new Error(`source not found: ${sourceId}`))).catch((error: any) => {
     if (!isCurrent()) return []
     resetListInfo(type, sourceId)
-    listInfo.noItemLabel = window.i18n.t('list__load_failed')
+    listInfo.noItemLabel = formatError(error, window.i18n.t('list__load_failed'), 'LIST_LOAD_FAILED')
     console.log(error)
     throw error
   }).finally(finish)

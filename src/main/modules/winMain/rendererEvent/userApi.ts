@@ -34,7 +34,7 @@ export default () => {
   })
 
   mainHandle<LX.UserApi.UserApiSetAllowUpdateAlertParams>(WIN_MAIN_RENDERER_EVENT_NAME.user_api_set_allow_update_alert, async({ params: { id, enable } }) => {
-    setAllowShowUpdateAlert(id, enable)
+    await setAllowShowUpdateAlert(id, enable)
   })
 
   mainHandle<LX.UserApi.UserApiRequestParams>(WIN_MAIN_RENDERER_EVENT_NAME.request_user_api, async({ params }) => {
@@ -51,4 +51,3 @@ export const sendStatusChange = (status: LX.UserApi.UserApiStatus) => {
 export const sendShowUpdateAlert = (info: LX.UserApi.UserApiUpdateInfo) => {
   sendEvent(WIN_MAIN_RENDERER_EVENT_NAME.user_api_show_update_alert, info)
 }
-

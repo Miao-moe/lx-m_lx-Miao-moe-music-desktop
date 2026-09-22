@@ -1,391 +1,147 @@
-<template lang="pug">
-dt#backup {{ $t('setting__backup') }}
-dd
-  h3#backup_part {{ $t('setting__backup_part') }}
-  div.setting-actions
-    base-btn.btn.gap-left(min @click="handleImportPlayList") {{ $t('setting__backup_part_import_list') }}
-    base-btn.btn.gap-left(min @click="handleExportPlayList") {{ $t('setting__backup_part_export_list') }}
-    base-btn.btn.gap-left(min @click="handleImportSetting") {{ $t('setting__backup_part_import_setting') }}
-    base-btn.btn.gap-left(min @click="handleExportSetting") {{ $t('setting__backup_part_export_setting') }}
-dd
-  h3#backup_all {{ $t('setting__backup_all') }}
-  div.setting-actions
-    base-btn.btn.gap-left(min @click="handleImportAllData") {{ $t('setting__backup_all_import') }}
-    base-btn.btn.gap-left(min @click="handleExportAllData") {{ $t('setting__backup_all_export') }}
-dd
-  h3#backup_other {{ $t('setting__backup_other') }}
-  div.setting-actions
-    base-btn.btn.gap-left(min @click="handleExportPlayListToText") {{ $t('setting__backup_other_export_list_text') }}
-    base-btn.btn.gap-left(min @click="handleExportPlayListToCsv") {{ $t('setting__backup_other_export_list_csv') }}
+<template>
+  <dt id="backup">{{ $t('setting__backup') }}</dt>
+  <dd>
+    <h3 id="backup_part">{{ $t('setting__backup_part') }}</h3>
+    <div class="setting-actions">
+      <base-btn class="btn gap-left" min :disabled="busy" @click="openImport('playlists')">{{ $t('setting__backup_part_import_list') }}</base-btn>
+      <base-btn class="btn gap-left" min :disabled="busy" @click="exportBackup('playlists')">{{ $t('setting__backup_part_export_list') }}</base-btn>
+      <base-btn class="btn gap-left" min :disabled="busy" @click="openImport('settings')">{{ $t('setting__backup_part_import_setting') }}</base-btn>
+      <base-btn class="btn gap-left" min :disabled="busy" @click="exportBackup('settings')">{{ $t('setting__backup_part_export_setting') }}</base-btn>
+    </div>
+  </dd>
+  <dd>
+    <h3 id="backup_all">{{ $t('setting__backup_all') }}</h3>
+    <p :class="$style.note">{{ $t('setting__backup_scope') }}</p>
+    <div class="setting-actions">
+      <base-btn class="btn gap-left" min :disabled="busy" @click="openImport('all')">{{ $t('setting__backup_all_import') }}</base-btn>
+      <base-btn class="btn gap-left" min :disabled="busy" @click="exportBackup('all')">{{ $t('setting__backup_all_export') }}</base-btn>
+    </div>
+    <p v-if="busy" :class="$style.note" role="status">{{ $t('setting__backup_working') }}</p>
+    <p v-if="notice" :class="$style.notice" :role="failed ? 'alert' : 'status'" data-backup-notice>{{ notice }}</p>
+  </dd>
+  <dd>
+    <h3 id="backup_other">{{ $t('setting__backup_other') }}</h3>
+    <div class="setting-actions">
+      <base-btn class="btn gap-left" min :disabled="busy" @click="exportText(false)">{{ $t('setting__backup_other_export_list_text') }}</base-btn>
+      <base-btn class="btn gap-left" min :disabled="busy" @click="exportText(true)">{{ $t('setting__backup_other_export_list_csv') }}</base-btn>
+    </div>
+  </dd>
+  <material-modal :show="!!preview" :bg-close="!busy" max-width="640px" @close="closePreview">
+    <form v-if="preview" :class="$style.preview" data-backup-preview @submit.prevent="restore">
+      <h2>{{ $t('setting__backup_preview') }}</h2>
+      <p :class="$style.filename">{{ preview.filename }}</p>
+      <p v-if="preview.createdAt" :class="$style.note">{{ new Date(preview.createdAt).toLocaleString() }}</p>
+      <p :class="$style.note">{{ $t('setting__backup_selection') }}</p>
+      <div :class="$style.sections">
+        <section v-for="section in availableSections" :key="section" :class="$style.section">
+          <label><input v-model="selected" type="checkbox" :value="section" :disabled="busy" :data-backup-section="section">{{ $t(`setting__backup_section_${section}`) }} <span>{{ preview.counts[section] }}</span></label>
+          <p :class="$style.note">{{ $t(`setting__backup_replace_${section}`) }}</p>
+          <div v-if="section === 'playlists' && selected.includes('playlists')" :class="$style.lists">
+            <label v-for="list in preview.playlists" :key="list.id"><input v-model="playlistIds" type="checkbox" :value="list.id" :disabled="busy">{{ listName(list) }} <span>{{ list.count }}</span></label>
+          </div>
+        </section>
+      </div>
+      <p v-if="notice && failed" role="alert">{{ notice }}</p>
+      <div :class="$style.actions">
+        <base-btn type="button" :disabled="busy" @click="closePreview">{{ $t('btn_cancel') }}</base-btn>
+        <base-btn type="submit" :disabled="busy || !selected.length || (selected.includes('playlists') && preview.playlists.length > 0 && !playlistIds.length)">{{ $t(busy ? 'setting__backup_working' : 'setting__backup_restore') }}</base-btn>
+      </div>
+    </form>
+  </material-modal>
 </template>
 
-<script>
-import { toRaw } from '@common/utils/vueTools'
-// import { mergeSetting } from '@common/utils'
-// import { base as eventBaseName } from '@renderer/event/names'
-// import { defaultList, loveList, userLists } from '@renderer/core/share/list'
-import {
-  toNewMusicInfo,
-  // toOldMusicInfo,
-  filterMusicList,
-  fixNewMusicInfoQuality,
-} from '@renderer/utils'
-import {
-  showSelectDialog,
-  openSaveDir,
-} from '@renderer/utils/ipc'
-// import { currentStting } from '../setting'
+<script setup>
+import { formatError } from '@common/utils/errorMessage'
+import { computed, onBeforeUnmount, ref, toRaw } from '@common/utils/vueTools'
+import { ipcRenderer } from 'electron'
+import { BACKUP_IPC, BACKUP_SECTIONS } from '@common/backup'
+import { showSelectDialog, openSaveDir } from '@renderer/utils/ipc'
 import { dialog } from '@renderer/plugins/Dialog'
-import useImportTip from '@renderer/utils/compositions/useImportTip'
 import { useI18n } from '@renderer/plugins/i18n'
-import { getListMusics, overwriteListFull, overwriteListMusics } from '@renderer/store/list/action'
-import { LIST_IDS } from '@common/constants'
-import { defaultList, loveList, userLists } from '@renderer/store/list/state'
-import { appSetting, updateSetting } from '@renderer/store/setting'
-import migrateSetting from '@common/utils/migrateSetting'
+import { getListMusics } from '@renderer/store/list/action'
+import { defaultList, loveList, tempList, userLists } from '@renderer/store/list/state'
+import { withLocalListLocks } from '@renderer/store/list/localMutationLock'
+import { withDownloadListSync } from '@renderer/store/download/action'
 
-
-export default {
-  name: 'SettingUpdate',
-  setup() {
-    const t = useI18n()
-    // const setting = useRefGetter('setting')
-    // const settingVersion = useRefGetter('settingVersion')
-    // const setSettingVersion = useCommit('setSettingVersion')
-    // const setList = useCommit('list', 'setList')
-    const showImportTip = useImportTip()
-
-    const getAllLists = async() => {
-      const lists = []
-      lists.push(await getListMusics(defaultList.id).then(musics => ({ ...defaultList, list: toRaw(musics) })))
-      lists.push(await getListMusics(loveList.id).then(musics => ({ ...loveList, list: toRaw(musics) })))
-
-      for await (const list of userLists) {
-        lists.push(await getListMusics(list.id).then(musics => ({ ...toRaw(list), list: toRaw(musics) })))
-      }
-
-      return lists
-    }
-
-    const importOldListData = async(lists) => {
-      const allLists = await getAllLists()
-      for (const list of lists) {
-        try {
-          const targetList = allLists.find(l => l.id == list.id)
-          if (targetList) {
-            targetList.list = filterMusicList(list.list.map(m => toNewMusicInfo(m)))
-          } else {
-            allLists.push({
-              name: list.name,
-              id: list.id,
-              list: filterMusicList(list.list.map(m => toNewMusicInfo(m))),
-              source: list.source,
-              sourceListId: list.sourceListId,
-              locationUpdateTime: list.locationUpdateTime ?? null,
-            })
-          }
-        } catch (err) {
-          console.log(err)
-        }
-      }
-      const defaultList = allLists.shift().list
-      const loveList = allLists.shift().list
-      await overwriteListFull({ defaultList, loveList, userList: allLists })
-    }
-    const importNewListData = async(lists) => {
-      const allLists = await getAllLists()
-      for (const list of lists) {
-        try {
-          const targetList = allLists.find(l => l.id == list.id)
-          if (targetList) {
-            targetList.list = filterMusicList(list.list).map(m => fixNewMusicInfoQuality(m))
-          } else {
-            allLists.push({
-              name: list.name,
-              id: list.id,
-              list: filterMusicList(list.list).map(m => fixNewMusicInfoQuality(m)),
-              source: list.source,
-              sourceListId: list.sourceListId,
-              locationUpdateTime: list.locationUpdateTime ?? null,
-            })
-          }
-        } catch (err) {
-          console.log(err)
-        }
-      }
-      const defaultList = allLists.shift().list
-      const loveList = allLists.shift().list
-      await overwriteListFull({ defaultList, loveList, userList: allLists })
-    }
-    const importOldSettingData = (setting) => {
-      console.log(setting)
-      setting = migrateSetting(setting)
-      setting['common.isAgreePact'] = false
-      updateSetting(setting)
-    }
-    const importNewSettingData = (setting) => {
-      setting['common.isAgreePact'] = false
-      updateSetting(setting)
-    }
-
-
-    const importAllData = async(path) => {
-      let allData
-      try {
-        allData = await window.lx.worker.main.readLxConfigFile(path)
-      } catch (error) {
-        return
-      }
-
-      switch (allData.type) {
-        case 'allData':
-          // 兼容0.6.2及以前版本的列表数据
-          if (allData.defaultList) await overwriteListMusics({ listId: LIST_IDS.DEFAULT, musicInfos: filterMusicList(allData.defaultList.list.map(m => toNewMusicInfo(m))) })
-          else await importOldListData(allData.playList)
-          importOldSettingData(allData.setting)
-          break
-        case 'allData_v2':
-          await importNewListData(allData.playList)
-          importNewSettingData(allData.setting)
-          break
-        default: { showImportTip(allData.type) }
-      }
-    }
-    const handleImportAllData = () => {
-      void showSelectDialog({
-        title: t('setting__backup_all_import_desc'),
-        properties: ['openFile'],
-        filters: [
-          { name: 'Setting', extensions: ['json', 'lxmc'] },
-          { name: 'All Files', extensions: ['*'] },
-        ],
-      }).then(result => {
-        if (result.canceled) return
-        void dialog.confirm({
-          message: t('setting__backup_part_import_list_confirm'),
-          cancelButtonText: t('cancel_button_text'),
-          confirmButtonText: t('confirm_button_text'),
-        }).then(confirm => {
-          if (!confirm) return
-          void importAllData(result.filePaths[0])
-        })
-      })
-    }
-
-    const exportAllData = async(path) => {
-      let allData = {
-        type: 'allData_v2',
-        setting: { ...appSetting },
-        playList: await getAllLists(),
-      }
-      void window.lx.worker.main.saveLxConfigFile(path, allData)
-    }
-    const handleExportAllData = () => {
-      void openSaveDir({
-        title: t('setting__backup_all_export_desc'),
-        defaultPath: 'lx_datas_v2.lxmc',
-      }).then(result => {
-        if (result.canceled) return
-        void exportAllData(result.filePath)
-      })
-    }
-
-    const exportSetting = (path) => {
-      const data = {
-        type: 'setting_v2',
-        data: { ...appSetting },
-      }
-      void window.lx.worker.main.saveLxConfigFile(path, data)
-    }
-    const handleExportSetting = () => {
-      void openSaveDir({
-        title: t('setting__backup_part_export_setting_desc'),
-        defaultPath: 'lx_setting_v2.lxmc',
-      }).then(result => {
-        if (result.canceled) return
-        exportSetting(result.filePath)
-      })
-    }
-
-    const importSetting = async(path) => {
-      let settingData
-      try {
-        settingData = await window.lx.worker.main.readLxConfigFile(path)
-      } catch (error) {
-        return
-      }
-
-      switch (settingData.type) {
-        case 'setting':
-          importOldSettingData(settingData.data)
-          break
-        case 'setting_v2':
-          importNewSettingData(settingData.data)
-          break
-        default: { showImportTip(settingData.type) }
-      }
-    }
-    const handleImportSetting = () => {
-      void showSelectDialog({
-        title: t('setting__backup_part_import_setting_desc'),
-        properties: ['openFile'],
-        filters: [
-          { name: 'Setting', extensions: ['json', 'lxmc'] },
-          { name: 'All Files', extensions: ['*'] },
-        ],
-      }).then(result => {
-        if (result.canceled) return
-        void importSetting(result.filePaths[0])
-      })
-    }
-
-    const exportPlayList = async(path) => {
-      const data = {
-        type: 'playList_v2',
-        data: await getAllLists(),
-      }
-      void window.lx.worker.main.saveLxConfigFile(path, data)
-    }
-    const handleExportPlayList = () => {
-      void openSaveDir({
-        title: t('setting__backup_part_export_list_desc'),
-        defaultPath: 'lx_list.lxmc',
-      }).then(result => {
-        if (result.canceled) return
-        void exportPlayList(result.filePath)
-      })
-    }
-
-    const importPlayList = async(path) => {
-      let listData
-      try {
-        listData = await window.lx.worker.main.readLxConfigFile(path)
-      } catch (error) {
-        return
-      }
-      console.log(listData.type)
-
-      switch (listData.type) {
-        case 'defautlList': // 兼容0.6.2及以前版本的列表数据
-          await overwriteListMusics({ listId: LIST_IDS.DEFAULT, musicInfos: filterMusicList(listData.data.list.map(m => toNewMusicInfo(m))) })
-          break
-        case 'playList':
-          await importOldListData(listData.data)
-          break
-        case 'playList_v2':
-          await importNewListData(listData.data)
-          break
-        default: { showImportTip(listData.type) }
-      }
-    }
-    const handleImportPlayList = () => {
-      void showSelectDialog({
-        title: t('setting__backup_part_import_list_desc'),
-        properties: ['openFile'],
-        filters: [
-          { name: 'Play List', extensions: ['json', 'lxmc'] },
-          { name: 'All Files', extensions: ['*'] },
-        ],
-      }).then(result => {
-        if (result.canceled) return
-        void dialog.confirm({
-          message: t('setting__backup_part_import_list_confirm'),
-          cancelButtonText: t('cancel_button_text'),
-          confirmButtonText: t('confirm_button_text'),
-        }).then(confirm => {
-          if (!confirm) return
-          void importPlayList(result.filePaths[0])
-        })
-      })
-    }
-
-    const exportPlayListToText = async(savePath, isMerge) => {
-      const lists = await getAllLists()
-      await window.lx.worker.main.exportPlayListToText(savePath, lists, isMerge)
-    }
-    const handleExportPlayListToText = async() => {
-      const confirm = await dialog.confirm({
-        message: t('setting__backup_other_export_list_text_confirm'),
-        cancelButtonText: t('cancel_button_text'),
-        confirmButtonText: t('confirm_button_text'),
-      })
-      if (confirm) {
-        void openSaveDir({
-          title: t('setting__backup_other_export_dir'),
-          defaultPath: 'lx_list_all.txt',
-        }).then(result => {
-          if (result.canceled) return
-          let path = result.filePath
-          if (!path.endsWith('.txt')) path += '.txt'
-          void exportPlayListToText(path, true)
-        })
-      } else {
-        void showSelectDialog({
-          title: t('setting__backup_other_export_dir'),
-          // defaultPath: currentStting.value.download.savePath,
-          properties: ['openDirectory'],
-        }).then(result => {
-          if (result.canceled) return
-          void exportPlayListToText(result.filePaths[0], false)
-        })
-      }
-    }
-
-    const exportPlayListToCsv = async(savePath, isMerge) => {
-      const lists = await getAllLists()
-      await window.lx.worker.main.exportPlayListToCSV(savePath, lists, isMerge, `${t('music_name')},${t('music_singer')},${t('music_album')}\n`)
-    }
-    const handleExportPlayListToCsv = async() => {
-      const confirm = await dialog.confirm({
-        message: t('setting__backup_other_export_list_text_confirm'),
-        cancelButtonText: t('cancel_button_text'),
-        confirmButtonText: t('confirm_button_text'),
-      })
-      if (confirm) {
-        void openSaveDir({
-          title: t('setting__backup_other_export_dir'),
-          defaultPath: 'lx_list_all.csv',
-        }).then(result => {
-          if (result.canceled) return
-          let path = result.filePath
-          if (!path.endsWith('.csv')) path += '.csv'
-          void exportPlayListToCsv(path, true)
-        })
-      } else {
-        void showSelectDialog({
-          title: t('setting__backup_other_export_dir'),
-          // defaultPath: currentStting.value.download.savePath,
-          properties: ['openDirectory'],
-        }).then(result => {
-          if (result.canceled) return
-          void exportPlayListToCsv(result.filePaths[0], false)
-        })
-      }
-    }
-
-    // window.eventHub.on(eventBaseName.set_config, handleUpdateSetting)
-
-    // onBeforeUnmount(() => {
-    //   window.eventHub.off(eventBaseName.set_config, handleUpdateSetting)
-    // })
-
-    return {
-      // currentStting,
-      handleExportPlayList,
-      handleImportPlayList,
-      handleExportSetting,
-      handleImportSetting,
-      handleExportAllData,
-      handleImportAllData,
-      handleExportPlayListToText,
-      handleExportPlayListToCsv,
-    }
-  },
+const t = useI18n()
+const rendererInvoke = ipcRenderer.invoke.bind(ipcRenderer)
+const busy = ref(false)
+const notice = ref('')
+const failed = ref(false)
+const preview = ref(null)
+const selected = ref([])
+const playlistIds = ref([])
+const availableSections = computed(() => BACKUP_SECTIONS.filter(section => preview.value?.counts[section] !== undefined))
+const listName = list => list.id === 'default' ? t('default_list') : list.id === 'love' ? t('love_list') : list.id === 'temp' ? t('setting__backup_temp_list') : list.name
+const errorMessage = error => {
+  const code = /backup:([a-z_]+)/.exec(String(error?.message ?? error))?.[1]
+  if (String(error?.message ?? error).includes('downloads_running')) return formatError(error, t('setting__backup_error_downloads_running'), 'BACKUP_DOWNLOADS_RUNNING')
+  return formatError(error, t(`setting__backup_error_${['file_size', 'expanded_size', 'file_changed', 'compression', 'json', 'invalid', 'type', 'expired', 'selection', 'busy', 'rollback_failed'].includes(code) ? code : 'io'}`), 'BACKUP_FAILED')
 }
+const run = async action => {
+  if (busy.value) return
+  busy.value = true
+  notice.value = ''
+  failed.value = false
+  try { await action() } catch (error) { failed.value = true; notice.value = errorMessage(error) } finally { busy.value = false }
+}
+const discard = async() => {
+  const token = preview.value?.token
+  preview.value = null
+  if (token) await rendererInvoke(BACKUP_IPC.discard, token)
+}
+const closePreview = () => { if (!busy.value) void discard().catch(console.error) }
+onBeforeUnmount(() => { void discard().catch(console.error) })
+const openImport = async kind => run(async() => {
+  const result = await showSelectDialog({ title: t('setting__backup_all_import_desc'), properties: ['openFile'], filters: [{ name: 'LX Music', extensions: ['lxmc', 'json'] }] })
+  if (result.canceled || !result.filePaths.length) return
+  const value = await rendererInvoke(BACKUP_IPC.preview, result.filePaths[0])
+  preview.value = value
+  selected.value = BACKUP_SECTIONS.filter(section => value.counts[section] !== undefined && (kind === 'all' || kind === section))
+  playlistIds.value = value.playlists.map(list => list.id)
+  if (!selected.value.length) { await discard(); throw new Error('backup:type') }
+})
+const restore = async() => run(async() => {
+  const request = { token: preview.value.token, sections: [...selected.value], ...(selected.value.includes('playlists') && playlistIds.value.length ? { playlistIds: [...playlistIds.value] } : {}) }
+  const apply = async() => rendererInvoke(BACKUP_IPC.restore, request)
+  const downloadSafe = async() => request.sections.includes('downloads') ? withDownloadListSync(apply) : apply()
+  const result = await withLocalListLocks([defaultList.id, loveList.id, tempList.id, ...userLists.map(list => list.id), ...playlistIds.value], downloadSafe)
+  preview.value = null
+  notice.value = t(result.restart ? 'setting__backup_restored_restart' : 'setting__backup_restored')
+})
+const exportBackup = async kind => run(async() => {
+  const result = await openSaveDir({ title: t('setting__backup_all_export_desc'), defaultPath: kind === 'all' ? 'lx_datas_v3.lxmc' : kind === 'settings' ? 'lx_setting_v2.lxmc' : 'lx_list.lxmc' })
+  if (result.canceled || !result.filePath) return
+  await rendererInvoke(BACKUP_IPC.export, { path: result.filePath, kind })
+  notice.value = t('setting__backup_exported')
+})
+const exportText = async csv => run(async() => {
+  const merge = await dialog.confirm({ message: t('setting__backup_other_export_list_text_confirm'), cancelButtonText: t('cancel_button_text'), confirmButtonText: t('confirm_button_text') })
+  const extension = csv ? '.csv' : '.txt'
+  const result = merge ? await openSaveDir({ title: t('setting__backup_other_export_dir'), defaultPath: 'lx_list_all' + extension }) : await showSelectDialog({ title: t('setting__backup_other_export_dir'), properties: ['openDirectory'] })
+  if (result.canceled) return
+  let filename = merge ? result.filePath : result.filePaths[0]
+  if (merge && !filename.toLowerCase().endsWith(extension)) filename += extension
+  const lists = []
+  for (const list of [defaultList, loveList, tempList, ...userLists]) lists.push({ ...toRaw(list), list: toRaw(await getListMusics(list.id)) })
+  if (csv) await window.lx.worker.main.exportPlayListToCSV(filename, lists, merge, `${t('music_name')},${t('music_singer')},${t('music_album')}\n`)
+  else await window.lx.worker.main.exportPlayListToText(filename, lists, merge)
+  notice.value = t('setting__backup_exported')
+})
 </script>
 
 <style lang="less" module>
-.savePath {
-  font-size: 12px;
-}
+.note { line-height: 1.6; font-size: .9em; opacity: .8; margin: 6px 0 12px; }
+.notice { margin-top: 14px; line-height: 1.6; white-space: pre-wrap; }
+.preview { padding: 24px; display: flex; flex-direction: column; gap: 10px; }
+.preview h2 { font-size: 1.2em; }
+.filename { overflow-wrap: anywhere; }
+.sections { overflow-y: auto; max-height: 42vh; }
+.section { padding: 12px 0; border-bottom: 1px solid var(--color-border-background); }
+.section label { display: flex; align-items: center; gap: 10px; line-height: 1.6; }
+.section label span { margin-left: auto; opacity: .7; }
+.section input { accent-color: var(--color-primary); flex-shrink: 0; }
+.lists { padding-left: 22px; }
+.lists label { margin: 6px 0; }
+.actions { display: flex; justify-content: flex-end; gap: 12px; }
 </style>

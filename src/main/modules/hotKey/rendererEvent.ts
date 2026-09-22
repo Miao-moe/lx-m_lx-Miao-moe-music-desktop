@@ -8,7 +8,7 @@ export default () => {
     switch (params.action) {
       case 'config':
         // global.lx.event_app.saveConfig(data, source)
-        global.lx.event_app.hot_key_config_update(params.data)
+        await global.lx.event_app.hot_key_config_update(params.data)
         return true
       case 'enable':
         global.lx.hotKey.enable = params.data

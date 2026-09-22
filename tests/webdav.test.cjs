@@ -5,6 +5,7 @@ const { createDAV, playlists, task, song, snapshot } = require('./helpers/webdav
 
 const builtins = Object.fromEntries(['node:http', 'node:https', 'node:crypto', 'node:path', 'node:os'].map(name => [name, require(name)]))
 const constants = {
+  STORE_NAMES: { APP_SETTINGS: 'config_v2' },
   LIST_IDS: { DEFAULT: 'default', LOVE: 'love', TEMP: 'temp', DOWNLOAD: 'download' },
   QUALITYS: ['128k', '192k', '320k', 'flac', 'flac24bit', 'hires', 'master', 'atmos', 'wav', 'ape'],
 }
@@ -21,12 +22,15 @@ async function fixture(t, selected = ['playlists']) {
       get: key => structuredClone(stores.get(name)[key]),
       set: (key, value) => { stores.get(name)[key] = structuredClone(value) },
       override: value => { stores.set(name, structuredClone(value)) },
+      snapshot: () => structuredClone(stores.get(name)),
+      acceptCommitted: value => stores.set(name, structuredClone(value)),
     }
   }
-  const local = { playlists: playlists('1'), downloads: [task('1', true), task('2')], dislike: 'Example', writes: [] }
+  const local = { playlists: playlists('1'), downloads: [task('1', true), task('2')], dislike: 'Example', writes: [], reads: 0 }
   const settings = { ...defaults, 'sync.webdav.enable': true }
   for (const key of Object.keys(dav.config)) settings['sync.webdav.' + key] = dav.config[key]
   for (const key of sections) settings['sync.webdav.' + key] = selected.includes(key)
+  getStore('config_v2').override({ setting: settings })
   const previousGlobal = global.lx
   global.lx = {
     appSetting: settings,
@@ -34,14 +38,17 @@ async function fixture(t, selected = ['playlists']) {
       getDownloadList: async() => structuredClone(local.downloads),
       downloadListReplace: async list => { local.downloads = structuredClone(list); local.writes.push('downloads') },
     } },
-    event_app: { update_config: value => { Object.assign(settings, value); local.writes.push('settings') } },
+    event_app: { config_committed: value => { Object.assign(settings, value); local.writes.push('settings') } },
+    event_list: { list_data_restored() {} }, event_dislike: { dislike_data_restored() {} },
   }
   t.after(() => { global.lx = previousGlobal })
   const load = createLoader({
     ...builtins,
     '@common/defaultSetting': { default: defaults, __esModule: true },
     '@common/constants': constants,
-    '@main/utils/store': { default: getStore, __esModule: true },
+    '@main/utils/store': { default: getStore, __esModule: true, withStoreExclusive: async fn => fn(), protectStoreRecovery() {} },
+    '@main/utils': { mergeSetting: (old, update) => ({ setting: { ...old, ...update }, updatedSettingKeys: Object.keys(update), updatedSetting: update }) },
+    '@main/utils/credentials': { serializePublicConfig: JSON.stringify },
     '@main/modules/sync/listEvent': {
       getLocalListData: async() => structuredClone(local.playlists),
       setLocalListData: async value => { local.playlists = structuredClone(value); local.writes.push('playlists') },
@@ -49,6 +56,43 @@ async function fixture(t, selected = ['playlists']) {
     '@main/modules/sync/dislikeEvent': {
       getLocalDislikeData: async() => local.dislike,
       setLocalDislikeData: async value => { local.dislike = value; local.writes.push('dislike') },
+    },
+  })
+  const { isCompleted, portableDownloads, hash } = load('src/main/modules/webdav/data.ts')
+  const { WebDAVError } = load('src/main/modules/webdav/errors.ts')
+  const revision = () => JSON.stringify([local.playlists, local.downloads, local.dislike])
+  Object.assign(global.lx.worker.dbService, {
+    webdavRevision: async() => revision(),
+    webdavRead: async selected => {
+      local.reads++
+      const data = {}
+      if (selected.includes('playlists')) data.playlists = structuredClone(local.playlists)
+      if (selected.includes('dislike')) data.dislike = local.dislike
+      if (selected.includes('downloadHistory')) data.downloadHistory = structuredClone(local.downloads.filter(isCompleted))
+      if (selected.includes('downloadTasks')) data.downloadTasks = structuredClone(local.downloads.filter(task => !isCompleted(task)))
+      return { data, revision: revision() }
+    },
+    // The real database/file transaction is covered by backup-transaction.test.cjs.
+    webdavRestore: async(root, data, files, selected, expected) => {
+      if (revision() !== expected) throw new WebDAVError('local_changed')
+      const hashes = {}
+      if (data.downloadHistory !== undefined || data.downloadTasks !== undefined) {
+        if (local.downloads.some(task => ['run', 'waiting'].includes(task.status))) throw new WebDAVError('downloads_running')
+        const retained = local.downloads.filter(task => isCompleted(task) ? data.downloadHistory === undefined : data.downloadTasks === undefined)
+        const ids = new Set(retained.map(task => task.id))
+        for (const task of [...data.downloadHistory ?? [], ...data.downloadTasks ?? []]) {
+          if (ids.has(task.id)) continue
+          ids.add(task.id)
+          retained.push(structuredClone(task))
+        }
+        local.downloads = retained
+        local.writes.push('downloads')
+        if (data.downloadHistory !== undefined) hashes.downloadHistory = hash(portableDownloads(retained.filter(isCompleted)))
+        if (data.downloadTasks !== undefined) hashes.downloadTasks = hash(portableDownloads(retained.filter(task => !isCompleted(task))))
+      }
+      if (data.playlists) { local.playlists = structuredClone(data.playlists); local.writes.push('playlists') }
+      if (data.dislike !== undefined) { local.dislike = data.dislike.toLowerCase(); local.writes.push('dislike') }
+      return { hashes, dislike: data.dislike !== undefined ? local.dislike : undefined }
     },
   })
   return { dav, local, settings, stores, load, run: load('src/main/modules/webdav/index.ts').runWebDAV }
@@ -249,4 +293,63 @@ test('invalid URL credentials, traversal and unsupported schemes are rejected be
   f.settings['sync.webdav.directory'] = 'music/../escape'
   assert.equal((await f.run('test')).error, 'invalid_config')
   assert.equal(f.dav.requests.length, 0)
+})
+
+test('F01/F02: each round reads one local snapshot and unchanged remote data uses conditional GET', async t => {
+  const f = await fixture(t, sections)
+  assert.equal((await f.run('upload')).success, true)
+  const before = f.dav.requests.length
+  for (let count = 0; count < 3; count++) {
+    const result = await f.run('sync')
+    assert.equal(result.success, true)
+    assert.deepEqual(result.uploaded, [])
+    assert.deepEqual(result.downloaded, [])
+  }
+  assert.equal(f.local.reads, 4)
+  assert.equal(f.dav.requests.length - before, 3)
+  assert(f.dav.requests.slice(before).every(req => req.method === 'GET' && req.headers['if-none-match']))
+  f.settings['sync.webdav.password'] = 'wrong'
+  assert.equal((await f.run('sync')).error, 'auth')
+  assert.equal(f.dav.requests.at(-1).headers['if-none-match'], undefined, 'account changes invalidate the cached snapshot')
+})
+
+test('F06/F11: conflict includes a bounded visual diff and keeps the last successful sync time', async t => {
+  const f = await fixture(t)
+  const success = await f.run('upload')
+  f.local.playlists.loveList.push(song('local'))
+  f.dav.seed({ playlists: playlists('remote') })
+  const result = await f.run('sync')
+  assert.equal(result.error, 'conflict')
+  assert.equal(result.lastSuccess, success.lastSuccess)
+  assert(result.diff.total > 0)
+  assert(result.diff.changes.some(change => change.kind === 'added' && change.after.includes('remote')))
+  assert(result.diff.changes.some(change => change.kind === 'removed'))
+})
+
+test('F02: Last-Modified is used when no ETag is supplied and changed remote content is read again', async t => {
+  const dav = await createDAV()
+  t.after(() => dav.close())
+  const client = createLoader()('src/main/modules/webdav/client.ts').createClient(dav.config)
+  let content = 'first', modified = 'Mon, 21 Sep 2026 00:00:00 GMT'
+  dav.control.beforeRequest = (req, res) => {
+    if (req.headers['if-modified-since'] === modified) res.writeHead(304).end()
+    else res.writeHead(200, { 'Last-Modified': modified }).end(content)
+    return true
+  }
+  const first = await client.read()
+  assert.equal(first.content, 'first')
+  assert.equal((await client.read(first)).unchanged, true)
+  content = 'second'; modified = 'Tue, 22 Sep 2026 00:00:00 GMT'
+  assert.equal((await client.read(first)).content, 'second')
+})
+
+test('F01: enabling a previously unselected category validates its cached body before applying it', async t => {
+  const f = await fixture(t)
+  f.dav.seed({ playlists: playlists('remote'), downloadTasks: [{ invalid: true }] })
+  assert.equal((await f.run('download')).success, true)
+  const writes = f.local.writes.length
+  f.settings['sync.webdav.downloadTasks'] = true
+  assert.equal((await f.run('download')).error, 'invalid_data')
+  assert.equal(f.local.writes.length, writes)
+  assert(f.dav.requests.at(-1).headers['if-none-match'])
 })

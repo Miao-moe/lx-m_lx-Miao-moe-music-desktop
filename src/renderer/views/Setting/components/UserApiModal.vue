@@ -30,6 +30,7 @@ material-modal(:show="modelValue" bg-close teleport="#view" @close="handleClose"
 </template>
 
 <script>
+import { formatError } from '@common/utils/errorMessage'
 import { importUserApi, removeUserApi, showSelectDialog, setAllowShowUserApiUpdateAlert } from '@renderer/utils/ipc'
 import { readFile } from '@common/utils/nodejs'
 import { openUrl } from '@common/utils/electron'
@@ -68,7 +69,7 @@ export default {
       return importUserApi(script).then(({ apiList }) => {
         userApi.list = apiList
       }).catch((err) => {
-        if (showError) void dialog(this.$t('user_api_import__failed', { message: err.message }))
+        if (showError) void dialog(this.$t('user_api_import__failed', { message: formatError(err, '', 'SOURCE_IMPORT_FAILED') }))
         return err
       })
     },
@@ -105,7 +106,7 @@ export default {
           if (error) throw error
         } catch (err) {
           const fileName = filePath.split(/[\\/]/).pop() ?? filePath
-          errors.push(`${fileName}: ${err.message}`)
+          errors.push(`${fileName}: ${formatError(err, '', 'SOURCE_IMPORT_FAILED')}`)
         }
       }
       if (errors.length) {
@@ -121,7 +122,7 @@ export default {
       if (appSetting['common.apiSource'] == api.id) {
         let backApi = apiSourceInfo.find(api => !api.disabled)
         if (!backApi) backApi = userApi.list[0]
-        updateSetting({ 'common.apiSource': backApi?.id ?? '' })
+        await updateSetting({ 'common.apiSource': backApi?.id ?? '' })
       }
       userApi.list = await removeUserApi([api.id])
     },

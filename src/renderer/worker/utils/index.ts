@@ -1,3 +1,4 @@
+import { showLoadError } from '@common/loadErrorNotice'
 import * as Comlink from 'comlink'
 
 export type MainTypes = Comlink.Remote<LX.WorkerMainTypes>
@@ -8,6 +9,7 @@ export const createMainWorker = () => {
     '../main',
     import.meta.url,
   ))
+  worker.addEventListener('error', event => { showLoadError(event.error ?? event.message, 'WORKER_LOAD_FAILED') })
   return Comlink.wrap<LX.WorkerMainTypes>(worker)
 }
 
@@ -27,6 +29,7 @@ export const createDownloadWorker = () => {
     '../download',
     import.meta.url,
   ))
+  worker.addEventListener('error', event => { showLoadError(event.error ?? event.message, 'WORKER_LOAD_FAILED') })
   return Comlink.wrap<LX.WorkerDownloadTypes>(worker)
 }
 

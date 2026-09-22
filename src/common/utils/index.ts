@@ -1,4 +1,8 @@
 import log from 'electron-log/node'
+import { installConsoleRedaction, redactArguments } from '../sensitive'
+
+installConsoleRedaction()
+log.hooks.push(message => ({ ...message, data: redactArguments(message.data) }))
 
 
 export const isLinux = process.platform == 'linux'

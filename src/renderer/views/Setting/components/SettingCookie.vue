@@ -51,6 +51,7 @@ dd(v-for="item in sources" :key="item.id" :data-setting-search="`setting__cookie
 </template>
 
 <script>
+import { formatError } from '@common/utils/errorMessage'
 import { reactive, ref } from '@common/utils/vueTools'
 import { useI18n } from '@renderer/plugins/i18n'
 import { appSetting, updateSetting } from '@renderer/store/setting'
@@ -89,12 +90,12 @@ export default {
         if (testStates[id] !== state || appSetting[`cookie.${id}`] !== cookie) return
         testStates[id] = {
           busy: false,
-          tip: t(`setting__cookie_test_${result.status}`, { count: String(result.listCount) }),
+          tip: result.status === 'success' ? t(`setting__cookie_test_${result.status}`, { count: String(result.listCount) }) : formatError(result.message ?? { code: `COOKIE_${result.status.toUpperCase()}`, message: t(`setting__cookie_test_${result.status}`) }, '', 'COOKIE_LOAD_FAILED'),
           error: result.status !== 'success',
         }
-      } catch {
+      } catch (error) {
         if (testStates[id] !== state || appSetting[`cookie.${id}`] !== cookie) return
-        testStates[id] = { busy: false, tip: t('setting__cookie_test_failed'), error: true }
+        testStates[id] = { busy: false, tip: formatError(error, t('setting__cookie_test_failed'), 'COOKIE_LOAD_FAILED'), error: true }
       }
     }
 
@@ -105,7 +106,7 @@ export default {
       if (timer) clearTimeout(timer)
       cookieSaveTimers.set(key, setTimeout(() => {
         cookieSaveTimers.delete(key)
-        updateSetting({ [key]: value.trim() })
+        void updateSetting({ [key]: value.trim() })
       }, 400))
     }
 
@@ -127,7 +128,7 @@ export default {
       }
       appSetting[item.settingKey] = ''
       resetTest(id)
-      updateSetting({ [item.settingKey]: '' })
+      await updateSetting({ [item.settingKey]: '' })
     }
 
     const loginStates = reactive({})
@@ -142,7 +143,7 @@ export default {
         const { cookie, playlists } = await loginCookie(item.id)
         appSetting[item.settingKey] = cookie
         resetTest(item.id)
-        updateSetting({ [item.settingKey]: cookie })
+        await updateSetting({ [item.settingKey]: cookie })
         loginStates[item.id] = { busy: false, tip: t('setting__cookie_login_done'), error: false }
 
         syncing.value = true
@@ -153,20 +154,21 @@ export default {
           if (result.synced) {
             syncTip.value = t('setting__cookie_sync_now_done', { list: String(result.listCount), count: String(result.count) })
             syncError.value = !!result.error
+            if (result.error) syncTip.value += '\n' + formatError(result.message, '', 'COOKIE_SYNC_FAILED')
           } else if (result.error) {
             syncError.value = true
-            syncTip.value = t('setting__cookie_sync_now_failed')
+            syncTip.value = formatError(result.message, t('setting__cookie_sync_now_failed'), 'COOKIE_SYNC_FAILED')
           } else {
             syncTip.value = t('setting__cookie_sync_now_skipped')
           }
-        } catch {
+        } catch (error) {
           syncError.value = true
-          syncTip.value = t('setting__cookie_sync_now_failed')
+          syncTip.value = formatError(error, t('setting__cookie_sync_now_failed'), 'COOKIE_SYNC_FAILED')
         } finally {
           syncing.value = false
         }
-      } catch {
-        loginStates[item.id] = { busy: false, tip: t('setting__cookie_login_failed'), error: true }
+      } catch (error) {
+        loginStates[item.id] = { busy: false, tip: formatError(error, t('setting__cookie_login_failed'), 'COOKIE_LOGIN_FAILED'), error: true }
       }
     }
 
@@ -185,7 +187,7 @@ export default {
             ? `${name}✓(${d.listCount}/${d.count})`
             : `${name}✓`
         }
-        return `${name}✗`
+        return `${name}✗\n${formatError(d.message, '', 'COOKIE_SYNC_FAILED')}`
       }).join('  ')
     }
 
@@ -203,9 +205,9 @@ export default {
           syncTip.value = buildSyncTip(result.details)
           syncError.value = !!result.error
         }
-      } catch {
+      } catch (error) {
         syncError.value = true
-        syncTip.value = t('setting__cookie_sync_now_failed')
+        syncTip.value = formatError(error, t('setting__cookie_sync_now_failed'), 'COOKIE_SYNC_FAILED')
       } finally {
         syncing.value = false
       }

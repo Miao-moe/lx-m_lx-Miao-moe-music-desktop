@@ -14,9 +14,10 @@ function load(file, imports = {}, globals = {}) {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText
-  vm.runInNewContext(code, { module, exports: module.exports, console, Buffer, setTimeout, clearTimeout, ...globals,
+  vm.runInNewContext(code, { module, exports: module.exports, console, Buffer, AbortController, setTimeout, clearTimeout, ...globals,
     require: name => {
       if (Object.hasOwn(imports, name)) return imports[name]
+      if (name.endsWith('requestContext')) return require('./helpers/load-typescript.cjs')()('src/renderer/utils/requestContext.js')
       if (name.startsWith('node:') || ['ws', 'zlib'].includes(name)) return require(name)
       throw Error('Unexpected import: ' + name)
     },

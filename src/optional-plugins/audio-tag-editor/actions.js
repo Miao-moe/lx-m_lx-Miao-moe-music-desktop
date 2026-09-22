@@ -1,3 +1,4 @@
+import { formatError } from '@common/utils/errorMessage'
 import { computed } from 'vue'
 import { dialog } from '@renderer/plugins/Dialog'
 import { getDownloads, getDownloadSavePaths } from '@renderer/utils/downloadFiles'
@@ -7,9 +8,13 @@ import { editor } from './session'
 import { text, fieldNames } from './text'
 
 export const dirty = computed(() => editor.snapshot && fieldNames.some(key => editor.tags[key] !== editor.snapshot.tags[key]))
-export const errorText = computed(() => text.value.errors[editor.error] ?? text.value.errors.UNKNOWN)
+export const errorText = computed(() => {
+  const reason = text.value.errors[editor.error] ?? text.value.errors.UNKNOWN
+  const detail = editor.errorDetail && editor.errorDetail !== editor.error && editor.errorDetail !== reason ? ` ${editor.errorDetail}` : ''
+  return formatError({ code: editor.error, message: reason + detail }, '', 'TAGS_LOAD_FAILED')
+})
 export const confirmDiscard = async() => !dirty.value || dialog.confirm({ message: text.value.discard, confirmButtonText: text.value.discardConfirm, cancelButtonText: text.value.cancel })
-export const report = error => { editor.error = error.code ?? 'UNKNOWN'; editor.saved = false }
+export const report = error => { editor.error = error.code ?? 'UNKNOWN'; editor.errorDetail = error.message; editor.saved = false }
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 
 export const applySnapshot = (snapshot, id = '') => {

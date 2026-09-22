@@ -1,5 +1,5 @@
 <template>
-  <common-list-loading :load-key="props.listInfo.list" :loading="isLoading" :class="$style.container">
+  <common-list-loading :load-key="props.listInfo.list" :loading="isLoading" :streaming="streaming" :class="$style.container">
     <div v-show="!props.listInfo.noItemLabel || (immediate && isLoading && props.listInfo.list.length)" ref="dom_list_ref" :class="$style.listContent" class="scroll">
       <ul>
         <li
@@ -51,6 +51,7 @@ import { useRoute, useRouter } from '@common/utils/vueRouter'
 
 const props = withDefaults(defineProps<{
   listInfo: ListInfo
+  streaming?: boolean
   visibleSource?: boolean
   hideRetry?: boolean
   searchOnClick?: boolean
@@ -68,9 +69,9 @@ const route = useRoute()
 const dom_list_ref = ref<HTMLElement | null>(null)
 const imageErrorSet = reactive(new Set<string>())
 const getItemKey = (item: ListInfoItem) => `${item.source}__${item.id}`
-const isMessage = (text: string, key: 'list__loading' | 'list__load_failed') => Object.values(window.i18n.messages).some(messages => messages[key] == text)
+const isMessage = (text: string, key: 'list__loading' | 'list__load_failed') => Object.values(window.i18n.messages).some(messages => messages[key] == text || (key === 'list__load_failed' && text.startsWith(messages[key] + '\n')))
 const isLoading = computed(() => isMessage(props.listInfo.noItemLabel, 'list__loading'))
-const immediate = computed(() => appSetting['list.loadingMode'] === 'immediate')
+const immediate = computed(() => props.streaming || appSetting['list.loadingMode'] === 'immediate')
 
 const emit = defineEmits(['toggle-page', 'retry'])
 

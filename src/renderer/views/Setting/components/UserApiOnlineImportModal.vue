@@ -19,6 +19,7 @@
 </template>
 
 <script>
+import { formatError } from '@common/utils/errorMessage'
 import { dialog } from '@renderer/plugins/Dialog'
 import { httpFetch } from '@renderer/utils/request'
 
@@ -63,7 +64,7 @@ export default {
       try {
         script = await httpFetch(url, { follow_max: 3 }).promise.then(resp => resp.body)
       } catch (err) {
-        void dialog(this.$t('user_api_import__failed', { message: err.message }))
+        void dialog(this.$t('user_api_import__failed', { message: formatError(err, '', 'SOURCE_IMPORT_FAILED') }))
         return
       } finally {
         this.disabled = false

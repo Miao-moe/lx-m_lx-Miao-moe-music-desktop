@@ -5,6 +5,7 @@ module.exports = {
   target: process.env.BUILD_WIN7 ? 'electron22.3-renderer' : 'electron-renderer',
   entry: {
     'user-api-preload': path.join(__dirname, '../../src/main/modules/userApi/renderer/preload.js'),
+    'source-plugin-preload': path.join(__dirname, '../../src/main/modules/sourcePlugins/preload.js'),
   },
   output: {
     filename: '[name].js',

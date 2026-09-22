@@ -37,9 +37,12 @@ declare global {
       | DownloadTaskAction<'refreshUrl'>
       | DownloadTaskAction<'statusText', string>
       | DownloadTaskAction<'progress', ProgressInfo>
+      | DownloadTaskAction<'filePath', { filePath: string, fileName: string }>
       | DownloadTaskAction<'error', {
         error?: keyof Message
         message?: string
+        code?: string
+        kind?: import('../utils/download/errors').DownloadFailureKind
       }>
 
       interface ListItem {
@@ -52,6 +55,9 @@ declare global {
         progress: number
         speed: string
         writeQueue: number
+        priority?: number
+        audioDownloaded?: boolean
+        failure?: { kind: import('../utils/download/errors').DownloadFailureKind, code?: string, message?: string }
         metadata: {
           musicInfo: LX.Music.MusicInfoOnline
           url: string | null
@@ -59,6 +65,7 @@ declare global {
           ext: FileExt
           fileName: string
           filePath: string
+          fileAllocated?: boolean
           listId?: string
         }
       }

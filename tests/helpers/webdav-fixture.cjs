@@ -42,13 +42,14 @@ exports.createDAV = async() => {
       } else if (req.method === 'GET') {
         if (!files.has(url)) { res.writeHead(404).end(); return }
         const content = files.get(url)
+        if (control.validators && req.headers['if-none-match'] === etag(content)) { res.writeHead(304, { ETag: etag(content) }).end(); return }
         res.writeHead(200, { 'Content-Type': 'application/json', ...(control.validators ? { ETag: etag(content) } : {}) }).end(content)
       } else if (req.method === 'PUT') {
         if (!directories.has(url.replace(/[^/]+$/, ''))) { res.writeHead(409).end(); return }
         const old = files.get(url)
         if ((req.headers['if-none-match'] === '*' && old !== undefined) || (req.headers['if-match'] && req.headers['if-match'] !== etag(old ?? ''))) { res.writeHead(412).end(); return }
         files.set(url, body)
-        res.writeHead(old === undefined ? 201 : 204).end()
+        res.writeHead(old === undefined ? 201 : 204, control.validators ? { ETag: etag(body) } : {}).end()
       } else if (req.method === 'DELETE') {
         files.delete(url)
         res.writeHead(204).end()

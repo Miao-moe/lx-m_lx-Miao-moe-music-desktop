@@ -14,6 +14,7 @@ material-modal(:show="versionInfo.showModal" :close-btn="!isInstalling && !isCan
         base-btn(v-else :class="$style.btn" @click="handleCheckUpdate") 重新检查更新
   main(v-else-if="versionInfo.isUnknown" :class="$style.main")
     h2 ❓ 获取最新版本信息失败 ❓
+    p.load-error-detail(v-if="versionInfo.updateError" role="alert") {{ versionInfo.updateError }}
     div.scroll.select(:class="$style.info")
       div(:class="$style.current")
         h3 当前版本：{{ versionInfo.version }}

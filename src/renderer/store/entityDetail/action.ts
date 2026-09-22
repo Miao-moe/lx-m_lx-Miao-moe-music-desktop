@@ -1,3 +1,4 @@
+import { formatError } from '@common/utils/errorMessage'
 import { markRaw, markRawList } from '@common/utils/vueTools'
 import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
 import musicSdk from '@renderer/utils/musicSdk'
@@ -235,7 +236,7 @@ export const getAndSetEntityDetail = async(type: EntityType, id: string, source:
     if (key != entityDetailInfo.key) return
     entityDetailInfo.list = []
     entityDetailInfo.total = 0
-    entityDetailInfo.noItemLabel = window.i18n.t('list__load_failed')
+    entityDetailInfo.noItemLabel = formatError(error, window.i18n.t('list__load_failed'), 'LIST_LOAD_FAILED')
     console.log(error)
     throw error
   }

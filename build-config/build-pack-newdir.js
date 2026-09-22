@@ -29,7 +29,6 @@ builder.build({
       'node_modules/electron-font-manager/build/Release/font_manager.node',
       'node_modules/playwright-core',
       '!node_modules/playwright-core/lib/tools/skills/**',
-      'build/Release/qrc_decode.node',
       'dist/plugin-compiler/**/*',
     ],
     asar: { smartUnpack: false },

@@ -755,8 +755,14 @@ table {
 }
 
 .ui-state-error {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
   color: var(--color-danger);
 }
+.load-error-detail, [role="alert"] { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+[data-cover-error] { position: relative; }
+[data-cover-error]::after { content: '!'; position: absolute; right: 1px; bottom: 1px; border-radius: 50%; padding: 1px 5px; background: var(--color-main-background); color: var(--color-font); font-size: 11px; line-height: 1.4; }
 
 .ui-state-retry {
   margin-top: 12px;

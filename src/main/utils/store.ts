@@ -1,35 +1,69 @@
-// import { writeFileSync } from 'atomically'
+/* eslint-disable @typescript-eslint/promise-function-async -- Preserve the original rejection-handled promise for legacy event callers. */
 import { dialog, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { log } from '@common/utils'
+import { writeFileAtomic } from '@common/utils/atomicFile'
+import { readProtectedConfig, writeProtectedConfig } from './credentials'
 
 type Stores = Record<string, Store>
 
 const stores: Stores = {}
+const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value))
+let writes: Promise<unknown> = Promise.resolve()
+let recoveryError: Error | null = null
+export const protectStoreRecovery = (error: Error | null) => { recoveryError = error }
+export const withStoreExclusive = <T>(action: () => Promise<T>): Promise<T> => {
+  const task = writes.then(action)
+  writes = task.catch(error => { log.error(error) })
+  return task
+}
+export const flushStores = async() => {
+  // Include mutations queued in the same turn, and ones added while flushing.
+  do {
+    await Promise.resolve()
+    const pending = writes
+    await pending
+    if (pending === writes && !Object.values(stores).some(store => store.pending)) return
+  } while (true)
+}
 
 
 class Store {
-  private readonly filePath: string
-  private readonly dirPath: string
+  readonly filePath: string
   private store: Record<string, any>
+  private readonly changes: Array<{ change: (data: Record<string, any>) => Record<string, any>, resolve: () => void, reject: (error: unknown) => void }> = []
+  get pending() { return this.changes.length > 0 }
 
-  private writeFile() {
-    const tempPath = this.filePath + '.' + Math.random().toString().substring(2, 10) + '.temp'
-    try {
-      fs.writeFileSync(tempPath, JSON.stringify(this.store, null, '\t'), 'utf8')
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
-        fs.mkdirSync(this.dirPath, { recursive: true })
-        fs.writeFileSync(tempPath, JSON.stringify(this.store, null, '\t'), 'utf8')
-      } else throw err
+  update(change: (data: Record<string, any>) => Record<string, any>): Promise<void> {
+    const first = !this.changes.length
+    const task = new Promise<void>((resolve, reject) => { this.changes.push({ change, resolve, reject }) })
+    // Keep fire-and-forget legacy callers safe; awaiting this promise still rejects.
+    void task.catch(error => { log.error(error) })
+    if (first) {
+      void withStoreExclusive(async() => {
+        const batch = this.changes.splice(0)
+        try {
+          if (recoveryError) throw recoveryError
+          let next = clone(this.store)
+          for (const item of batch) next = item.change(next)
+          next = clone(next)
+          if (path.basename(this.filePath) === 'config_v2.json') await writeProtectedConfig(this.filePath, next)
+          else await writeFileAtomic(this.filePath, JSON.stringify(next, null, '\t'))
+          this.store = next
+          for (const item of batch) item.resolve()
+        } catch (error) { for (const item of batch) item.reject(error) }
+      })
     }
-    fs.renameSync(tempPath, this.filePath)
+    return task
   }
+
+  snapshot() { return clone(this.store) }
+  // Only called under withStoreExclusive after a coordinated disk commit.
+  acceptCommitted(value: Record<string, any>) { this.store = clone(value) }
 
   constructor(filePath: string, clearInvalidConfig: boolean = false) {
     this.filePath = filePath
-    this.dirPath = path.dirname(this.filePath)
 
     let store: Record<string, any>
     if (fs.existsSync(this.filePath)) {
@@ -46,11 +80,11 @@ class Store {
       if (clearInvalidConfig) store = {}
       else throw new Error('parse data error: ' + String(store))
     }
-    this.store = store
+    this.store = path.basename(this.filePath) === 'config_v2.json' ? readProtectedConfig(this.filePath, store) : store
   }
 
   get<Value>(key: string): Value {
-    return this.store[key]
+    return clone(this.store[key])
   }
 
   has(key: string): boolean {
@@ -58,14 +92,14 @@ class Store {
   }
 
   set(key: string, value: any) {
-    this.store[key] = value
-    this.writeFile()
+    const saved = clone(value)
+    return this.update(data => ({ ...data, [key]: saved }))
   }
 
   override(value: Record<string, any>) {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('Config must be an object')
-    this.store = value
-    this.writeFile()
+    const saved = clone(value)
+    return this.update(() => saved)
   }
 }
 
@@ -84,6 +118,7 @@ export default (name: string, isIgnoredError = true, isShowErrorAlert = true): S
     store = stores[name] = new Store(storePath, false)
   } catch (err: any) {
     const error = err as Error
+    if (String(err?.code).startsWith('CREDENTIAL_')) throw error
     log.error(error)
 
     if (!isIgnoredError) throw error

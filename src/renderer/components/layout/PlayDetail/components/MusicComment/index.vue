@@ -19,7 +19,7 @@ div.comment(ref="dom_container" :class="$style.comment")
         div(:class="$style.tab_content")
           div.scroll(ref="dom_commentHot" :class="$style.tab_content_scroll")
             div(v-if="hotComment.isLoadError" :class="$style.commentError")
-              p(:class="$style.commentLabel") {{ $t('comment__hot_load_error') }}
+              p(:class="$style.commentLabel") {{ hotComment.errorMessage }}
               base-btn(min class="ui-state-retry" @click="handleGetHotComment(currentMusicInfo, hotComment.nextPage, hotComment.limit)") {{ $t('reload') }}
             p(v-else-if="hotComment.isLoading && !hotComment.list.length" :class="$style.commentLabel") {{ $t('comment__hot_loading') }}
             comment-floor(v-if="!hotComment.isLoadError && hotComment.list.length" :class="[$style.commentFloor, hotComment.isLoading ? $style.loading : null]" :comments="hotComment.list")
@@ -29,7 +29,7 @@ div.comment(ref="dom_container" :class="$style.comment")
         div(:class="$style.tab_content")
           div.scroll(ref="dom_commentNew" :class="$style.tab_content_scroll")
             div(v-if="newComment.isLoadError" :class="$style.commentError")
-              p(:class="$style.commentLabel") {{ $t('comment__new_load_error') }}
+              p(:class="$style.commentLabel") {{ newComment.errorMessage }}
               base-btn(min class="ui-state-retry" @click="handleGetNewComment(currentMusicInfo, newComment.nextPage, newComment.limit)") {{ $t('reload') }}
             p(v-else-if="newComment.isLoading && !newComment.list.length" :class="$style.commentLabel") {{ $t('comment__new_loading') }}
             comment-floor(v-if="!newComment.isLoadError && newComment.list.length" :class="[$style.commentFloor, newComment.isLoading ? $style.loading : null]" :comments="newComment.list")
@@ -41,6 +41,7 @@ div.comment(ref="dom_container" :class="$style.comment")
 </template>
 
 <script>
+import { formatError } from '@common/utils/errorMessage'
 import { toOldMusicInfo } from '@renderer/utils'
 import music from '@renderer/utils/musicSdk'
 import CommentFloor from './CommentFloor.vue'
@@ -67,6 +68,7 @@ export default {
       },
       tabActiveId: 'hot',
       newComment: {
+        errorMessage: '',
         isLoading: false,
         isLoadError: false,
         page: 1,
@@ -87,6 +89,7 @@ export default {
         ],
       },
       hotComment: {
+        errorMessage: '',
         isLoading: true,
         isLoadError: true,
         page: 1,
@@ -175,6 +178,7 @@ export default {
         console.log(err)
         if (err.message == '取消请求') return
         this.newComment.isLoadError = true
+        this.newComment.errorMessage = formatError(err, this.$t('comment__new_load_error'), 'COMMENTS_LOAD_FAILED')
         this.newComment.isLoading = false
       })
     },
@@ -194,6 +198,7 @@ export default {
         console.log(err)
         if (err.message == '取消请求') return
         this.hotComment.isLoadError = true
+        this.hotComment.errorMessage = formatError(err, this.$t('comment__hot_load_error'), 'COMMENTS_LOAD_FAILED')
         this.hotComment.isLoading = false
       })
     },
@@ -328,6 +333,8 @@ export default {
   scroll-behavior: smooth;
 }
 .commentLabel {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   padding: 15px;
   color: var(--color-font-label);
   font-size: 14px;

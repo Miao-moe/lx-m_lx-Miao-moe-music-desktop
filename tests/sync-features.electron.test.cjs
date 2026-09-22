@@ -1,0 +1,116 @@
+const assert = require('node:assert/strict')
+const path = require('node:path')
+const http = require('node:http')
+const { test } = require('node:test')
+const { launch, route, settled } = require('./helpers/motion-fixture.cjs')
+const { createDAV, playlists, song } = require('./helpers/webdav-fixture.cjs')
+const invoke = (page, channel, params) => page.evaluate(({ channel, params }) => require('electron').ipcRenderer.invoke(channel, params), { channel, params })
+
+test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual WebDAV audio playback', { timeout: 100000 }, async t => {
+  const dav = await createDAV()
+  const bytes = Buffer.alloc(44 + 16000 * 20 * 2)
+  bytes.write('RIFF'); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WAVEfmt ', 8); bytes.writeUInt32LE(16, 16)
+  bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(1, 22); bytes.writeUInt32LE(16000, 24); bytes.writeUInt32LE(32000, 28)
+  bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34); bytes.write('data', 36); bytes.writeUInt32LE(bytes.length - 44, 40)
+  const xmlRow = (href, name, folder = false) => `<d:response><d:href>${href}</d:href><d:propstat><d:prop><d:displayname>${name}</d:displayname><d:resourcetype>${folder ? '<d:collection/>' : ''}</d:resourcetype><d:getcontentlength>${bytes.length}</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
+  const root = xmlRow('/dav/', 'Root', true) + xmlRow('/dav/album/', '我的专辑', true) + xmlRow('/dav/fixture.wav', '远程试听.wav') + xmlRow('/dav/notes.txt', 'notes.txt')
+  dav.control.beforeRequest = (req, res) => {
+    if (req.method === 'PROPFIND' && req.headers.depth === '1') {
+      res.writeHead(207, { 'Content-Type': 'application/xml' }).end(`<d:multistatus xmlns:d="DAV:">${req.url === '/dav/' ? root : xmlRow('/dav/album/', '我的专辑', true) + xmlRow('/dav/album/next.wav', '子目录试听.wav')}</d:multistatus>`); return true
+    }
+    if (req.url.endsWith('.wav')) {
+      const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? '')
+      const start = range ? Number(range[1]) : 0, end = range?.[2] ? Number(range[2]) : bytes.length - 1
+      res.writeHead(range ? 206 : 200, { 'Content-Type': 'audio/wav', 'Content-Length': end - start + 1, 'Accept-Ranges': 'bytes', ...(range ? { 'Content-Range': `bytes ${start}-${end}/${bytes.length}` } : {}) }).end(bytes.subarray(start, end + 1)); return true
+    }
+  }
+  const platform = http.createServer((req, res) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ code: '000000', data: { myCreatedMusicLists: { createdMusicLists: [{ musicListId: 'one', title: '平台歌单一' }, { musicListId: 'two', title: '平台歌单二' }] } } })))
+  await new Promise(resolve => platform.listen(0, '127.0.0.1', resolve))
+  let fixture
+  t.after(async() => { if (fixture) await fixture.app.close(); await dav.close(); platform.closeAllConnections(); await new Promise(resolve => platform.close(resolve)) })
+  fixture = await launch({ initializeMotion: false, rendererPath: path.resolve('dist/index.html') })
+  const { app, page } = fixture
+  await app.evaluate(async(_, config) => {
+    await global.lx.event_app.update_config({ ...Object.fromEntries(Object.entries(config).map(([key, value]) => ['sync.webdav.' + key, value])), 'sync.webdav.enable': true, 'player.volume': 0, 'common.langId': 'zh-cn' })
+  }, dav.config)
+  await route(page, '/setting?name=SettingSync'); await settled(page)
+  const audio = page.getByRole('region', { name: 'WebDAV 音频目录' })
+  await t.test('browse root and nested directories, filter nonaudio and play with seeking', async() => {
+    await audio.getByRole('button', { name: '打开根目录' }).click()
+    await audio.getByRole('button', { name: /我的专辑/ }).click()
+    await audio.getByRole('button', { name: /子目录试听/ }).waitFor()
+    await audio.getByRole('button', { name: '上一级' }).click()
+    await audio.getByRole('button', { name: /远程试听/ }).waitFor()
+    assert.equal(await audio.getByText('notes.txt', { exact: true }).count(), 0)
+    assert.equal(await audio.getByRole('button', { name: '上一级' }).isDisabled(), true)
+    await audio.getByRole('button', { name: /远程试听/ }).click()
+    await page.waitForFunction(() => window.lxData.playMusicInfo.musicInfo?.meta.webdav?.path === 'fixture.wav')
+    await page.waitForFunction(() => window.__motionComponents().some(c => c.setupState.maxPlayTimeStr === '00:20' && c.setupState.nowPlayTimeStr !== '00:00'), undefined, { timeout: 10000 })
+    await page.evaluate(() => window.app_event.setProgress(10))
+    await page.waitForFunction(() => window.__motionComponents().some(c => /^00:1\d$/.test(c.setupState.nowPlayTimeStr)))
+    assert(dav.requests.some(req => req.path === '/dav/fixture.wav' && req.method === 'GET' && req.headers.range))
+    const song = await page.evaluate(() => window.lxData.playMusicInfo.musicInfo)
+    assert(!JSON.stringify(song).includes('pass word')); assert(!JSON.stringify(song).includes('127.0.0.1'))
+    const statuses = await page.evaluate(song => window.lx.worker.main.inspectLibraryFiles([song]), song)
+    assert.deepEqual(statuses, [])
+  })
+  await t.test('persist a selected/ignored playlist range and retain hidden selections', async() => {
+    await page.evaluate(port => {
+      const https = require('https'), http = require('http'), request = https.request
+      https.request = function(options, callback) {
+        if ((options.hostname ?? options.host) === 'c.musicapp.migu.cn') return http.request({ ...options, protocol: 'http:', hostname: '127.0.0.1', host: '127.0.0.1', port, agent: undefined }, callback)
+        return request.apply(this, arguments)
+      }
+      window.lxData.appSetting['cookie.mg'] = 'mg_auth_uid=7; mg_auth_pacmtoken=fixture-session'
+    }, platform.address().port)
+    await page.getByRole('combobox', { name: '选择平台' }).selectOption('mg')
+    await page.getByRole('button', { name: '读取平台歌单' }).click()
+    await page.locator('label[for="sync_selection_mg_one"]').click()
+    await page.getByPlaceholder('搜索歌单', { exact: true }).fill('二')
+    await page.getByRole('button', { name: '选中筛选结果' }).click()
+    await page.getByRole('combobox', { name: '同步范围' }).selectOption('exclude')
+    await page.getByRole('button', { name: '保存同步范围' }).click()
+    await page.getByText('同步范围已保存', { exact: true }).waitFor()
+    assert.deepEqual(await app.evaluate(() => JSON.parse(global.lx.appSetting['sync.platform.selection']).mg), { mode: 'exclude', ids: ['one', 'two'] })
+  })
+  await t.test('conflict preview, failed-only filtering and retry retain the last successful time', async() => {
+    await app.evaluate(async(_, lists) => global.lx.event_list.list_data_overwrite(lists), playlists('before'))
+    await page.getByRole('button', { name: '立即同步', exact: true }).click()
+    await page.getByRole('status').filter({ hasText: '上传 1 项' }).waitFor()
+    const baseline = await invoke(page, 'winMain_webdav_last_result')
+    await app.evaluate(async(_, lists) => global.lx.event_list.list_data_overwrite(lists), playlists('local-change'))
+    const remote = playlists('remote-change')
+    remote.userList.push({ id: 'new-list', name: '云端新增歌单', locationUpdateTime: null, list: [song('new')] })
+    dav.seed({ playlists: remote })
+    await page.getByRole('button', { name: '立即同步', exact: true }).click()
+    await page.getByText(/远端相对本地的差异/).waitFor()
+    await page.getByRole('cell', { name: '云端新增歌单', exact: true }).first().waitFor()
+    await page.getByPlaceholder('搜索平台或歌单').fill('WebDAV')
+    await page.locator('label[for="sync_errors_only"]').click()
+    const row = page.locator('#sync_status').locator('..').locator('li').filter({ has: page.locator('strong', { hasText: /^WebDAV$/ }) })
+    await row.getByText(/WEBDAV_CONFLICT/).waitFor()
+    assert((await row.textContent()).includes('最近成功'))
+    assert.equal((await invoke(page, 'winMain_webdav_last_result')).lastSuccess, baseline.lastSuccess)
+    dav.seed({ playlists: playlists('local-change') })
+    await row.getByRole('button', { name: '重试', exact: true }).click()
+    await row.waitFor({ state: 'detached' })
+    await page.locator('label[for="sync_errors_only"]').click()
+    await page.screenshot({ path: path.resolve('logs/sync-features.png') })
+  })
+  assert.deepEqual(fixture.errors, [])
+  assert.deepEqual(dav.errors, [])
+  const profilePath = fixture.output
+  await app.close(); fixture = null
+  fixture = await launch({ initializeMotion: false, rendererPath: path.resolve('dist/index.html'), profilePath })
+  await route(fixture.page, '/setting?name=SettingSync'); await settled(fixture.page)
+  await fixture.page.getByRole('combobox', { name: '选择平台' }).selectOption('mg')
+  assert.equal(await fixture.page.getByRole('combobox', { name: '同步范围' }).inputValue(), 'exclude')
+  assert.deepEqual(await fixture.app.evaluate(() => JSON.parse(global.lx.appSetting['sync.platform.selection']).mg.ids), ['one', 'two'])
+  const restoredStatus = await fixture.page.evaluate(() => JSON.parse(localStorage.getItem('lx-sync-status-v1')).webdav)
+  assert.equal(restoredStatus.state, 'success'); assert(restoredStatus.lastSuccess > 0)
+  await fixture.app.evaluate(async() => global.lx.event_app.update_config({ 'sync.webdav.password': 'invalid' }))
+  await fixture.page.getByRole('button', { name: '打开根目录', exact: true }).click()
+  await fixture.page.getByRole('alert').filter({ hasText: 'WEBDAV_AUTH' }).waitFor()
+  assert((await fixture.page.getByRole('alert').filter({ hasText: 'WEBDAV_AUTH' }).textContent()).includes('原因'))
+  assert.deepEqual(fixture.errors, [])
+})

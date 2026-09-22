@@ -9,7 +9,7 @@
       </div>
     </div>
     <p v-if="pluginTransferNotice" :class="$style.notice" :role="pluginTransferNotice.error ? 'alert' : 'status'" data-plugin-transfer-status>{{ pluginTransferNotice.message }}</p>
-    <p v-if="pluginStore.catalogError || pluginStoreError" :class="$style.notice" role="status">{{ $t('setting__plugins_catalog_error') }}</p>
+    <p v-if="pluginStore.catalogError || pluginStoreError" :class="$style.notice" role="status">{{ formatError(pluginStore.catalogError || pluginStoreError, $t('setting__plugins_catalog_error'), 'PLUGIN_CATALOG_LOAD_FAILED') }}</p>
     <p v-if="!refreshing && !items.length" :class="$style.notice" role="status">{{ $t('setting__plugins_empty') }}</p>
     <div :class="$style.grid">
       <article v-for="item in items" :key="item.id" :class="$style.card" :data-plugin-id="item.id" :data-setting-search="`plugin-card:${item.id}`">
@@ -19,7 +19,7 @@
             <h3 :class="$style.title">{{ item.title }}</h3>
             <p :class="$style.meta">{{ $t(item.local ? 'setting__plugins_local' : 'setting__plugins_official') }}<span v-if="item.version"> · v{{ item.version }}</span></p>
           </div>
-          <span :class="[$style.badge, {[$style.installed]: item.loaded}]" data-plugin-status>{{ $t(item.builtin ? 'setting__plugins_builtin' : item.broken ? 'setting__plugins_broken' : item.installed ? 'setting__plugins_installed' : 'setting__plugins_available') }}</span>
+          <span :class="[$style.badge, {[$style.installed]: item.loaded}]" data-plugin-status>{{ $t(item.builtin ? 'setting__plugins_builtin' : item.broken ? 'setting__plugins_broken' : item.disabled ? 'setting__plugins_disabled' : item.installed ? 'setting__plugins_installed' : 'setting__plugins_available') }}</span>
         </div>
         <p v-if="item.description" :class="$style.description">{{ item.description }}</p>
         <p v-if="item.builtin && item.id === 'audio-tag-editor'" :class="$style.meta">{{ $t('setting__plugins_tag_editor_hint') }}</p>
@@ -28,12 +28,14 @@
         <p v-if="item.incompatible" :class="$style.notice" role="status">{{ $t('setting__plugins_incompatible') }}</p>
         <p v-if="item.local" :class="$style.notice">{{ $t('setting__plugins_local_hint') }}</p>
         <p v-else-if="!item.builtin && item.installed && !item.available" :class="$style.notice" role="status">{{ $t('setting__plugins_removed') }}</p>
-        <p v-if="item.broken || pluginOperationErrors[item.id]" :class="$style.notice" role="alert">{{ $t('setting__plugins_operation_error') }}</p>
+        <p v-if="item.broken || pluginOperationErrors[item.id]" :class="$style.notice" role="alert">{{ formatError(pluginOperationErrors[item.id] || item.error, $t('setting__plugins_operation_error'), 'PLUGIN_LOAD_FAILED') }}</p>
+        <p v-if="pluginRuntime.cleanupErrors[item.id]" :class="$style.notice" role="alert">{{ formatError(pluginRuntime.cleanupErrors[item.id], $t('setting__plugins_cleanup_error'), 'PLUGIN_CLEANUP_FAILED') }}</p>
         <div :class="$style.actions">
           <base-btn v-if="!item.builtin && !item.local && (!item.installed || item.update || item.broken)" min :disabled="pluginBusy[item.id] || pluginTransferBusy || !item.available || item.incompatible" @click="changePluginInstallation(item.id, true, 'lxplugin')">
             {{ $t(pluginBusy[item.id] ? 'setting__plugins_working' : item.broken ? 'setting__plugins_reinstall' : item.update ? 'setting__plugins_update' : 'setting__plugins_install') }}
           </base-btn>
           <base-btn v-if="item.hasSettings" min :disabled="pluginBusy[item.id] || pluginTransferBusy" @click="expanded = expanded === item.id ? null : item.id">{{ $t(expanded === item.id ? 'setting__plugins_close_settings' : 'setting__plugins_settings') }}</base-btn>
+          <base-btn v-if="item.installed && item.exportable && !item.builtin" min :disabled="pluginBusy[item.id] || pluginTransferBusy" @click="changePluginEnabled(item.id, item.disabled)">{{ $t(item.disabled ? 'setting__plugins_enable' : 'setting__plugins_disable') }}</base-btn>
           <base-btn v-if="item.installed && !item.builtin" min :disabled="storeBusy || !item.exportable" @click="transferPlugin(item.id)">{{ $t('setting__plugins_export') }}</base-btn>
           <base-btn v-if="item.installed && !item.builtin" min outline :disabled="pluginBusy[item.id] || pluginTransferBusy" @click="uninstall(item.id)">{{ $t(pluginBusy[item.id] ? 'setting__plugins_working' : 'setting__plugins_uninstall') }}</base-btn>
         </div>
@@ -48,10 +50,11 @@
 </template>
 
 <script setup>
+import { formatError } from '@common/utils/errorMessage'
 import { computed, onMounted, ref } from '@common/utils/vueTools'
 import { isPluginApiSupported, pluginPackages, pluginText, comparePluginVersions } from '@common/optionalPlugins'
 import { builtinPlugins, getBuiltinPlugin } from '@common/builtinPlugins'
-import { pluginStore, pluginRuntime, pluginBusy, pluginOperationErrors, pluginStoreError, pluginTransferBusy, pluginTransferNotice, refreshPlugins, changePluginInstallation, transferPlugin } from '@renderer/store/optionalPlugins'
+import { pluginStore, pluginRuntime, pluginBusy, pluginOperationErrors, pluginStoreError, pluginTransferBusy, pluginTransferNotice, refreshPlugins, changePluginInstallation, changePluginEnabled, transferPlugin } from '@renderer/store/optionalPlugins'
 import { appSetting } from '@renderer/store/setting'
 
 const expanded = ref(null)
@@ -68,6 +71,7 @@ const items = computed(() => {
     const available = catalog.get(id)
     const packages = available ? pluginPackages(available) : {}
     const local = !builtin && (installed?.source === 'local' || snapshot.sources?.[id] === 'local')
+    const failure = snapshot.loadFailures?.[id]
     const display = builtin ?? (local ? installed?.manifest : available ?? installed?.manifest)
     return {
       id,
@@ -78,9 +82,11 @@ const items = computed(() => {
       icon: display?.icon ?? '#icon-tune-variant',
       exportable: !!installed,
       installed: !!installed || !!snapshot.errors[id],
+      disabled: installed?.enabled === false,
       loaded: !!pluginRuntime.components[id],
       hasSettings: !!pluginRuntime.components[id]?.Settings,
-      broken: (!builtin && !!snapshot.errors[id]) || !!pluginRuntime.errors[id],
+      broken: (!builtin && !!snapshot.errors[id]) || !!pluginRuntime.errors[id] || !!failure,
+      error: snapshot.errors[id] ?? pluginRuntime.errors[id] ?? failure?.message,
       available: !!available,
       version: builtin?.version ?? installed?.manifest.version ?? (local ? undefined : available?.version),
       bytes: !!builtin || local ? undefined : packages.lxplugin?.bytes,

@@ -1,6 +1,7 @@
 import { httpFetch } from '../../request'
 import { weapi } from './utils/crypto'
 import { formatPlayTime, sizeFormate } from '../../index'
+import { providerError, retryProviderRequest } from '../requestErrors'
 // https://github.com/Binaryify/NeteaseCloudMusicApi/blob/master/module/song_detail.js
 
 export default {
@@ -14,12 +15,12 @@ export default {
   filterList({ songs, privileges }) {
     // console.log(songs, privileges)
     const list = []
-    songs.forEach((item, index) => {
+    const privilegeMap = new Map((privileges ?? []).map(item => [item.id, item]))
+    songs.forEach(item => {
       const types = []
       const _types = {}
       let size
-      let privilege = privileges?.[index]
-      if (privilege?.id !== item.id) privilege = privileges?.find(p => p.id === item.id)
+      const privilege = privilegeMap.get(item.id)
       if (!privilege) return
 
       if (privilege.maxBrLevel == 'hires') {
@@ -93,19 +94,22 @@ export default {
   async getList(ids = [], retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('try max num'))
 
-    const requestObj = httpFetch('https://music.163.com/weapi/v3/song/detail', {
-      method: 'post',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
-        origin: 'https://music.163.com',
-      },
-      form: weapi({
-        c: '[' + ids.map(id => ('{"id":' + id + '}')).join(',') + ']',
-        ids: '[' + ids.join(',') + ']',
-      }),
+    const body = await retryProviderRequest(async() => {
+      const requestObj = httpFetch('https://music.163.com/weapi/v3/song/detail', {
+        method: 'post',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
+          origin: 'https://music.163.com',
+        },
+        form: weapi({
+          c: '[' + ids.map(id => ('{"id":' + id + '}')).join(',') + ']',
+          ids: '[' + ids.join(',') + ']',
+        }),
+      })
+      const { body, statusCode } = await requestObj.promise
+      if (statusCode != 200 || body?.code !== 200) throw providerError('wy', body?.code, statusCode)
+      return body
     })
-    const { body, statusCode } = await requestObj.promise
-    if (statusCode != 200 || body.code !== 200) throw new Error('获取歌曲详情失败')
     // console.log(body)
     return { source: 'wy', list: this.filterList(body) }
   },

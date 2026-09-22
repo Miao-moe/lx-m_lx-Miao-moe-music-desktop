@@ -40,6 +40,11 @@
     </div>
     <play-bar v-if="visibled" data-detail-part="controls" />
     <common-audio-visualizer v-if="appSetting['player.audioVisualization'] && visibled && !pluginPlayDetail" />
+    <!-- Native drag regions follow document order, so this must follow plugin no-drag surfaces. -->
+    <div
+      v-if="isShowPlayerDetail && visibled && pluginPlayDetail && !isShowPlayComment && !isShowLrcSelectContent && !isFullscreen && !isMaximized"
+      :class="$style.windowDrag" data-detail-window-drag aria-hidden="true"
+    />
   </div>
 </template>
 
@@ -49,7 +54,7 @@ import { computed, watch } from '@common/utils/vueTools'
 import { pluginRuntime } from '@renderer/store/optionalPlugins'
 import usePlayerDetailMotion from '@renderer/utils/compositions/usePlayerDetailMotion'
 import useEntityDetailNavigation from '@renderer/utils/compositions/useEntityDetailNavigation'
-import { isFullscreen } from '@renderer/store'
+import { isFullscreen, isMaximized } from '@renderer/store'
 import {
   isShowPlayerDetail,
   isShowPlayComment,
@@ -150,6 +155,7 @@ export default {
       handleAfterLeave,
       ...detailMotion,
       isFullscreen,
+      isMaximized,
       fullscreenExit() {
         void setFullScreen(false).then((fullscreen) => {
           isFullscreen.value = fullscreen
@@ -174,6 +180,18 @@ export default {
 @import '@renderer/assets/styles/layout.less';
 
 @control-btn-width: @height-toolbar * .26;
+
+// Plugins may hide their chrome or cover it with an iframe. Keep a native drag
+// target above that surface, leaving both possible window-button groups free.
+.windowDrag {
+  position: absolute;
+  top: 0;
+  left: 240px;
+  right: 240px;
+  height: @height-toolbar;
+  z-index: 3;
+  -webkit-app-region: drag;
+}
 
 .container {
   position: absolute;

@@ -1,8 +1,10 @@
+import { formatError } from '@common/utils/errorMessage'
 import { markRaw } from '@common/utils/vueTools'
 import music from '@renderer/utils/musicSdk'
 import { deduplicationList, toNewMusicInfo } from '@renderer/utils'
-import { sortInsert, similar } from '@common/utils/common'
+import { searchScore } from '@common/utils/searchScore'
 import { createAggregateSearch } from '../aggregate'
+import { withRequestScope } from '@renderer/utils/requestContext'
 
 import { sources, maxPages, listInfos } from './state'
 
@@ -15,9 +17,11 @@ interface SearchResult {
 }
 
 const aggregateSearch = createAggregateSearch<SearchResult>()
-export const retryFailedSources = async() => aggregateSearch.retry(listInfos.all)
+const cacheExpires = new WeakMap<object, number>()
+export const retryFailedSources = async(source?: LX.OnlineSource) => aggregateSearch.retry(listInfos.all, source)
 
 interface PendingSearch {
+  controller: AbortController
   key: string
   promise: Promise<LX.Music.MusicInfo[]>
 }
@@ -31,14 +35,8 @@ const pendingSearches = new Map<LX.OnlineSource | 'all', PendingSearch>()
  * @returns 排序后的列表
  */
 const handleSortList = (list: LX.Music.MusicInfo[], keyword: string) => {
-  let arr: any[] = []
-  for (const item of list) {
-    sortInsert(arr, {
-      num: similar(keyword, `${item.name} ${item.singer}`),
-      data: item,
-    })
-  }
-  return arr.map(item => item.data).reverse()
+  return list.map((item, index) => ({ item, index, score: searchScore(keyword, `${item.name} ${item.singer}`) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index).map(value => value.item)
 }
 
 
@@ -67,6 +65,7 @@ const setLists = (results: SearchResult[], page: number, text: string, pending =
   if (pending) listInfo.noItemLabel = window.i18n.t('list__loading')
   else if (text && !list.length && page == 1) listInfo.noItemLabel = window.i18n.t('no_item')
   else listInfo.noItemLabel = ''
+  if (!pending) cacheExpires.set(listInfo, Date.now() + 30000)
   return listInfo.list
 }
 
@@ -81,13 +80,16 @@ const setList = (datas: SearchResult, page: number, text: string): LX.Music.Musi
   listInfo.limit = datas.limit
   if (text && !datas.list.length && page == 1) listInfo.noItemLabel = window.i18n.t('no_item')
   else listInfo.noItemLabel = ''
+  cacheExpires.set(listInfo, Date.now() + 30000)
   return listInfo.list
 }
 
 export const resetListInfo = (sourceId: LX.OnlineSource | 'all'): [] => {
+  pendingSearches.get(sourceId)?.controller.abort()
   pendingSearches.delete(sourceId)
   let listInfo = listInfos[sourceId]
   if (!listInfo) return []
+  cacheExpires.delete(listInfo)
   aggregateSearch.reset(listInfo)
   listInfo.key = null
   listInfo.list = []
@@ -111,8 +113,12 @@ const performSearch = async(text: string, page: number, sourceId: LX.OnlineSourc
       return setList(data, page, text)
     }).catch((error: any) => {
       if (!isCurrent()) return []
-      resetListInfo(sourceId)
-      listInfo!.noItemLabel = window.i18n.t('list__load_failed')
+      listInfo!.key = null
+      listInfo!.list = []
+      listInfo!.page = 0
+      listInfo!.maxPage = 0
+      listInfo!.total = 0
+      listInfo!.noItemLabel = formatError(error, window.i18n.t('list__load_failed'), 'LIST_LOAD_FAILED')
       console.log(error)
       throw error
     })
@@ -125,15 +131,19 @@ export const search = async(text: string, page: number, sourceId: LX.OnlineSourc
   const key = `${page}__${text}`
   const pending = pendingSearches.get(sourceId)
   if (pending?.key === key) return pending.promise
-  if (!pending && listInfo.key === key && listInfo.list.length) return Promise.resolve(listInfo.list)
+  if (!pending && listInfo.key === key && listInfo.list.length && (cacheExpires.get(listInfo) ?? 0) > Date.now()) return Promise.resolve(listInfo.list)
 
   // An old query's rows must not become a cache hit for a new query still loading.
   resetListInfo(sourceId)
   listInfo.key = key
   listInfo.noItemLabel = window.i18n.t('list__loading')
   const task: PendingSearch = {
+    controller: new AbortController(),
     key,
-    promise: Promise.resolve().then(async() => performSearch(text, page, sourceId, () => pendingSearches.get(sourceId) === task)).finally(() => {
+    promise: Promise.resolve().then(async() => withRequestScope(task.controller.signal, async() => performSearch(text, page, sourceId, () => pendingSearches.get(sourceId) === task))).catch(error => {
+      if (pendingSearches.get(sourceId) !== task) return []
+      throw error
+    }).finally(() => {
       if (pendingSearches.get(sourceId) === task) pendingSearches.delete(sourceId)
     }),
   }

@@ -1,5 +1,6 @@
 import { toMD5 } from '../utils'
 import { httpFetch } from '../../request'
+import { providerError, retryProviderRequest } from '../requestErrors'
 
 // s.content[0].lyricContent.forEach(([str]) => {
 //   console.log(str)
@@ -25,23 +26,16 @@ export const signatureParams = (params, platform = 'android', body = '') => {
  * @param {*} options
  * @param {*} retryNum
  */
-export const createHttpFetch = async(url, options, retryNum = 0) => {
-  if (retryNum > 2) throw new Error('try max num')
-  let result
-  try {
-    result = await httpFetch(url, options).promise
-  } catch (err) {
-    console.log(err)
-    return createHttpFetch(url, options, ++retryNum)
-  }
+export const createHttpFetch = async(url, options) => retryProviderRequest(async() => {
+  const result = await httpFetch(url, options).promise
   // console.log(result.statusCode, result.body)
   if (result.statusCode !== 200 ||
     (
-      result.body.error_code ??
-      result.body.errcode ??
-      result.body.err_code) != 0
-  ) return createHttpFetch(url, options, ++retryNum)
+      result.body?.error_code ??
+      result.body?.errcode ??
+      result.body?.err_code) != 0
+  ) throw providerError('kg', result.body?.error_code ?? result.body?.errcode ?? result.body?.err_code, result.statusCode)
   if (result.body.data) return result.body.data
   if (Array.isArray(result.body.info)) return result.body
   return result.body.info
-}
+})

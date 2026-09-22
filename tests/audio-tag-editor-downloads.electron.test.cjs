@@ -38,7 +38,8 @@ test('Downloads opens the tag editor for the clicked file and handles stale file
     await page.locator('.list-item').filter({ hasText: id }).click({ button: 'right' })
   }
   const dismiss = async text => {
-    await page.getByText(text, { exact: true }).waitFor()
+    await page.getByText(text, { exact: false }).last().waitFor()
+    assert.match(await page.getByText(text, { exact: false }).last().innerText(), /错误代码|Error code/)
     await page.getByRole('button', { name: await label(page, 'confirm_button_text'), exact: true }).click()
     await page.waitForFunction(() => !document.querySelector('[data-audio-tag-editor]') || !document.querySelector('[data-audio-tag-editor] fieldset')?.disabled)
   }

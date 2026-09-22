@@ -27,6 +27,11 @@ const fixListIdType = (lists: LX.List.UserListInfo[] | LX.List.UserListInfoFull[
 }
 
 export class Event extends EventEmitter {
+  list_data_restored(data: MakeOptional<LX.List.ListDataFull, 'tempList'>) {
+    this.emit('list_data_overwrite', data, true)
+    this.list_changed()
+  }
+
   list_changed() {
     this.emit('list_changed')
   }

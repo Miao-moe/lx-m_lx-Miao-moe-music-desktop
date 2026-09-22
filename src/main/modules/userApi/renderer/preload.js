@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
-import needle from 'needle'
 import zlib from 'zlib'
 import { createCipheriv, publicEncrypt, constants, randomBytes, createHash } from 'crypto'
 import USER_API_RENDERER_EVENT_NAME from '../rendererEvent/name'
-import { httpOverHttp, httpsOverHttp } from 'tunnel'
+import { createProxyAgentPool, requestWithDeadline } from '@common/utils/needleRequest'
+import { getRequestSignal, withRequestScope } from '@common/utils/requestContext'
+import { installConsoleRedaction } from '@common/sensitive'
+
+installConsoleRedaction()
 
 
 const sendMessage = (action, data, status, message) => {
@@ -44,14 +47,29 @@ const supportActions = {
   local: ['musicUrl', 'lyric', 'pic'],
 }
 
-const httpsRxp = /^https:/
-const getRequestAgent = url => {
-  return proxy.host ? (httpsRxp.test(url) ? httpsOverHttp : httpOverHttp)({
-    proxy: {
-      host: proxy.host,
-      port: proxy.port,
+const requestAgent = createProxyAgentPool()
+const requestControllers = new Map()
+
+const getScriptRequestScope = () => {
+  const inherited = getRequestSignal()
+  const signals = inherited ? [inherited] : [...requestControllers.values()].map(controller => controller.signal)
+  if (signals.length < 2) return { signal: signals[0], release() {} }
+
+  // Chromium promises across contextBridge do not retain Node's async context.
+  // An unattributed transport may belong to any currently running script call;
+  // keep it until all of those consumers finish, without cancelling another song.
+  const controller = new AbortController()
+  const onAbort = () => {
+    if (signals.every(signal => signal.aborted)) controller.abort()
+  }
+  for (const signal of signals) signal.addEventListener('abort', onAbort, { once: true })
+  onAbort()
+  return {
+    signal: controller.signal,
+    release() {
+      for (const signal of signals) signal.removeEventListener('abort', onAbort)
     },
-  }) : undefined
+  }
 }
 
 const verifyLyricInfo = (info) => {
@@ -68,8 +86,11 @@ const verifyLyricInfo = (info) => {
 const handleRequest = (context, { requestKey, data }) => {
   // console.log(data)
   if (!events.request) return sendMessage(USER_API_RENDERER_EVENT_NAME.response, { requestKey }, false, 'Request event is not defined')
+  requestControllers.get(requestKey)?.abort()
+  const controller = new AbortController()
+  requestControllers.set(requestKey, controller)
   try {
-    events.request.call(context, { source: data.source, action: data.action, info: data.info }).then(response => {
+    withRequestScope(controller.signal, () => events.request.call(context, { source: data.source, action: data.action, info: data.info })).then(response => {
       let sendData = {
         requestKey,
       }
@@ -104,6 +125,9 @@ const handleRequest = (context, { requestKey, data }) => {
       sendMessage(USER_API_RENDERER_EVENT_NAME.response, sendData, true)
     }).catch(err => {
       sendMessage(USER_API_RENDERER_EVENT_NAME.response, { requestKey }, false, err.message)
+    }).finally(() => {
+      if (requestControllers.get(requestKey) === controller) requestControllers.delete(requestKey)
+      controller.abort()
     })
   } catch (err) {
     sendMessage(USER_API_RENDERER_EVENT_NAME.response, { requestKey }, false, err.message)
@@ -164,6 +188,9 @@ const handleInit = (context, info) => {
   ipcRenderer.on(USER_API_RENDERER_EVENT_NAME.request, (event, data) => {
     handleRequest(context, data)
   })
+  ipcRenderer.on(USER_API_RENDERER_EVENT_NAME.cancelRequest, (_event, requestKey) => {
+    requestControllers.get(requestKey)?.abort()
+  })
 }
 
 const handleShowUpdateAlert = (data, resolve, reject) => {
@@ -192,52 +219,55 @@ const initEnv = (userApi) => {
   contextBridge.exposeInMainWorld('lx', {
     EVENT_NAMES,
     request(url, { method = 'get', timeout, headers, body, form, formData }, callback) {
+      const agent = requestAgent(url, proxy)
+      const scope = getScriptRequestScope()
       let options = {
         headers,
-        agent: getRequestAgent(url),
+        agent,
+        signal: scope.signal,
+        method,
+        timeout: typeof timeout == 'number' && timeout > 0 ? Math.min(timeout, 60_000) : 60_000,
       }
-      let data
       if (body) {
-        data = body
+        options.body = body
       } else if (form) {
-        data = form
+        options.form = form
         // data.content_type = 'application/x-www-form-urlencoded'
         options.json = false
       } else if (formData) {
-        data = formData
+        options.formData = formData
         // data.content_type = 'multipart/form-data'
         options.json = false
       }
-      options.response_timeout = typeof timeout == 'number' && timeout > 0 ? Math.min(timeout, 60_000) : 60_000
-
-      let request = needle.request(method, url, data, options, (err, resp, body) => {
-        // console.log(err, resp, body)
-        try {
-          if (err) {
-            callback.call(this, err, null, null)
-          } else {
-            body = resp.body = resp.raw.toString()
-            try {
-              resp.body = JSON.parse(resp.body)
-            } catch (_) {}
-            body = resp.body
-            callback.call(this, err, {
-              statusCode: resp.statusCode,
-              statusMessage: resp.statusMessage,
-              headers: resp.headers,
-              bytes: resp.bytes,
-              raw: resp.raw,
-              body,
-            }, body)
+      let request
+      try {
+        request = requestWithDeadline(url, options, (err, resp, body) => {
+          scope.release()
+          // console.log(err, resp, body)
+          try {
+            if (err) {
+              callback.call(this, err, null, null)
+            } else {
+              callback.call(this, err, {
+                statusCode: resp.statusCode,
+                statusMessage: resp.statusMessage,
+                headers: resp.headers,
+                bytes: resp.bytes,
+                raw: resp.raw,
+                body,
+              }, body)
+            }
+          } catch (err) {
+            onError(err.message)
           }
-        } catch (err) {
-          onError(err.message)
-        }
-      }).request
+        })
+      } catch (err) {
+        scope.release()
+        throw err
+      }
 
       return () => {
-        if (!request.aborted) request.abort()
-        request = null
+        request.abort()
       }
     },
     send(eventName, data) {

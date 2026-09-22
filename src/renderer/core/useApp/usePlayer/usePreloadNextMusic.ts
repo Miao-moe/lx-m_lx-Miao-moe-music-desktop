@@ -1,7 +1,7 @@
 import { onBeforeUnmount, watch } from '@common/utils/vueTools'
 import { onPlaying, onTimeupdate, getCurrentTime, getAudioElement, gaplessAudioOutput } from '@renderer/plugins/player'
 import { playProgress } from '@renderer/store/player/playProgress'
-import { musicInfo, playMusicInfo, playQueueRevision } from '@renderer/store/player/state'
+import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
 import { getNextPlayMusicInfo, playPreloadedNext, resetRandomNextMusicInfo } from '@renderer/core/player'
 import { getMusicUrl } from '@renderer/core/music'
 import { appSetting } from '@renderer/store/setting'
@@ -16,9 +16,11 @@ import {
   setNextSongUrl,
 } from '@renderer/utils/gaplessPlayer'
 import { reportPlayHistory } from '@renderer/utils/playHistoryReporter'
+import { playbackSession } from '@renderer/core/player/playbackSession'
 
 let audio: HTMLAudioElement
 let cancelCheckMusicUrl: (() => void) | null = null
+let preloadController = new AbortController()
 const initAudio = () => {
   if (audio) return
   audio = new Audio()
@@ -64,12 +66,13 @@ const checkMusicUrl = async(url: string): Promise<boolean> => {
 }
 
 const getAvailableMusicUrl = async(info: LX.Player.PlayMusicInfo, requestId: number) => {
-  const url = await getMusicUrl({ musicInfo: info.musicInfo }).catch(() => '')
+  const signal = preloadController.signal
+  const url = await getMusicUrl({ musicInfo: info.musicInfo, signal }).catch(() => '')
   if (requestId !== preloadMusicInfo.requestId) return ''
   if (await checkMusicUrl(url)) return url
   if (requestId !== preloadMusicInfo.requestId) return ''
 
-  const refreshedUrl = await getMusicUrl({ musicInfo: info.musicInfo, isRefresh: true }).catch(() => '')
+  const refreshedUrl = await getMusicUrl({ musicInfo: info.musicInfo, isRefresh: true, signal }).catch(() => '')
   if (requestId !== preloadMusicInfo.requestId) return ''
   return await checkMusicUrl(refreshedUrl) ? refreshedUrl : ''
 }
@@ -84,6 +87,8 @@ const preloadMusicInfo = {
 }
 
 const resetPreloadInfo = () => {
+  preloadController.abort()
+  preloadController = new AbortController()
   preloadMusicInfo.requestId++
   cancelCheckMusicUrl?.()
   if (audio) {
@@ -98,6 +103,7 @@ const resetPreloadInfo = () => {
 }
 
 const preloadNextMusicUrl = async(curTime: number) => {
+  if (!playbackSession.canAdvance()) return
   if (preloadMusicInfo.isLoading || curTime - preloadMusicInfo.preProgress < 2) return
   const currentMusicId = musicInfo.id
   if (!currentMusicId) return
@@ -158,7 +164,12 @@ export default () => {
     }
   }
   // Cancel once per edit, before a pending handoff can consume the old candidate.
-  watch(playQueueRevision, invalidatePreload, { flush: 'sync' })
+  const unsubscribe = playbackSession.subscribe(reason => {
+    // Pausing releases the overlapping audio but keeps a completed URL probe.
+    // In-flight probes still get aborted so they cannot finish after a pause.
+    if (reason === 'pause' && preloadMusicInfo.info && !preloadMusicInfo.isLoading) return
+    if (reason !== 'track') invalidatePreload()
+  })
   watch(() => appSetting['player.togglePlayMethod'], () => {
     resetRandomNextMusicInfo()
     invalidatePreload()
@@ -191,6 +202,7 @@ export default () => {
   })
 
   onBeforeUnmount(() => {
+    unsubscribe()
     rOnPlaying()
     rOnTimeupdate()
     resetPreloadInfo()

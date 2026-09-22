@@ -18,9 +18,10 @@ import useListLoading from '@renderer/utils/compositions/useListLoading'
 const props = defineProps<{
   loadKey: unknown
   loading?: boolean
+  streaming?: boolean
 }>()
-const ready = useListLoading([() => props.loadKey, () => props.loading], () => !!props.loading)
-const immediate = computed(() => appSetting['list.loadingMode'] === 'immediate')
+const immediate = computed(() => props.streaming || appSetting['list.loadingMode'] === 'immediate')
+const ready = useListLoading([() => props.loadKey, () => props.loading, () => props.streaming], () => !!props.loading, () => immediate.value)
 const hidden = computed(() => !ready.value || (immediate.value && props.loading && Array.isArray(props.loadKey) && !props.loadKey.length))
 </script>
 

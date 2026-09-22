@@ -1,6 +1,7 @@
 import { getCookie, getCookieValue } from '../cookieManager'
 import { CookieLoginError, fetchResponse, getKugouAuth, getRemotePlaylists, requestKugou, wyEapiRequest } from '../cookiePlaylistApi'
 import { updateSetting } from '../ipc'
+import { queuePlatformRequest } from '../syncQueue'
 import { WritebackError, type LocalPlaylist, type RemoteSession, type Snapshot, type Track, type WritebackSource } from './types'
 
 // Protocol references: NeteaseCloudMusicApiEnhanced/api-enhanced,
@@ -35,7 +36,7 @@ export const openRemotePlaylist = async(local: LocalPlaylist): Promise<RemoteSes
   }
   const request = async(url: string, options: Record<string, any> = {}) => {
     assertActive()
-    return fetchResponse(url, { ...options, timeout: 15000 })
+    return queuePlatformRequest(source, async() => { assertActive(); return fetchResponse(url, { ...options, timeout: 15000 }) })
   }
   const batches = async<T>(items: T[], action: (batch: T[]) => Promise<void>, size = 100) => {
     for (let offset = 0; offset < items.length; offset += size) {
@@ -50,7 +51,7 @@ export const openRemotePlaylist = async(local: LocalPlaylist): Promise<RemoteSes
     const wy = async(api: string, params: Record<string, unknown>) => {
       assertActive()
       try {
-        const body = await wyEapiRequest(cookie, api, params)
+        const body = await queuePlatformRequest(source, async() => { assertActive(); return wyEapiRequest(cookie, api, params) })
         assertActive()
         return body
       } catch (error) {
@@ -98,7 +99,7 @@ export const openRemotePlaylist = async(local: LocalPlaylist): Promise<RemoteSes
     const key = getCookieValue(cookie, 'qqmusic_key')
     if (!ownerId || !key) throw new WritebackError('login')
     // This endpoint is specifically the current user's created lists, excluding subscriptions.
-    const own = await getRemotePlaylists('tx', cookie)
+    const own = await queuePlatformRequest(source, async() => getRemotePlaylists('tx', cookie))
     if (!own.some(playlist => playlist.id === id)) throw new WritebackError('owner')
     let gtk = 5381
     for (const ch of key) gtk += (gtk << 5) + ch.charCodeAt(0)
@@ -153,12 +154,12 @@ export const openRemotePlaylist = async(local: LocalPlaylist): Promise<RemoteSes
 
   if (source === 'kg') {
     const auth = getKugouAuth(cookie)
-    const own = await getRemotePlaylists('kg', cookie)
+    const own = await queuePlatformRequest(source, async() => getRemotePlaylists('kg', cookie))
     if (!own.some(playlist => playlist.id === id)) throw new WritebackError('owner')
     const name = own.find(playlist => playlist.id === id)!.name
     const kg = async(path: string, data: Record<string, unknown>, extra: Record<string, string | number> = {}) => {
       assertActive()
-      return requestKugou(path, 'cloudlist.service.kugou.com', { ...data, userid: auth.userid, token: auth.token }, auth, extra)
+      return queuePlatformRequest(source, async() => { assertActive(); return requestKugou(path, 'cloudlist.service.kugou.com', { ...data, userid: auth.userid, token: auth.token }, auth, extra) })
     }
     const read = async(): Promise<Snapshot> => {
       const tracks: Track[] = []

@@ -1,9 +1,10 @@
 <template>
   <div :class="$style.container">
-    <AggregateStatus :state="listInfo.aggregate" @retry="handleRetry" />
+    <AggregateStatus :state="listInfo.aggregate" @retry="retrySource" />
     <div :class="$style.results">
       <SongList
-        ref="listRef" :list-info="listInfo" :visible-source="sourceId == 'all'" search-on-click
+        ref="listRef"
+        :streaming="sourceId == 'all'" :list-info="listInfo" :visible-source="sourceId == 'all'" search-on-click
         :hide-retry="!!listInfo.aggregate?.failedSources.length"
         :search-result-type="type" @toggle-page="togglePage" @retry="handleRetry"
       />
@@ -29,6 +30,7 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 const { listRef, listInfo, search } = useList()
+const retrySource = async(source?: LX.OnlineSource) => retryFailedSources(props.type, source)
 
 watch(() => [props.type, searchText.value, props.sourceId, props.page] as const, ([type, text, sourceId, page]) => {
   if (!text) return
