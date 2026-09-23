@@ -124,6 +124,8 @@ const defaultSetting: LX.AppSetting = {
   'download.fileName': '歌名 - 歌手',
   'download.maxDownloadNum': 3,
   'download.rateLimit': 0,
+  'download.maxTaskSizeMiB': 0,
+  'download.maxBatchSizeMiB': 0,
   'download.autoResume': true,
   'download.skipExistFile': true,
   'download.isDownloadLrc': false,

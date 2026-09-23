@@ -37,8 +37,8 @@
             <p v-if="errors[list.id] || writebackStatus[list.id]?.error" :class="$style.error" role="status">
               {{ formatError({ code: 'WRITEBACK_' + (errors[list.id] || writebackStatus[list.id].error).toUpperCase(), message: $t(`list_writeback__error_${errors[list.id] || writebackStatus[list.id].error}`) }) }}
             </p>
-            <SyncDiffPanel :diff="writebackStatus[list.id]?.diff?.local" title="本地修改" />
-            <SyncDiffPanel :diff="writebackStatus[list.id]?.diff?.remote" title="平台修改" />
+            <SyncDiffPanel :diff="writebackStatus[list.id]?.diff?.local" :title="$t('list_writeback__diff_local')" />
+            <SyncDiffPanel :diff="writebackStatus[list.id]?.diff?.remote" :title="$t('list_writeback__diff_remote')" />
             <p v-if="writebackStatus[list.id]?.enabled" :class="$style.status">
               {{ $t(`list_writeback__scope_${list.source}`) }}
             </p>

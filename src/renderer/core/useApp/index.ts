@@ -14,7 +14,8 @@ import useEventListener from './useEventListener'
 import useWindowState from './useWindowState'
 import useDeeplink from './useDeeplink'
 import usePlayer from './usePlayer'
-import useLibrary from './useLibrary'
+import { libraryError, refreshLibraryPreferences } from '@renderer/utils/library'
+import { formatError } from '@common/utils/errorMessage'
 import useSettingSync from './useSettingSync'
 import { useRouter } from '@common/utils/vueRouter'
 import handleListAutoUpdate from './listAutoUpdate'
@@ -38,7 +39,6 @@ export default () => {
   useWindowState()
   useEventListener()
   const initPlayer = usePlayer()
-  const initLibrary = useLibrary()
   const pluginsReady = initOptionalPlugins()
   onBeforeUnmount(() => { void pluginsReady.then(dispose => { dispose() }) })
   const handleEnvParams = useHandleEnvParams()
@@ -74,7 +74,7 @@ export default () => {
     void initData().then(async() => {
       await pluginsReady
       initPlayer()
-      initLibrary()
+      void refreshLibraryPreferences().catch(error => { libraryError.value = formatError(error, window.i18n.t('lists__tags_load_failed')) })
       handleEnvParams(envParams) // 处理传入的启动参数
       void initDeeplink(envParams)
       void initSyncService()

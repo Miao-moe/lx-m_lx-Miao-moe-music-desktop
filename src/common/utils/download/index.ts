@@ -24,6 +24,9 @@ export interface Options {
   forceResume?: boolean
   proxy?: { host: string, port: number }
   rateLimit?: number
+  maxBytes?: number
+  reserveBytes?: (bytes: number) => boolean
+  releaseBytes?: (bytes: number) => void
   onCompleted?: () => void
   onError?: (error: Error) => void
   onFail?: (response: http.IncomingMessage) => void
@@ -40,6 +43,9 @@ export const createDownload = ({
   forceResume,
   proxy,
   rateLimit = 0,
+  maxBytes = 0,
+  reserveBytes,
+  releaseBytes,
   // resumeTime = 5000,
   onCompleted = noop,
   onError = noop,
@@ -60,6 +66,9 @@ export const createDownload = ({
 
     forceResume,
     rateLimit,
+    maxBytes,
+    reserveBytes,
+    releaseBytes,
   })
 
   dl.on('completed', () => {

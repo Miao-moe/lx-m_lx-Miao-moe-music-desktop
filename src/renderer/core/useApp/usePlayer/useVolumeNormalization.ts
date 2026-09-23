@@ -10,7 +10,7 @@ export default () => {
     const handleError = (error: unknown) => {
       if (current !== request) return
       console.error('Volume normalization could not start:', error)
-      updateSetting({ 'player.volumeNormalization': false })
+      void updateSetting({ 'player.volumeNormalization': false })
       toast(window.i18n.t('setting__play_volume_normalization_error'))
     }
     void setVolumeNormalization(enabled, handleError).catch(handleError)

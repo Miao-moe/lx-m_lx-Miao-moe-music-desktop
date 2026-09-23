@@ -26,7 +26,7 @@ const toDBDownloadInfo = (musicInfos: LX.Download.ListItem[], offset: number = 0
       fileName: info.metadata.fileName,
       filePath: info.metadata.filePath,
       musicInfo: JSON.stringify(info.metadata.musicInfo),
-      taskOptions: JSON.stringify({ priority: info.priority, failure: info.failure, audioDownloaded: info.audioDownloaded, fileAllocated: info.metadata.fileAllocated, listId: info.metadata.listId }),
+      taskOptions: JSON.stringify({ priority: info.priority, failure: info.failure, audioDownloaded: info.audioDownloaded, batchId: info.batchId, batchLimitBytes: info.batchLimitBytes, fileAllocated: info.metadata.fileAllocated, listId: info.metadata.listId }),
       position: offset + index,
     }
   })
@@ -35,7 +35,7 @@ const toDBDownloadInfo = (musicInfos: LX.Download.ListItem[], offset: number = 0
 const initDownloadList = () => {
   list = queryDownloadList().map(item => {
     const musicInfo = JSON.parse(item.musicInfo) as LX.Music.MusicInfoOnline
-    let options: Pick<LX.Download.ListItem, 'priority' | 'failure' | 'audioDownloaded'> & { fileAllocated?: boolean, listId?: string } = {}
+    let options: Pick<LX.Download.ListItem, 'priority' | 'failure' | 'audioDownloaded' | 'batchId' | 'batchLimitBytes'> & { fileAllocated?: boolean, listId?: string } = {}
     try { options = JSON.parse(item.taskOptions || '{}') ?? {} } catch {}
     return {
       id: item.id,
@@ -48,6 +48,8 @@ const initDownloadList = () => {
       speed: '',
       writeQueue: 0,
       priority: options.priority,
+      batchId: options.batchId,
+      batchLimitBytes: options.batchLimitBytes,
       failure: options.failure,
       audioDownloaded: options.audioDownloaded,
       metadata: {

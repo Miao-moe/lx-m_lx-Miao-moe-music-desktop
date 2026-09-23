@@ -119,12 +119,12 @@ export const isCookieRecognized = (source: CookieSource, cookie?: string): boole
  * 播放记录同步开关
  */
 export const isPlayHistorySyncEnabled = (): boolean => {
-  return appSetting['cookie.enablePlayHistorySync'] === true
+  return appSetting['cookie.enablePlayHistorySync']
 }
 
 /**
  * 收藏歌单同步开关
  */
 export const isFavListSyncEnabled = (): boolean => {
-  return appSetting['cookie.enableFavListSync'] === true
+  return appSetting['cookie.enableFavListSync']
 }

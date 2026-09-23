@@ -5,7 +5,7 @@ const { createHash } = require('node:crypto')
 const { test } = require('node:test')
 const { launch, route, settled, seedTrack, showDetail } = require('./helpers/motion-fixture.cjs')
 const { mockGitHub, openStore, label, install, startSilentAudio } = require('./helpers/plugin-fixture.cjs')
-const { packSource } = require('../src/common/pluginSource')
+const { packSource, unpackSource } = require('../src/common/pluginSource')
 const { version: visualizerVersion } = require('../src/optional-plugins/audio-visualizer/plugin.json')
 
 const styles = ['spectrum', 'wave', 'radial']
@@ -58,7 +58,20 @@ test('visualizer updates independently with three styles and audioMotion, a pick
     assert.equal(oldRegistry['audio-visualizer'] != null, true)
     await fs.mkdir(path.join(dataRoot, 'plugins/preferences'), { recursive: true })
     await fs.writeFile(path.join(dataRoot, 'plugins/preferences/audio-visualizer.json'), JSON.stringify({ version: 1, main: 'bars', desktop: 'ring' }))
-    await app.evaluate(() => { global.__pluginCatalogOverride = null })
+    // Exercise the current source rather than the previously published store archive.
+    const published = require('../plugins/store/catalog.json').plugins.find(plugin => plugin.id === 'audio-visualizer')
+    const current = await unpackSource(await fs.readFile(path.join('plugins/store', published.path)))
+    for (const name of ['MainVisualizer.vue', 'Preview.vue', 'LyricVisualizer.vue', 'renderer.ts', 'spectrum.ts']) {
+      current.files.set(`src/${name}`, await fs.readFile(path.join('src/optional-plugins/audio-visualizer', name)))
+    }
+    const currentArchive = await packSource(current.manifest, current.files)
+    const currentHash = createHash('sha256').update(currentArchive).digest('hex')
+    const currentPath = `audio-visualizer/${visualizerVersion}/${currentHash}.zip`
+    const currentCatalog = { schemaVersion: 2, plugins: [{ ...published, path: currentPath, bytes: currentArchive.length, sha256: currentHash, packages: undefined }] }
+    await app.evaluate((_electron, { catalog, archive, archivePath }) => {
+      global.__pluginCatalogOverride = catalog
+      global.__pluginPackageOverrides[archivePath] = archive
+    }, { catalog: currentCatalog, archive: currentArchive.toString('base64'), archivePath: currentPath })
     await page.getByRole('button', { name: await label(page, 'setting__plugins_refresh'), exact: true }).click()
     await page.locator('[data-plugin-id="audio-visualizer"]').getByRole('button', { name: await label(page, 'setting__plugins_update'), exact: true }).click()
     await page.waitForFunction(version => document.querySelector('[data-plugin-id="audio-visualizer"]')?.textContent.includes(`v${version}`), visualizerVersion)
@@ -128,6 +141,51 @@ test('visualizer updates independently with three styles and audioMotion, a pick
       if (kind === 'radial') {
         assert.equal(await page.locator('[data-plugin-visualizer="main"] canvas').getAttribute('data-visualizer-engine'), 'audioMotion-4.5.4')
         assert.equal(await page.evaluate(() => window.__visualizerAnalysers.some(node => node.fftSize === 8192 && !node.__disconnected)), true)
+        await settled(page)
+        const reads = await page.evaluate(async() => {
+          const canvas = document.querySelector('[data-plugin-visualizer="main"] canvas')
+          const lyrics = document.querySelector('[data-player-detail] [data-detail-part="lyrics"]')
+          const context = canvas.getContext('2d')
+          const width = canvas.clientWidth
+          const height = canvas.clientHeight
+          const originalBounds = lyrics.getBoundingClientRect
+          const originalDraw = context.drawImage
+          let size = 0
+          let bounds = 0
+          let draws = 0
+          Object.defineProperties(canvas, {
+            clientWidth: { configurable: true, get() { size++; return width } },
+            clientHeight: { configurable: true, get() { size++; return height } },
+          })
+          lyrics.getBoundingClientRect = function() { bounds++; return originalBounds.call(this) }
+          context.drawImage = function(...args) { draws++; return originalDraw.apply(this, args) }
+          try {
+            await new Promise(resolve => {
+              let remaining = 8
+              const next = () => { if (--remaining) requestAnimationFrame(next); else resolve() }
+              requestAnimationFrame(next)
+            })
+          } finally {
+            delete canvas.clientWidth
+            delete canvas.clientHeight
+            lyrics.getBoundingClientRect = originalBounds
+            context.drawImage = originalDraw
+          }
+          return { size, bounds, draws }
+        })
+        assert.ok(reads.draws >= 2, 'The radial renderer kept drawing')
+        assert.equal(reads.size, 0, 'Animation frames did not query canvas layout')
+        assert.equal(reads.bounds, 0, 'Animation frames did not query lyric layout')
+        await page.setViewportSize({ width: 1280, height: 760 })
+        await page.waitForFunction(() => {
+          const canvas = document.querySelector('[data-plugin-visualizer="main"] canvas')
+          const width = canvas.clientWidth
+          const height = canvas.clientHeight
+          const ratio = Math.min(devicePixelRatio || 1, 2, Math.sqrt(8_000_000 / Math.max(1, width * height)))
+          return canvas.width === Math.round(width * ratio) && canvas.height === Math.round(height * ratio)
+        })
+        await hasPixels(page, '[data-plugin-visualizer="main"] canvas')
+        await page.setViewportSize({ width: 1114, height: 718 })
       }
     }
     await choose(dialog, 'wave')

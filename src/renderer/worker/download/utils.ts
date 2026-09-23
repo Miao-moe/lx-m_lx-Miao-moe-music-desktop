@@ -1,6 +1,6 @@
 import { DOWNLOAD_STATUS, QUALITYS } from '@common/constants'
 import { buildLyrics } from './lrcTool'
-import fs from 'fs'
+import { writeFileAtomic } from '@common/utils/atomicFile'
 import { formatDownloadFileName } from '@common/utils/download/fileName'
 
 /**
@@ -15,15 +15,8 @@ export const saveLrc = async(lrcData: LX.Music.LyricInfo, info: {
 }) => {
   const iconv = (await import('iconv-lite')).default
   const lrc = buildLyrics(lrcData, info.downloadLxlrc, info.downloadTlrc, info.downloadRlrc)
-  switch (info.format) {
-    case 'gbk':
-      await fs.promises.writeFile(info.filePath, iconv.encode(lrc, 'gbk', { addBOM: true }))
-      break
-    case 'utf8':
-    default:
-      await fs.promises.writeFile(info.filePath, iconv.encode(lrc, 'utf8', { addBOM: true }))
-      break
-  }
+  const encoding = info.format === 'gbk' ? 'gbk' : 'utf8'
+  await writeFileAtomic(info.filePath, iconv.encode(lrc, encoding, { addBOM: true }))
 }
 
 export const getExt = (type: string): LX.Download.FileExt => {
@@ -60,7 +53,7 @@ export const getMusicType = (musicInfo: LX.Music.MusicInfoOnline, type: LX.Quali
   for (const type of rangeType) {
     if (type === 'master' || type === 'atmos' || type === 'hires') {
       if (musicInfo.meta._qualitys.flac24bit && list.includes(type)) return type
-    } else if (musicInfo.meta._qualitys[type] || list.includes(type)) {
+    } else if (Boolean(musicInfo.meta._qualitys[type]) || list.includes(type)) {
       return type
     }
   }

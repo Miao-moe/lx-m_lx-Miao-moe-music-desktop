@@ -138,7 +138,7 @@ export const initSetting = async() => {
   await recoverCredentialCommit(global.lxDataPath)
   const electronStore_config = getStore(STORE_NAMES.APP_SETTINGS)
 
-  let setting = electronStore_config.get('setting') as LX.AppSetting | undefined
+  let setting = electronStore_config.get<LX.AppSetting | undefined>('setting')
 
   // migrate setting
   if (!setting) {
@@ -158,8 +158,8 @@ export const initSetting = async() => {
 export const initHotKey = async() => {
   const electronStore_hotKey = getStore(STORE_NAMES.HOTKEY)
 
-  let localConfig = electronStore_hotKey.get('local') as LX.HotKeyConfig | null
-  let globalConfig = electronStore_hotKey.get('global') as LX.HotKeyConfig | null
+  let localConfig = electronStore_hotKey.get<LX.HotKeyConfig | null>('local')
+  let globalConfig = electronStore_hotKey.get<LX.HotKeyConfig | null>('global')
   const hotKeyVersion = electronStore_hotKey.get<number>('version') ?? 0
 
   if (globalConfig) {
@@ -218,7 +218,7 @@ export const openDevTools = (webContents: Electron.WebContents) => {
 
 let userThemes: LX.Theme[]
 export const getAllThemes = () => {
-  userThemes ??= getStore(STORE_NAMES.THEME).get('themes') as (LX.Theme[] | null) ?? []
+  userThemes ??= getStore(STORE_NAMES.THEME).get<LX.Theme[] | null>('themes') ?? []
   return {
     themes,
     userThemes,
@@ -268,7 +268,7 @@ export const getTheme = () => {
   // themeId = 'black'
   let theme = themes.find(theme => theme.id == themeId)
   if (!theme) {
-    userThemes = getStore(STORE_NAMES.THEME).get('themes') as LX.Theme[] | null ?? []
+    userThemes = getStore(STORE_NAMES.THEME).get<LX.Theme[] | null>('themes') ?? []
     theme = userThemes.find(theme => theme.id == themeId)
     if (theme) {
       if (theme.config.extInfo['--background-image'] != 'none') {

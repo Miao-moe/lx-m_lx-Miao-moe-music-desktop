@@ -92,7 +92,7 @@ test('playlist recycle bin persists, restores safely, expires and supports undo 
 
     await t.test('clear broadcasts correctly and favorites are recoverable', async() => {
       await reset()
-      await route(fixture.page, '/list?id=default')
+      await route(fixture.page, '/list?id=love')
       await settled(fixture.page)
       const cleared = await invoke(fixture.page, 'list_music_clear', ['default', 'love'])
       assert.equal(cleared.length, 2)

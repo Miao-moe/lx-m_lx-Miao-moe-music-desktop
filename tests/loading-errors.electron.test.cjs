@@ -42,7 +42,7 @@ test('production UI shows codes and reasons for local data, artwork and otherwis
     await error.waitFor({ state: 'hidden' })
     await page.evaluate(() => window.__restoreErrorFixture())
 
-    await route(page, '/list?id=default')
+    await route(page, '/list?id=love')
     await page.waitForFunction(() => window.__motionComponents().some(c => c.type.name === 'MusicList' && 'list' in c.setupState))
     await page.evaluate(port => {
       const component = window.__motionComponents().find(c => c.type.name === 'MusicList' && 'list' in c.setupState)

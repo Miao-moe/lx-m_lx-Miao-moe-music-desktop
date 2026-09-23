@@ -13,7 +13,7 @@ export const initOptionalPlugins = () => {
   const reportError = (error: unknown) => { console.error(error); showLoadError(error, 'PLUGIN_LOAD_FAILED') }
   const onChange = (_event: Electron.IpcRendererEvent, snapshot: PluginStoreSnapshot) => { void pluginRuntime.sync(snapshot).catch(reportError) }
   ipcRenderer.on(PLUGIN_IPC.changed, onChange)
-  void ipcRenderer.invoke(PLUGIN_IPC.list).then(snapshot => pluginRuntime.sync(snapshot)).catch(reportError)
+  void (async() => { await pluginRuntime.sync(await ipcRenderer.invoke(PLUGIN_IPC.list)) })().catch(reportError)
   return () => {
     ipcRenderer.removeListener(PLUGIN_IPC.changed, onChange)
     void pluginRuntime.dispose()

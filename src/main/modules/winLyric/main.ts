@@ -40,7 +40,7 @@ const winEvent = () => {
       saveBoundsTimer = null
     }
     const bounds = window.getBounds()
-    global.lx.event_app.update_config({
+    void global.lx.event_app.update_config({
       'desktopLyric.x': bounds.x,
       'desktopLyric.y': bounds.y,
       'desktopLyric.width': windowSize.width,
@@ -174,7 +174,7 @@ export const createWindow = () => {
   let isShowTaskbar = global.lx.appSetting['desktopLyric.isShowTaskbar']
   // let { width: screenWidth, height: screenHeight } = global.envParams.workAreaSize
   const winSize = initWindowSize(x, y, width, height)
-  global.lx.event_app.update_config({
+  void global.lx.event_app.update_config({
     'desktopLyric.x': winSize.x,
     'desktopLyric.y': winSize.y,
     'desktopLyric.width': winSize.width,

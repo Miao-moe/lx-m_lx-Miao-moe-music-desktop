@@ -65,7 +65,7 @@ const sampleTransition = sidebar => sidebar.evaluate(element => {
   return sample
 })
 const open = async(page, name) => {
-  await route(page, name === 'myList' ? '/list?id=default' : '/leaderboard?source=wy&boardId=wy__19723756')
+  await route(page, name === 'myList' ? '/list?id=history' : '/leaderboard?source=wy&boardId=wy__19723756')
   await settled(page)
   await toggle(page, name).waitFor()
 }

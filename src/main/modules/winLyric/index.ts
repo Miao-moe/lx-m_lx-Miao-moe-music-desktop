@@ -68,7 +68,7 @@ export default () => {
     }
     newSetting[settingKey] = !global.lx.appSetting[settingKey]
 
-    global.lx.event_app.update_config(newSetting)
+    void global.lx.event_app.update_config(newSetting)
   })
 }
 export * from './main'

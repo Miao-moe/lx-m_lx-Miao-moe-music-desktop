@@ -154,9 +154,9 @@ test('production UI recovers search failures, local imports and missing download
     await t.test('mixed local import lists failed files and clears loading while retaining valid songs', async() => {
       const missing = path.join(output, 'failed-import.mp3')
       await app.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = async() => ({ canceled: false, filePaths: paths }) }, [chosenPath, missing])
-      await route(page, '/list?id=default')
+      await route(page, '/list?id=love')
       await settled(page)
-      const list = page.locator('li.default-list').first()
+      const list = page.locator('li.default-list').nth(1)
       await list.click({ button: 'right' })
       await page.getByRole('tab', { name: await label(page, 'lists__select_local_file'), exact: true }).click()
       await page.getByText(missing, { exact: false }).waitFor()

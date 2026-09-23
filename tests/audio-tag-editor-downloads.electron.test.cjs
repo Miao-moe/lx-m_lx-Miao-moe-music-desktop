@@ -62,6 +62,9 @@ test('Downloads opens the tag editor for the clicked file and handles stale file
       await page.screenshot({ path: path.join(output, 'download-tag-menu.png') })
       await menu().click()
       await title('Alpha')
+      assert.equal(await editor.locator('aside').count(), 0)
+      assert.equal(await editor.getByRole('searchbox').count(), 0)
+      assert.match(await editor.locator('form h4').innerText(), /alpha-song\.mp3/)
       assert.ok(page.url().includes('/download'), 'Editing must stay on the Downloads page')
       assert.equal(await page.getByRole('dialog', { name: '修改音频标签', exact: true }).count(), 1)
       await editor.getByLabel('标题', { exact: true }).fill('通过下载右键修改')
@@ -128,7 +131,7 @@ test('Downloads opens the tag editor for the clicked file and handles stale file
         return JSON.parse(JSON.stringify(list.splice(list.findIndex(item => item.id === 'beta-song'), 1)[0]))
       })
       await menu().click()
-      await dismiss('下载记录已删除，请刷新下载列表，或直接选择音频文件。')
+      await dismiss('下载记录已删除，请直接选择音频文件。')
       await page.evaluate(async task => { (await window.__lxPluginHost.downloadFiles.getDownloads()).push(task) }, removed)
     })
     await t.test('grouped download directories resolve moved files, while ambiguous names are rejected', async() => {

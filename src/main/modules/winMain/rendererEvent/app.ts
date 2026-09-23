@@ -85,7 +85,7 @@ export default () => {
   })
   // 在资源管理器中定位文件
   mainOn<string>(WIN_MAIN_RENDERER_EVENT_NAME.open_dir_in_explorer, async({ params }) => {
-    return openDirInExplorer(params)
+    openDirInExplorer(params)
   })
 
 

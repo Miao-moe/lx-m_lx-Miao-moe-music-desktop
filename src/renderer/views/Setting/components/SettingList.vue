@@ -92,7 +92,7 @@ export default {
         clearCoverSizeHint()
       }
       event.target.value = size
-      updateSetting({ 'list.coverSize': size })
+      void updateSetting({ 'list.coverSize': size })
     }
 
     onBeforeUnmount(clearCoverSizeHint)

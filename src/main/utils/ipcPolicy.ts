@@ -67,6 +67,7 @@ add('winMain_', 'focus min max min_toggle hide_toggle quit inited get_window_sta
 add('winMain_', 'close fullscreen', optional(bool))
 add('winMain_', 'set_power_save_blocker set_ignore_mouse_events', bool)
 add('winMain_', 'open_dir_in_explorer remove_theme get_data get_palyer_lyric get_lyric_raw get_lyric_edited remove_lyric_edited get_music_url remove_music_url get_other_source sync_remove_server_device request_user_api_cancel', str)
+checks.set('winMain_download_disk_space', str)
 add('winMain_', 'remove_user_api download_list_remove', strings)
 add('winMain_', 'download_list_update save_sound_effect_eq_preset save_sound_effect_convolution_preset', objects)
 add('winMain_', 'import_user_api', v => typeof v === 'string' && v.length <= 2 * 1024 * 1024)

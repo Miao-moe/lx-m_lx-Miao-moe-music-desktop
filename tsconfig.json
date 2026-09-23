@@ -1,7 +1,8 @@
 {
   // https://github.com/tsconfig/bases#recommended-tsconfigjson
+  // Shared options only. Run npm run typecheck to keep main and renderer globals in separate programs.
   "extends": "@tsconfig/recommended/tsconfig.json",
-  "exclude": ["node_modules", "build", "dist"],
+  "exclude": ["node_modules", "build", "dist", "src/optional-plugins/folia-lyrics/engine"],
   "compilerOptions": {
     "target": "ESNext",
     "allowJs": true,
@@ -10,13 +11,13 @@
     "resolveJsonModule": true,
     "rootDir": "./",
     "outDir": "./dist",
-    // "paths": {                                           /* Specify a set of entries that re-map imports to additional lookup locations. */
-    //   "@common/*": ["common/*"],
-    //   "@renderer/*": ["renderer/*"],
-    //   "@main/*": ["main/*"],
-    //   // "@lyric/*": ["renderer-lyric/*"],
-    //   "@static/*": ["static/*"],
-    //   "@root/*": ["./*"],
-    // },
+    "paths": {
+      "@root/*": ["./src/*"],
+      "@common/*": ["./src/common/*"],
+      "@main/*": ["./src/main/*"],
+      "@renderer/*": ["./src/renderer/*"],
+      "@lyric/*": ["./src/renderer-lyric/*"],
+      "@static/*": ["./src/static/*"],
+    },
   },
 }

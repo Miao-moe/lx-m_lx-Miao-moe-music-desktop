@@ -1,5 +1,5 @@
 <template>
-  <material-modal :show="editor.visible" :close-btn="!editor.busy" width="min(1000px, calc(100vw - 32px))" max-width="calc(100vw - 32px)" max-height="calc(100vh - 32px)" @close="close" @after-enter="focusEditor">
+  <material-modal :show="editor.visible" :close-btn="!editor.busy" width="min(780px, calc(100vw - 32px))" max-width="calc(100vw - 32px)" max-height="calc(100vh - 32px)" @close="close" @after-enter="focusEditor">
     <div ref="content" :class="$style.content" role="dialog" aria-modal="true" :aria-label="$t('download__edit_tags')" @keydown.esc.stop.prevent="close">
       <h2 :class="$style.title">{{ $t('download__edit_tags') }}</h2>
       <TagEditor />

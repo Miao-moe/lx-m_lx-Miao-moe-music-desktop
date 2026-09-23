@@ -105,12 +105,12 @@ export default {
 
     const setLightId = (id) => {
       if (appSetting['theme.lightId'] == id) return
-      updateSetting({ 'theme.lightId': id })
+      void updateSetting({ 'theme.lightId': id })
       if (appSetting['theme.id'] == 'auto') applyTheme('auto', id, appSetting['theme.darkId'], dataPath)
     }
     const setDarkId = (id) => {
       if (appSetting['theme.darkId'] == id) return
-      updateSetting({ 'theme.darkId': id })
+      void updateSetting({ 'theme.darkId': id })
       if (appSetting['theme.id'] == 'auto') applyTheme('auto', appSetting['theme.lightId'], id, dataPath)
     }
     return {

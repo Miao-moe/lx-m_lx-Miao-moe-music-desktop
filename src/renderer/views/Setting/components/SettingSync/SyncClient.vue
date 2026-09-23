@@ -44,7 +44,7 @@ export default {
     })
 
     const setSyncClientHost = debounce(host => {
-      updateSetting({ 'sync.client.host': host.trim() })
+      void updateSetting({ 'sync.client.host': host.trim() })
     }, 500)
 
 

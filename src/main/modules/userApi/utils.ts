@@ -7,7 +7,7 @@ let userApis: LX.UserApi.UserApiInfo[] | null
 let scripts = new Map<string, string>()
 
 const saveData = () => {
-  getStore(STORE_NAMES.USER_API).set('userApis', userApis!.map(api => {
+  void getStore(STORE_NAMES.USER_API).set('userApis', userApis!.map(api => {
     return {
       ...api,
       script: scripts.get(api.id),
@@ -19,7 +19,7 @@ export const getUserApis = (): LX.UserApi.UserApiInfo[] => {
   if (userApis) return userApis
 
   const electronStore_userApi = getStore(STORE_NAMES.USER_API)
-  let infoFull = electronStore_userApi.get('userApis') as LX.UserApi.UserApiInfoFull[]
+  let infoFull = electronStore_userApi.get<LX.UserApi.UserApiInfoFull[]>('userApis')
   let requiredUpdate = false
   if (infoFull) {
     for (let i = 0; i < infoFull.length; i++) {

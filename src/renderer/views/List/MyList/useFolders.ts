@@ -24,21 +24,18 @@ export default ({ listId }: { listId: Ref<string> }) => {
       lists: Array<{ item: LX.List.UserListInfo, index: number, name: string }>
     }> = [
       { id: 'local', lists: [] },
-      { id: 'pinned', name: '置顶', lists: [] },
       ...COOKIE_SOURCES.map(source => ({ id: source, source, name: SOURCE_NAME[source], lists: [] })),
     ]
     userLists.forEach((item, index) => {
       const source = getListFolder(item)
       const organization = libraryPreferences.value.lists[item.id]
-      const folder = organization?.pinned ? 'pinned' : organization?.folder ? `folder:${organization.folder}` : source ?? 'local'
-      let group = groups.find(group => group.id === folder)
-      if (!group) { group = { id: folder, name: organization.folder, lists: [] }; groups.push(group) }
+      const group = groups.find(group => group.id === (source ?? 'local'))!
       const prefix = source ? `${SOURCE_NAME[source]} - ` : ''
       const title = prefix && item.name.startsWith(prefix) ? item.name.slice(prefix.length) : item.name
       const name = title + (organization?.tags.length ? ` · ${organization.tags.join(' / ')}` : '')
       group.lists.push({ item, index, name })
     })
-    return groups.filter(group => group.id !== 'pinned' || group.lists.length).sort((a, b) => a.id === 'pinned' ? -1 : b.id === 'pinned' ? 1 : 0)
+    return groups
   })
 
   watch(() => listGroups.value.find(group => group.lists.some(list => list.item.id === listId.value))?.id, source => {

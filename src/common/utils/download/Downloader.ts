@@ -12,6 +12,9 @@ export interface Options {
   forceResume: boolean
   timeout: number
   rateLimit: number
+  maxBytes?: number
+  reserveBytes?: (bytes: number) => boolean
+  releaseBytes?: (bytes: number) => void
   requestOptions: RequestOptions
 }
 const failure = (message: string, code: string) => Object.assign(new Error(message), { code })
@@ -169,6 +172,7 @@ class Task extends EventEmitter {
       this.progress.downloaded = 0
       this.progress.total = contentLength
     }
+    if (this.options.maxBytes && this.progress.total > this.options.maxBytes) throw failure('Task size limit exceeded', 'DOWNLOAD_TASK_SIZE_LIMIT')
     this.statsEstimate.prevBytes = this.progress.downloaded
     const writer = fs.createWriteStream(this.chunkInfo.path, { flags: this.resumeLastChunk ? 'a' : 'w', highWaterMark: 64 * 1024 })
     this.ws = writer
@@ -185,6 +189,7 @@ class Task extends EventEmitter {
         this.resumeLastChunk = this.resumeLastChunk.length === length ? null : this.resumeLastChunk.subarray(length)
         chunk = chunk.subarray(length)
       }
+      if (this.options.maxBytes && this.progress.downloaded + chunk.length > this.options.maxBytes) throw failure('Task size limit exceeded', 'DOWNLOAD_TASK_SIZE_LIMIT')
       if (this.options.rateLimit > 0 && chunk.length) {
         this.nextWriteAt = Math.max(this.nextWriteAt, performance.now()) + chunk.length * 1000 / this.options.rateLimit
         await new Promise<void>(resolve => {
@@ -194,8 +199,14 @@ class Task extends EventEmitter {
         this.releaseRateWait = undefined
       }
       if (!this.current(generation)) return
+      if (chunk.length && this.options.reserveBytes && !this.options.reserveBytes(chunk.length)) throw failure('Batch size limit exceeded', 'DOWNLOAD_BATCH_SIZE_LIMIT')
       this.dataWriteQueueLength = 1
-      await new Promise<void>((resolve, reject) => writer.write(chunk, error => { error ? reject(error) : resolve() }))
+      try {
+        await new Promise<void>((resolve, reject) => writer.write(chunk, error => { error ? reject(error) : resolve() }))
+      } catch (error) {
+        this.options.releaseBytes?.(chunk.length)
+        throw error
+      }
       this.dataWriteQueueLength = 0
       if (!this.current(generation)) return
       this.__calculateProgress(chunk.length)

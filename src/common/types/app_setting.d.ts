@@ -550,6 +550,8 @@ declare global {
        */
       'download.maxDownloadNum': number
       'download.rateLimit': number
+      'download.maxTaskSizeMiB': number
+      'download.maxBatchSizeMiB': number
       'download.autoResume': boolean
 
       /**

@@ -17,6 +17,25 @@ interface Task {
   lease?: Awaited<ReturnType<typeof reserveDownloadPath>>
 }
 const tasks = new Map<string, Task>()
+interface BatchBudget { used: number, limit: number }
+const batchBudgets = new Map<string, BatchBudget>()
+const acquireBatchBudget = (info: LX.Download.ListItem, initialBytes: number) => {
+  if (!info.batchId || !info.batchLimitBytes) return null
+  let budget = batchBudgets.get(info.batchId)
+  if (!budget) {
+    budget = { used: Math.max(0, initialBytes), limit: info.batchLimitBytes }
+    batchBudgets.set(info.batchId, budget)
+  }
+  const held = budget
+  return {
+    reserve: (bytes: number) => {
+      if (held.used + bytes > held.limit) return false
+      held.used += bytes
+      return true
+    },
+    release: (bytes: number) => { held.used = Math.max(0, held.used - bytes) },
+  }
+}
 const current = (task: Task) => !task.cancelled && tasks.get(task.info.id) === task
 const send = (task: Task, action: LX.Download.DownloadTaskActions) => { if (current(task)) task.callback(action) }
 export const checkList = (list: LX.Download.ListItem[], info: LX.Music.MusicInfo, quality: LX.Quality, ext: string) =>
@@ -32,7 +51,7 @@ const reportError = (task: Task, error: any) => {
 const retry = async(task: Task, error: any) => {
   if (!current(task)) return
   const kind = classifyDownloadError(error)
-  if (++task.retries > 2 || ['permission', 'disk', 'conflict'].includes(kind) || [400, 404, 429].includes(error.statusCode)) {
+  if (++task.retries > 2 || ['permission', 'disk', 'conflict', 'limit'].includes(kind) || [400, 404, 429].includes(error.statusCode)) {
     reportError(task, error)
     return
   }
@@ -63,7 +82,9 @@ const stop = async(task: Task) => {
     await task.preparing
     await task.recovery
     await task.downloader?.stop()
-  } finally { task.lease?.release() }
+  } finally {
+    task.lease?.release()
+  }
 }
 export const pauseTask = async(id: string) => {
   const task = tasks.get(id)
@@ -75,7 +96,7 @@ export const removeTask = async(id: string) => {
   await stop(task)
   if (!task.info.audioDownloaded && !task.info.isComplate && task.info.downloaded > 1024) await removeFile(task.info.metadata.filePath).catch(() => {})
 }
-export const startTask = async(info: LX.Download.ListItem, savePath: string, skipExisting: boolean, callback: Task['callback'], proxy?: { host: string, port: number }, rateLimit = 0) => {
+export const startTask = async(info: LX.Download.ListItem, savePath: string, skipExisting: boolean, callback: Task['callback'], proxy?: { host: string, port: number }, rateLimit = 0, maxTaskBytes = 0, batchInitialBytes = 0) => {
   const previous = tasks.get(info.id)
   const stopped = previous ? stop(previous) : Promise.resolve()
   const task: Task = { info, callback, cancelled: false, retries: 0 }
@@ -95,12 +116,16 @@ export const startTask = async(info: LX.Download.ListItem, savePath: string, ski
       info.metadata.fileAllocated = true
       send(task, { action: 'filePath', data: { fileName: lease.fileName, filePath: lease.filePath } })
       if (!current(task)) return
+      const budget = acquireBatchBudget(info, batchInitialBytes)
       task.downloader = createDownload({
         url: info.metadata.url ?? '',
         path: savePath,
         fileName: lease.fileName,
         proxy,
         rateLimit,
+        maxBytes: maxTaskBytes,
+        reserveBytes: budget?.reserve,
+        releaseBytes: budget?.release,
         onCompleted() { info.audioDownloaded = true; send(task, { action: 'complete' }) },
         onStart() { send(task, { action: 'start' }) },
         onProgress(progress) { if (!current(task)) return; Object.assign(info, progress); send(task, { action: 'progress', data: progress }) },

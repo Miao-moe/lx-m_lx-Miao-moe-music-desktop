@@ -131,6 +131,10 @@ export default {
       })
     }
     const handleUpdateLyric = ({ lyric, tlyric, rlyric, lxlyric, offset }) => {
+      lyricInfo.lyric = lyric
+      lyricInfo.tlyric = tlyric
+      lyricInfo.rlyric = rlyric
+      lyricInfo.lxlyric = lxlyric
       setMusicInfo({
         lrc: lyric,
         tlrc: tlyric,

@@ -34,9 +34,9 @@ const applyLocal = async(data: LX.WebDAV.Data, sections: LX.WebDAV.Section[], re
   }
   // Notify renderers only after every selected section has committed.
   const notify = (action: () => void) => { try { action() } catch (error) { console.error('WebDAV committed notification failed', errorForTransport(error)) } }
-  if (change) notify(() => global.lx.event_app.config_committed(change.setting, change.updatedSettingKeys, change.updatedSetting))
-  if (data.playlists) notify(() => global.lx.event_list.list_data_restored(data.playlists!))
-  if (restored.dislike !== undefined) notify(() => global.lx.event_dislike.dislike_data_restored(restored.dislike!))
+  if (change) notify(() => { global.lx.event_app.config_committed(change.setting, change.updatedSettingKeys, change.updatedSetting) })
+  if (data.playlists) notify(() => { global.lx.event_list.list_data_restored(data.playlists!) })
+  if (restored.dislike !== undefined) notify(() => { global.lx.event_dislike.dislike_data_restored(restored.dislike!) })
   return restored
 })
 

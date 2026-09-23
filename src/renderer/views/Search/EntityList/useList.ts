@@ -28,7 +28,7 @@ export default () => {
   const search = (type: EntityType, text: string, source: SearchSource, page: number) => {
     if (active && (active.type !== type || active.source !== source)) resetListInfo(active.type, active.source)
     active = { type, source }
-    listInfo.value = listInfos[type][source] as SearchListInfo
+    listInfo.value = listInfos[type][source]!
     if (text.length) void addHistoryWord(text)
     void searchEntity(type, text, page, source).then((list: ListInfoItem[]) => {
       if (!list.length || !listRef.value) return

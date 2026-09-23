@@ -13,6 +13,6 @@ export const setVisualization = async(key: 'player.audioVisualization' | 'deskto
     await setMediaDeviceId('default')
     saveMediaDeviceId('default')
   }
-  updateSetting({ [key]: enabled })
+  await updateSetting({ [key]: enabled })
   return true
 }

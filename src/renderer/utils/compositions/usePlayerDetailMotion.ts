@@ -53,7 +53,8 @@ export default ({ onOpened, onClosed }: { onOpened: () => void, onClosed: () => 
 
     const target = visible ? detailCover.value : footerCover()
     const to = target?.getBoundingClientRect()
-    const source = detailCover.value?.currentSrc || footerCover()?.currentSrc
+    let source = detailCover.value?.currentSrc
+    if (!source) source = footerCover()?.currentSrc
     if (isMotionEnabled() && target && source && from?.width && to?.width && from.height && to.height) {
       const image = document.createElement('img')
       image.src = source

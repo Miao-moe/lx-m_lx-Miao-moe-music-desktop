@@ -1,8 +1,8 @@
 <template>
-  <material-modal :show="show" :bg-close="bgClose" :teleport="teleport" @close="handleClose">
+  <material-modal :show="show" :bg-close="bgClose && !starting" :teleport="teleport" @close="handleClose">
     <main :class="$style.main">
       <h2>{{ info.name }}<br>{{ info.singer }}</h2>
-      <base-btn v-for="quality in qualitys" :key="quality.type" :class="$style.btn" @click="handleClick(quality.type)">
+      <base-btn v-for="quality in qualitys" :key="quality.type" :class="$style.btn" :disabled="starting" @click="handleClick(quality.type)">
         {{ getTypeName(quality.type) }}{{ quality.size && ` - ${quality.size.toUpperCase()}` }}
       </base-btn>
     </main>
@@ -43,6 +43,9 @@ export default {
       qualityList,
     }
   },
+  data() {
+    return { starting: false }
+  },
   computed: {
     info() {
       return this.musicInfo || {}
@@ -67,12 +70,15 @@ export default {
     },
   },
   methods: {
-    handleClick(quality) {
-      void createDownloadTasks([this.musicInfo], quality, this.listId)
-      this.handleClose()
+    async handleClick(quality) {
+      if (this.starting) return
+      this.starting = true
+      try {
+        if (await createDownloadTasks([this.musicInfo], quality, this.listId)) this.$emit('update:show', false)
+      } finally { this.starting = false }
     },
     handleClose() {
-      this.$emit('update:show', false)
+      if (!this.starting) this.$emit('update:show', false)
     },
     getTypeName(quality) {
       switch (quality) {

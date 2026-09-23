@@ -1,8 +1,10 @@
 import { WIN_MAIN_RENDERER_EVENT_NAME } from '@common/ipcNames'
 import { mainHandle } from '@common/mainIpc'
+import { getDownloadDiskSpace } from '@main/utils/diskSpace'
 
 
 export default () => {
+  mainHandle<string, Awaited<ReturnType<typeof getDownloadDiskSpace>>>(WIN_MAIN_RENDERER_EVENT_NAME.download_disk_space, async({ params: path }) => getDownloadDiskSpace(path))
   mainHandle<LX.Download.ListItem[]>(WIN_MAIN_RENDERER_EVENT_NAME.download_list_get, async() => {
     return global.lx.worker.dbService.getDownloadList()
   })

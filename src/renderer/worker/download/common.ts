@@ -1,7 +1,7 @@
 import { setMeta } from '@common/utils/musicMeta'
 import { buildLyrics } from './lrcTool'
 
-export const writeMeta = ({ filePath, isEmbedLyricLx, isEmbedLyricT, isEmbedLyricR, ...meta }: {
+export const writeMeta = async({ filePath, isEmbedLyricLx, isEmbedLyricT, isEmbedLyricR, ...meta }: {
   filePath: string
   isEmbedLyricLx: boolean
   isEmbedLyricT: boolean

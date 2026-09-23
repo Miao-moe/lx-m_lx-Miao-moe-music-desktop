@@ -1,6 +1,4 @@
 // import { useCommit } from '@common/utils/vueTools'
-import { defaultList } from '@renderer/store/list/state'
-import { addListMusics } from '@renderer/store/list/action'
 import { addTempPlayList } from '@renderer/store/player/action'
 import { appSetting } from '@renderer/store/setting'
 import { type Ref } from '@common/utils/vueTools'
@@ -18,14 +16,9 @@ export default ({ selectedList, props, removeAllSelect, emit }: {
   let clickIndex = -1
 
   const handlePlayMusic = async(index: number, single: boolean) => {
-    let targetSong = props.list[index]
+    const targetSong = props.list[index]
     if (!targetSong) return
-    if (selectedList.value.length && !single) {
-      await addListMusics(defaultList.id, [...selectedList.value])
-      removeAllSelect()
-    } else {
-      await addListMusics(defaultList.id, [targetSong])
-    }
+    if (selectedList.value.length && !single) removeAllSelect()
     // 播放队列加入整个上下文列表（排行榜/热门歌单/搜索结果），由页面处理整列表的加载
     emit('play-list', index)
   }

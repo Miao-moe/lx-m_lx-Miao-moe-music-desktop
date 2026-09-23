@@ -92,7 +92,7 @@ const validateManifest = (manifest: PluginManifest, id: PluginId) => {
       if (normalizedNames.has(parts.join('/'))) throw new Error('Invalid plugin file: directory conflicts with file')
     }
   }
-  if (total > MAX_UNPACKED_BYTES || !names.has(manifest.entry) || (manifest.lyricEntry && !names.has(manifest.lyricEntry)) ||
+  if (total > MAX_UNPACKED_BYTES || !names.has(manifest.entry) || (manifest.lyricEntry !== undefined && !names.has(manifest.lyricEntry)) ||
     [...manifest.styles, ...(manifest.lyricStyles ?? [])].some(file => !names.has(file) || !file.endsWith('.css'))) throw new Error('Incomplete plugin package')
 }
 

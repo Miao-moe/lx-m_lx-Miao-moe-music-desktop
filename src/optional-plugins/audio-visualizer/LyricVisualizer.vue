@@ -45,7 +45,10 @@ watch(() => preferences.desktop, () => {
 onMounted(() => {
   mounted = true
   renderer = createVisualizerRenderer(canvas.value)
-  observer = new ResizeObserver(() => {
+  renderer.resize(canvas.value.clientWidth, canvas.value.clientHeight)
+  observer = new ResizeObserver(entries => {
+    const size = entries[0].contentRect
+    renderer.resize(size.width, size.height)
     if (resizeFrame != null) cancelAnimationFrame(resizeFrame)
     resizeFrame = requestAnimationFrame(() => { resizeFrame = null; draw() })
   })

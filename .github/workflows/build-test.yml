@@ -24,5 +24,8 @@ jobs:
       - name: Eslint check
         run: npm run lint
 
+      - name: TypeScript check
+        run: npm run typecheck
+
       - name: Test Build
         run: npm run build

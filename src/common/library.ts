@@ -2,24 +2,13 @@ export interface SmartRule { kind: 'recent' | 'unplayed' | 'downloaded', days: n
 export interface ListOrganization { folder: string, tags: string[], pinned: boolean, smart?: SmartRule }
 export interface LibraryFolder { path: string, listId: string, enabled: boolean }
 export interface LibraryPreferences { lists: Record<string, ListOrganization>, folders: LibraryFolder[] }
-export interface HistoryVersion { id: number, listId: string, time: number, reason: string, count: number }
-export interface LibraryQuery { search?: string, singer?: string, album?: string, year?: string, missing?: boolean, page?: number }
 export interface ListeningQuery { search?: string, from?: number, to?: number, page?: number }
-export interface HistoryDiff { listId: string, songs: LX.Music.MusicInfo[], added: LX.Music.MusicInfo[], removed: LX.Music.MusicInfo[], changed: LX.Music.MusicInfo[], reordered: number }
 export interface LibraryService {
   getLibraryPreferences: () => LibraryPreferences
   saveLibraryPreferences: (data: LibraryPreferences) => void
-  captureListHistory: (id: string, reason?: string) => void
-  getListHistory: (id: string) => HistoryVersion[]
-  getListHistoryDiff: (id: number) => HistoryDiff
   recordListening: (song: LX.Music.MusicInfo) => void
   getListeningHistory: (query?: ListeningQuery) => { rows: Array<{ id: number, time: number, song: LX.Music.MusicInfo }>, stats: { plays: number, songs: number, singers: number }, artists: Array<{ singer: string, count: number }> }
   clearListeningHistory: () => void
-  getLibraryCatalog: (query?: LibraryQuery) => { songs: Array<{ song: LX.Music.MusicInfo, missing: boolean }>, count: number }
-  getLibraryFacets: () => Record<'singers' | 'albums' | 'years', Array<{ value: string, count: number }>>
-  getLibraryLocalFiles: () => LX.Music.MusicInfoLocal[]
-  setLibraryFileStatus: (items: Array<{ id: string, missing: boolean }>) => void
-  getSmartPlaylist: (rule: SmartRule, excludeList?: string) => LX.Music.MusicInfo[]
   getDatabaseCacheSizes: () => { lyrics: number, urls: number, sources: number }
 }
 export const emptyLibraryPreferences = (): LibraryPreferences => ({ lists: {}, folders: [] })

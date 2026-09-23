@@ -14,7 +14,7 @@ export default ({ dom_lists_list, handleSaveListName, handleMenuClick }: {
   const isDragging = ref(false)
   const styles = useCssModule()
 
-  const { setDelay } = useDrag({
+  const drag = useDrag({
     dom_list: dom_lists_list,
     dragingItemClassName: styles.dragingItem,
     options: {
@@ -63,7 +63,7 @@ export default ({ dom_lists_list, handleSaveListName, handleMenuClick }: {
       }
 
       isModDown.value = true
-      setDelay(0)
+      drag.setDelay(0)
       void handleSaveListName()
     }
     handleMenuClick()
@@ -71,7 +71,7 @@ export default ({ dom_lists_list, handleSaveListName, handleMenuClick }: {
   const handle_key_mod_up = () => {
     if (isModDown.value) {
       isModDown.value = false
-      setDelay(LONG_PRESS_DELAY)
+      drag.setDelay(LONG_PRESS_DELAY)
     }
   }
 

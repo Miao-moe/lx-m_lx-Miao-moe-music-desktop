@@ -1,13 +1,13 @@
 import type { Capabilities, Snapshot, Track } from './types'
-import type { SyncDiff } from '@common/syncDiff'
+import { SYNC_DIFF_ORDER_CHANGED, SYNC_DIFF_PLAYLIST_SCOPE, SYNC_DIFF_SONG_ORDER, type SyncDiff } from '@common/syncDiff'
 
 export const describeChanges = (before: Snapshot, after: Snapshot): SyncDiff => {
   const plan = planChanges(before, after, { rename: true, order: true })
   const changes: SyncDiff['changes'] = []
-  if (plan.rename) changes.push({ kind: 'renamed', scope: '歌单', before: before.name, after: after.name })
+  if (plan.rename) changes.push({ kind: 'renamed', scope: SYNC_DIFF_PLAYLIST_SCOPE, scopeKind: 'playlist', before: before.name, after: after.name })
   for (const track of plan.add.slice(0, 100)) changes.push({ kind: 'added', scope: after.name, before: '', after: track.name ?? track.key })
   for (const track of plan.remove.slice(0, Math.max(0, 100 - changes.length))) changes.push({ kind: 'removed', scope: after.name, before: track.name ?? track.key, after: '' })
-  if (plan.order && !plan.add.length && !plan.remove.length) changes.push({ kind: 'changed', scope: after.name, before: '歌曲顺序', after: '顺序已改变' })
+  if (plan.order && !plan.add.length && !plan.remove.length) changes.push({ kind: 'changed', scope: after.name, detailKind: 'order', before: SYNC_DIFF_SONG_ORDER, after: SYNC_DIFF_ORDER_CHANGED })
   return { changes: changes.slice(0, 100), total: plan.add.length + plan.remove.length + Number(plan.rename) + Number(plan.order && !plan.add.length && !plan.remove.length) }
 }
 

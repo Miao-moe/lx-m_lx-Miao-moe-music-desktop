@@ -20,23 +20,17 @@
         </button>
       </div>
     </div>
-    <button v-show="showLibraryManagerEntry" :class="$style.libraryButton" aria-label="歌单与本地曲库" @click="isShowLibrary = true">曲库管理<span v-if="libraryMissingCount"> · {{ libraryMissingCount }} 个失效文件</span></button>
     <ul ref="dom_lists_list" class="scroll" :class="[$style.listsContent, { [$style.sortable]: isModDown || isDragging }]">
       <li
-        class="default-list" :class="[$style.listsItem, {[$style.active]: defaultList.id == listId}, {[$style.clicked]: rightClickItemIndex == -2}, {[$style.fetching]: fetchingListStatus[defaultList.id]}]"
-        :aria-label="$t(defaultList.name)" :aria-selected="defaultList.id == listId"
-        @contextmenu="handleListsItemRigthClick($event, -2)" @click="handleListToggle(defaultList.id)"
+        class="default-list" :class="[$style.listsItem, {[$style.active]: LIST_IDS.HISTORY == listId}]"
+        :aria-label="$t('history__title')" :aria-selected="LIST_IDS.HISTORY == listId"
+        @click="handleListToggle(LIST_IDS.HISTORY)"
       >
-        <!-- <div v-if="defaultList.id == listId" :class="$style.activeIcon">
-          <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" height="40%" viewBox="0 0 451.846 451.847" space="preserve">
-            <use xlink:href="#icon-right" />
-          </svg>
-        </div> -->
         <span :class="$style.listsLabel">
           <transition name="list-active">
-            <svg-icon v-if="defaultList.id == listId" name="angle-right-solid" :class="$style.activeIcon" />
+            <svg-icon v-if="LIST_IDS.HISTORY == listId" name="angle-right-solid" :class="$style.activeIcon" />
           </transition>
-          {{ $t(defaultList.name) }}
+          {{ $t('history__title') }}
         </span>
       </li>
       <li
@@ -97,7 +91,7 @@
     <ListSortModal v-model:visible="isShowListSortModal" :list-info="sortListInfo" />
     <ListUpdateModal v-model:visible="isShowListUpdateModal" />
     <RecycleBinModal v-model:visible="isShowRecycleBin" />
-    <LibraryManager v-if="isShowLibrary" v-model:visible="isShowLibrary" :list-id="listId" />
+    <PlaylistTagsModal v-model:visible="isShowTagsModal" :list-info="tagsListInfo" />
   </div>
 </template>
 
@@ -109,10 +103,9 @@ import DuplicateMusicModal from './components/DuplicateMusicModal.vue'
 import ListSortModal from './components/ListSortModal.vue'
 import ListUpdateModal from './components/ListUpdateModal.vue'
 import RecycleBinModal from './components/RecycleBinModal.vue'
-import LibraryManager from './components/LibraryManager.vue'
-import { libraryMissingCount } from '@renderer/utils/libraryMaintenance'
+import PlaylistTagsModal from './components/PlaylistTagsModal.vue'
 
-import { defaultList, loveList, userLists, fetchingListStatus } from '@renderer/store/list/state'
+import { loveList, userLists, fetchingListStatus } from '@renderer/store/list/state'
 import { removeUserList } from '@renderer/store/list/action'
 
 import { computed, ref, watch, useCssModule } from '@common/utils/vueTools'
@@ -139,7 +132,7 @@ import useFolders from './useFolders'
 export default {
   name: 'MyLists',
   components: {
-    LibraryManager,
+    PlaylistTagsModal,
     RecycleBinModal,
     DuplicateMusicModal,
     ListSortModal,
@@ -165,6 +158,12 @@ export default {
     const { isShowListUpdateModal, handleUpdateSourceList } = useListUpdate()
     const { isShowListSortModal, sortListInfo, handleSortList } = useSort()
     const { isShowDuplicateMusicModal, duplicateListInfo, handleDuplicateList } = useDuplicate()
+    const isShowTagsModal = ref(false)
+    const tagsListInfo = ref(null)
+    const handleEditTags = (listInfo) => {
+      tagsListInfo.value = listInfo
+      isShowTagsModal.value = true
+    }
     const { handleRename, handleSaveListName, isShowNewList, isNewListLeave, handleCreateList } = useEditList({ dom_lists_list })
     const handleFolderToggle = async(source) => {
       await handleSaveListName()
@@ -197,7 +196,7 @@ export default {
         if (!isRemove) return
         if (!await removeUserList([listInfo.id])) return
         if (props.listId == listInfo.id) {
-          handleListToggle(LIST_IDS.DEFAULT)
+          handleListToggle(LIST_IDS.HISTORY)
         }
       })
     }
@@ -219,6 +218,7 @@ export default {
       handleDuplicateList,
       handleRename,
       handleRemove,
+      handleEditTags,
     })
 
     const handleListsItemRigthClick = (event, index) => {
@@ -249,22 +249,22 @@ export default {
     })
 
     watch(() => userLists, (lists) => {
+      if (props.listId === LIST_IDS.HISTORY || props.listId === loveList.id) return
       if (lists.some(l => l.id == props.listId)) return
       void router.replace({
         path: '/list',
         query: {
-          id: defaultList.id,
+          id: LIST_IDS.HISTORY,
         },
       })
     })
 
     return {
       isShowRecycleBin: ref(false),
-      isShowLibrary: ref(false),
-      showLibraryManagerEntry: false, // 暂时隐藏入口，保留弹窗以便后续恢复
-      libraryMissingCount,
+      isShowTagsModal,
+      tagsListInfo,
+      LIST_IDS,
       rightClickItemIndex,
-      defaultList,
       loveList,
       userLists,
       listGroups,
@@ -300,19 +300,6 @@ export default {
 @import '@renderer/assets/styles/layout.less';
 
 @lists-item-height: 36px;
-.libraryButton {
-  flex: none;
-  padding: 7px;
-  border: 0;
-  border-bottom: var(--color-list-header-border-bottom);
-  background: transparent;
-  color: var(--color-primary);
-  cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-standard);
-  &:hover { background: var(--color-primary-background-hover); }
-  &:active { background: var(--color-primary-background-active); }
-  &:focus-visible { box-shadow: inset var(--focus-ring); }
-}
 .lists {
   flex: auto;
   width: 100%;

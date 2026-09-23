@@ -5,6 +5,7 @@ import {
   downloadTasksCreate,
   downloadTasksRemove,
   downloadTasksUpdate,
+  getDownloadDiskSpace,
 } from '@renderer/utils/ipc'
 import {
   downloadList,
@@ -21,6 +22,7 @@ import { buildSavePath } from './utils'
 import showToast from '@renderer/plugins/Toast'
 import { getFileStats } from '@common/utils/nodejs'
 import { classifyDownloadError, type DownloadFailureKind } from '@common/utils/download/errors'
+import { downloadLimitBytes, summarizeDownloadStorage, type DownloadStorageSummary } from '@common/utils/download/storage'
 import { withRequestDeadline, throwIfRequestCancelled } from '@renderer/utils/requestContext'
 import { finishDownloadFiles } from './postprocess'
 
@@ -47,7 +49,25 @@ const throttleUpdateTask = (tasks: LX.Download.ListItem[]) => {
 }
 
 const runingTask = new Map<string, LX.Download.ListItem>()
+const batchSizeSnapshots = new Map<string, Promise<number>>()
 let loadingDownloadList: Promise<LX.Download.ListItem[]> | null = null
+
+const getBatchInitialBytes = async(batchId: string) => {
+  let snapshot = batchSizeSnapshots.get(batchId)
+  if (snapshot) return snapshot
+  snapshot = (async() => {
+    const members = downloadList.filter(task => task.batchId === batchId && task.metadata.filePath)
+    let bytes = 0
+    for (let index = 0; index < members.length; index += 8) {
+      const stats = await Promise.all(members.slice(index, index + 8).map(async task => getFileStats(task.metadata.filePath)))
+      for (const item of stats) if (item?.isFile()) bytes += item.size
+    }
+    return bytes
+  })()
+  batchSizeSnapshots.set(batchId, snapshot)
+  void snapshot.catch(() => { batchSizeSnapshots.delete(batchId) })
+  return snapshot
+}
 
 const prepareDownloadList = (list: LX.Download.ListItem[]) => {
   for (const downloadInfo of list) {
@@ -223,7 +243,9 @@ const handleError = (info: LX.Download.ListItem, error: any, kind?: DownloadFail
   const failureKind = kind ?? classifyDownloadError(error)
   info.failure = { kind: failureKind, code: String(error?.code ?? ''), message: String(error?.message ?? error ?? '') }
   info.isComplate = false
-  setStatus(info, DOWNLOAD_STATUS.ERROR, formatError(error, window.i18n.t(info.audioDownloaded ? 'download__postprocess_failed' : ('download__failure_' + failureKind) as any), 'DOWNLOAD_FAILED'))
+  const limitMessage = error?.code === 'DOWNLOAD_BATCH_SIZE_LIMIT' ? 'download__size_limit_batch' : 'download__size_limit_task'
+  const fallback = failureKind === 'limit' ? window.i18n.t(limitMessage) : window.i18n.t(info.audioDownloaded ? 'download__postprocess_failed' : ('download__failure_' + failureKind) as any)
+  setStatus(info, DOWNLOAD_STATUS.ERROR, formatError(error, fallback, 'DOWNLOAD_FAILED'))
   void stopRun(info).finally(checkStartTask).catch(console.error)
 }
 const getUrl = async(info: LX.Download.ListItem, run: DownloadRun, refresh = false) => {
@@ -292,6 +314,8 @@ const handleStartTask = async(info: LX.Download.ListItem, run: DownloadRun) => {
     updateFilePath(info, filePath)
   }
   setStatusText(info, window.i18n.t('download_status_start'))
+  const batchInitialBytes = info.batchId ? await getBatchInitialBytes(info.batchId) : 0
+  if (!isCurrentRun(info, run)) return
   await window.lx.worker.download.startTask(toRaw(info), savePath, appSetting['download.skipExistFile'], proxyCallback((event: LX.Download.DownloadTaskActions) => {
     if (!isCurrentRun(info, run)) return
     switch (event.action) {
@@ -313,7 +337,9 @@ const handleStartTask = async(info: LX.Download.ListItem, run: DownloadRun) => {
         }).catch(error => { if (isCurrentRun(info, run)) handleError(info, error) })
         break
     }
-  }), getProxy(), Math.max(0, appSetting['download.rateLimit'] || 0) * 1024)
+  }), getProxy(), Math.max(0, appSetting['download.rateLimit'] || 0) * 1024,
+  downloadLimitBytes(appSetting['download.maxTaskSizeMiB']),
+  batchInitialBytes)
 }
 const startTask = async(info: LX.Download.ListItem) => {
   const run: DownloadRun = { controller: new AbortController() }
@@ -363,21 +389,63 @@ const filterTask = (list: LX.Download.ListItem[]) => {
     return true
   })
 }
+const prepareDownloadTasks = async(list: LX.Music.MusicInfoOnline[], quality: LX.Quality, listId?: string) => {
+  await getDownloadList()
+  return filterTask(await window.lx.worker.download.createDownloadTasks(list, quality,
+    appSetting['download.fileName'], toRaw(qualityList.value), listId))
+}
+export interface DownloadStoragePreview {
+  count: number
+  availableBytes: number | null
+  summary: DownloadStorageSummary
+}
+const assessDownloadTasks = async(tasks: LX.Download.ListItem[], isBatch: boolean): Promise<DownloadStoragePreview> => {
+  let availableBytes: number | null = null
+  try { availableBytes = (await getDownloadDiskSpace(appSetting['download.savePath'])).availableBytes } catch (error) { console.warn('Unable to read download disk space', (error as { code?: string })?.code ?? '') }
+  return {
+    count: tasks.length,
+    availableBytes,
+    summary: summarizeDownloadStorage(tasks,
+      downloadLimitBytes(appSetting['download.maxTaskSizeMiB']),
+      isBatch ? downloadLimitBytes(appSetting['download.maxBatchSizeMiB']) : 0,
+      availableBytes),
+  }
+}
+export const previewDownloadTasks = async(list: LX.Music.MusicInfoOnline[], quality: LX.Quality, listId?: string, forceBatch = false): Promise<DownloadStoragePreview> => {
+  if (downloadSyncLocked) throw new Error('downloads_running')
+  return assessDownloadTasks(await prepareDownloadTasks(list, quality, listId), forceBatch || list.length > 1)
+}
 /**
  * 创建下载任务
  * @param list 要下载的歌曲
  * @param quality 下载音质
  */
-export const createDownloadTasks = async(list: LX.Music.MusicInfoOnline[], quality: LX.Quality, listId?: string) => {
-  if (!list.length || checkDownloadSyncLock()) return
+export const createDownloadTasks = async(list: LX.Music.MusicInfoOnline[], quality: LX.Quality, listId?: string, forceBatch = false): Promise<boolean> => {
+  if (!list.length || checkDownloadSyncLock()) return false
   downloadMutations++
   try {
-    const tasks = filterTask(await window.lx.worker.download.createDownloadTasks(list, quality,
-      appSetting['download.fileName'],
-      toRaw(qualityList.value), listId),
-    )
-    if (tasks.length) await addTasks(tasks)
+    const tasks = await prepareDownloadTasks(list, quality, listId)
+    const isBatch = forceBatch || list.length > 1
+    const preview = await assessDownloadTasks(tasks, isBatch)
+    const failureKey = !tasks.length ? 'download__space_no_new_tasks'
+      : preview.summary.overTaskCount ? 'download__space_task_exceeded'
+        : preview.summary.overBatch ? 'download__space_batch_exceeded'
+          : preview.summary.insufficientDisk ? 'download__space_disk_shortage' : null
+    if (failureKey) {
+      showToast(window.i18n.t(failureKey, { count: preview.summary.overTaskCount }))
+      return false
+    }
+    const batchLimitBytes = downloadLimitBytes(appSetting['download.maxBatchSizeMiB'])
+    if (isBatch && batchLimitBytes) {
+      const batchId = globalThis.crypto.randomUUID()
+      for (const task of tasks) Object.assign(task, { batchId, batchLimitBytes })
+    }
+    await addTasks(tasks)
     void checkStartTask()
+    return true
+  } catch (error) {
+    showToast(formatError(error, window.i18n.t('download___status_error'), 'DOWNLOAD_CREATE_FAILED'))
+    return false
   } finally { downloadMutations-- }
 }
 

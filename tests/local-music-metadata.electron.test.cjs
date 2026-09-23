@@ -36,13 +36,16 @@ test('real untagged audio ignores online metadata while retaining local and edit
       for (const song of songs) {
         await ipc.invoke('winMain_save_lyric_raw', { id: song.id, lyrics: { lyric: '[00:00.00]错误的在线歌词' } })
       }
-      await ipc.invoke('player_list_data_overwire', { defaultList: songs, loveList: [], tempList: [], userList: [] })
+      await ipc.invoke('player_list_data_overwire', {
+        defaultList: [], loveList: [], tempList: [],
+        userList: [{ id: 'metadata-playlist', name: '本地元数据测试', locationUpdateTime: null, list: songs }],
+      })
       window.__lxPluginHost.player.getAudioElement().muted = true
       return songs
     }, files)
     assert.deepEqual(songs.map(song => [song.name, song.singer, song.meta.albumName]), [['recording', '', ''], ['local-assets', '', '']])
     assert.deepEqual(await page.evaluate(files => Promise.all(files.map(file => window.lx.worker.main.hasMusicFileTags(file))), files), [false, false])
-    await route(page, '/list?id=default')
+    await route(page, '/list?id=metadata-playlist')
     await settled(page)
 
     await t.test('the song list and playback skip old online artwork and lyric caches', async() => {

@@ -9,7 +9,7 @@ import { removeMusicUrl } from '@renderer/utils/ipc'
 import { setAllStatus } from '@renderer/store/player/action'
 import { appSetting } from '@renderer/store/setting'
 import { playbackSession } from '@renderer/core/player/playbackSession'
-import { libraryCall, libraryError } from '@renderer/utils/library'
+import { libraryError, recordListening } from '@renderer/utils/library'
 
 export default () => {
   const t = useI18n()
@@ -87,7 +87,7 @@ export default () => {
     const song = playing && ('progress' in playing ? playing.metadata.musicInfo : playing)
     if (song && recordedId !== song.id) {
       recordedId = song.id
-      void libraryCall('recordListening', song).catch(error => { libraryError.value = formatError(error, '保存听歌记录失败') })
+      void recordListening(song).catch(error => { libraryError.value = formatError(error, '保存听歌记录失败') })
     }
   }
 

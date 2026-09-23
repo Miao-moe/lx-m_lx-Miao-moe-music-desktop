@@ -35,8 +35,14 @@ watch(isPlay, refresh)
 onMounted(() => {
   mounted = true
   renderer = createVisualizerRenderer(canvas.value)
+  renderer.resize(canvas.value.clientWidth, canvas.value.clientHeight)
   if (props.live) release = acquirePreview(props.kind)
-  observer = new ResizeObserver(() => { stop(); frame = requestAnimationFrame(draw) })
+  observer = new ResizeObserver(entries => {
+    const size = entries[0].contentRect
+    renderer.resize(size.width, size.height)
+    stop()
+    frame = requestAnimationFrame(draw)
+  })
   observer.observe(canvas.value)
   document.addEventListener('visibilitychange', refresh)
   draw()

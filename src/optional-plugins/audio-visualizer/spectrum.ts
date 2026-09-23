@@ -1,6 +1,6 @@
 import { normalizeStyle, type VisualizerStyle } from './styles'
 
-interface DrawOptions { style?: VisualizerStyle, desktop?: boolean, preview?: boolean, time?: number }
+interface DrawOptions { style?: VisualizerStyle, desktop?: boolean, preview?: boolean, time?: number, width: number, height: number }
 
 const bands = (data: Uint8Array, count: number) => Array.from({ length: count }, (_, index) => {
   const start = Math.floor(Math.pow(index / count, 1.6) * data.length)
@@ -10,22 +10,8 @@ const bands = (data: Uint8Array, count: number) => Array.from({ length: count },
   return peak / 255
 })
 
-export const drawSpectrum = (canvas: HTMLCanvasElement, data: Uint8Array, options: DrawOptions = {}) => {
-  const context = canvas.getContext('2d')
-  if (!context) return
-  const { desktop = false, preview = false, time = 0 } = options
-  const width = canvas.clientWidth
-  const height = canvas.clientHeight
-  // Bound the backing buffer on high DPI and 4K displays.
-  const ratio = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(8_000_000 / Math.max(1, width * height)))
-  const pixelWidth = Math.round(width * ratio)
-  const pixelHeight = Math.round(height * ratio)
-  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-    canvas.width = pixelWidth
-    canvas.height = pixelHeight
-  }
-  context.setTransform(ratio, 0, 0, ratio, 0, 0)
-  context.clearRect(0, 0, width, height)
+export const drawSpectrum = (context: CanvasRenderingContext2D, data: Uint8Array, options: DrawOptions) => {
+  const { desktop = false, preview = false, time = 0, width, height } = options
   if (!width || !height || !data.some(value => value > 0)) return
   const theme = getComputedStyle(document.documentElement)
   const color = desktop && !preview ? '#ffffff' : theme.getPropertyValue('--color-primary').trim() || '#4daf7c'

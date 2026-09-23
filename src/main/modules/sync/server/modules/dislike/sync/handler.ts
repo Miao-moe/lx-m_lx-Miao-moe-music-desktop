@@ -15,7 +15,7 @@ const handler: LX.Sync.ServerSyncHandlerDislikeActions<LX.Sync.Server.Socket> = 
     await handleRemoteDislikeAction(action)
     const userSpace = getUserSpace(socket.userInfo.name)
     const key = await userSpace.dislikeManage.createSnapshot()
-    userSpace.dislikeManage.updateDeviceSnapshotKey(socket.keyInfo.clientId, key)
+    await userSpace.dislikeManage.updateDeviceSnapshotKey(socket.keyInfo.clientId, key)
     const currentUserName = socket.userInfo.name
     const currentId = socket.keyInfo.clientId
     socket.broadcast((client) => {

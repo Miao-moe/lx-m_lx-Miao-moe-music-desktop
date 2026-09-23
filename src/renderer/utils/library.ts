@@ -9,8 +9,13 @@ export const libraryCall = async<K extends keyof Service>(method: K, ...args: Pa
 }
 export const libraryPreferences = ref<LibraryPreferences>(emptyLibraryPreferences())
 export const libraryError = ref('')
+export const listeningHistoryVersion = ref(0)
 export const refreshLibraryPreferences = async() => { libraryPreferences.value = await libraryCall('getLibraryPreferences') }
 export const saveLibraryPreferences = async(value: LibraryPreferences) => {
   await libraryCall('saveLibraryPreferences', value)
   libraryPreferences.value = value
+}
+export const recordListening = async(song: LX.Music.MusicInfo) => {
+  await libraryCall('recordListening', song)
+  listeningHistoryVersion.value++
 }

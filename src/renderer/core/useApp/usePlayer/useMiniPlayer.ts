@@ -62,7 +62,7 @@ export default () => {
   const handleAction = async(request: LX.DesktopLyric.PlayerRequest) => {
     switch (request.action) {
       case 'get_player_state': sendState(); sendCover(); break
-      case 'player_toggle_play': await togglePlay(); break
+      case 'player_toggle_play': togglePlay(); break
       case 'player_prev': await playPrev(); break
       case 'player_next': await playNext(); break
       case 'player_seek':

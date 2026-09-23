@@ -45,7 +45,7 @@ export const refreshPlugins = async() => {
   try { await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.refresh)) } catch (error: any) { pluginStoreError.value = error.message }
 }
 export const changePluginInstallation = async(id: PluginId, install: boolean, format: PluginPackageFormat = 'lxplugin') => {
-  if (isBuiltinPlugin(id) || pluginBusy[id] || pluginTransferBusy.value) return
+  if (isBuiltinPlugin(id) || Boolean(pluginBusy[id]) || pluginTransferBusy.value) return
   pluginBusy[id] = true
   Reflect.deleteProperty(pluginOperationErrors, id)
   try {
@@ -61,7 +61,7 @@ export const changePluginInstallation = async(id: PluginId, install: boolean, fo
 }
 
 export const changePluginEnabled = async(id: PluginId, enabled: boolean) => {
-  if (isBuiltinPlugin(id) || pluginBusy[id] || pluginTransferBusy.value) return
+  if (isBuiltinPlugin(id) || Boolean(pluginBusy[id]) || pluginTransferBusy.value) return
   pluginBusy[id] = true
   Reflect.deleteProperty(pluginOperationErrors, id)
   try { await applySnapshot(await ipcRenderer.invoke(PLUGIN_IPC.setEnabled, id, enabled)) } catch (error: any) {
@@ -71,7 +71,7 @@ export const changePluginEnabled = async(id: PluginId, enabled: boolean) => {
 }
 
 export const transferPlugin = async(id?: PluginId) => {
-  if ((id && isBuiltinPlugin(id)) || pluginTransferBusy.value || Object.values(pluginBusy).some(Boolean)) return
+  if ((id != null && id !== '' && isBuiltinPlugin(id)) || pluginTransferBusy.value || Object.values(pluginBusy).some(Boolean)) return
   pluginTransferBusy.value = true
   pluginTransferNotice.value = null
   const t = useI18n()
@@ -110,7 +110,7 @@ export const transferPlugin = async(id?: PluginId) => {
       Reflect.deleteProperty(pluginOperationErrors, result.value.id)
       await applySnapshot(result.value.snapshot)
       const failed = !!pluginRuntime.errors[result.value.id] || !!pluginStore.value.loadFailures?.[result.value.id]
-      pluginTransferNotice.value = { message: failed ? formatError(pluginRuntime.errors[result.value.id] || pluginStore.value.loadFailures?.[result.value.id]?.message, t('setting__plugins_import_load_failed'), 'PLUGIN_LOAD_FAILED') : t('setting__plugins_import_success'), error: failed }
+      pluginTransferNotice.value = { message: failed ? formatError(pluginRuntime.errors[result.value.id] ?? pluginStore.value.loadFailures?.[result.value.id]?.message, t('setting__plugins_import_load_failed'), 'PLUGIN_LOAD_FAILED') : t('setting__plugins_import_success'), error: failed }
     }
   } catch (error) {
     pluginTransferNotice.value = { message: formatError(error, t('setting__plugins_transfer_write_failed'), 'PLUGIN_TRANSFER_FAILED'), error: true }

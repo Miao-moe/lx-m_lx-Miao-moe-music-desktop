@@ -37,7 +37,7 @@ export default {
   name: 'SettingOpenAPI',
   setup() {
     const setPort = debounce(port => {
-      updateSetting({ 'openAPI.port': port.trim() })
+      void updateSetting({ 'openAPI.port': port.trim() })
     }, 500)
 
     return {

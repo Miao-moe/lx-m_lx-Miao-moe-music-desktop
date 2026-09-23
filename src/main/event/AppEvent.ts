@@ -33,6 +33,8 @@ export class Event extends EventEmitter {
    * 更新配置
    * @param setting 新设置
    */
+  // Keep the original promise so legacy callers can ignore it while the rejection is logged below.
+  // eslint-disable-next-line @typescript-eslint/promise-function-async
   update_config(setting: Partial<LX.AppSetting>) {
     const task = updateSetting(setting).then(({ setting: newSetting, updatedSettingKeys, updatedSetting }) => {
       this.config_committed(newSetting, updatedSettingKeys, updatedSetting)

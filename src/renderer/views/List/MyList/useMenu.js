@@ -1,6 +1,6 @@
 import { computed, ref, reactive, nextTick } from '@common/utils/vueTools'
 import { useI18n } from '@renderer/plugins/i18n'
-import { userLists, defaultList, loveList } from '@renderer/store/list/state'
+import { userLists, loveList } from '@renderer/store/list/state'
 import musicSdk from '@renderer/utils/musicSdk'
 import { addLocalFile } from './actions'
 
@@ -15,6 +15,7 @@ export default ({
   handleExportList,
   handleUpdateSourceList,
   handleRemove,
+  handleEditTags,
 }) => {
   const menuControl = reactive({
     rename: true,
@@ -26,6 +27,7 @@ export default ({
     export: true,
     sync: false,
     remove: true,
+    tags: true,
   })
   const t = useI18n()
   const menuLocation = reactive({ x: 0, y: 0 })
@@ -47,6 +49,11 @@ export default ({
         name: t('lists__duplicate'),
         action: 'duplicate',
         disabled: !menuControl.duplicate,
+      },
+      {
+        name: t('lists__edit_tags'),
+        action: 'tags',
+        disabled: !menuControl.tags,
       },
       {
         name: t('lists__select_local_file'),
@@ -100,14 +107,15 @@ export default ({
     let source
     switch (index) {
       case -1:
-      case -2:
         menuControl.rename = false
         menuControl.remove = false
         menuControl.sync = false
+        menuControl.tags = false
         break
       default:
         menuControl.rename = true
         menuControl.remove = true
+        menuControl.tags = true
         source = userLists[index].source
         menuControl.sync = !!source && !!musicSdk[source]?.songList
         break
@@ -132,9 +140,6 @@ export default ({
   const getListInfo = (index) => {
     let list
     switch (index) {
-      case -2:
-        list = defaultList
-        break
       case -1:
         list = loveList
         break
@@ -157,6 +162,9 @@ export default ({
         break
       case 'duplicate':
         handleDuplicateList(listInfo)
+        break
+      case 'tags':
+        handleEditTags(listInfo)
         break
       case 'sort':
         handleSortList(listInfo)

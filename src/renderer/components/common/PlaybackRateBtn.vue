@@ -42,7 +42,7 @@ const handleWheel = (event) => {
 
 
 const updatePreservesPitch = (enabled) => {
-  updateSetting({ 'player.preservesPitch': enabled })
+  void updateSetting({ 'player.preservesPitch': enabled })
 }
 
 // const icon = computed(() => {

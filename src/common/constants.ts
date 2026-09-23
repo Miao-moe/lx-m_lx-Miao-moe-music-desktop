@@ -30,6 +30,7 @@ export const APP_EVENT_NAMES = {
 
 export const LIST_IDS = {
   DEFAULT: 'default',
+  HISTORY: 'history',
   LOVE: 'love',
   TEMP: 'temp',
   DOWNLOAD: 'download',

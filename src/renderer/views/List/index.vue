@@ -1,41 +1,48 @@
 <template>
   <div id="my-list" :class="$style.container" @click="handleContainerClick">
     <common-resizable-sidebar name="myList" :label="$t('my_list')">
-      <MyList ref="myList" :list-id="listId" @show-menu="$refs.musicList.handleMenuClick()" />
+      <MyList ref="myList" :list-id="listId" @show-menu="$refs.musicList?.handleMenuClick()" />
     </common-resizable-sidebar>
     <common-motion-view :motion-key="listId">
-      <MusicList ref="musicList" :list-id="listId" @show-menu="$refs.myList.handleMenuClick()" />
+      <ListeningHistory v-if="listId === HISTORY_ID" />
+      <MusicList v-else ref="musicList" :list-id="listId" @show-menu="$refs.myList.handleMenuClick()" />
     </common-motion-view>
   </div>
 </template>
 
 <script>
 import { getListPrevSelectId } from '@renderer/utils/data'
+import { LIST_IDS } from '@common/constants'
 
 import MyList from './MyList/index.vue'
 import MusicList from './MusicList/index.vue'
+import ListeningHistory from './ListeningHistory.vue'
 
 export default {
   name: 'List',
   components: {
     MyList,
     MusicList,
+    ListeningHistory,
   },
   async beforeRouteEnter(to, from, next) {
     let id = to.query.id
     if (!id) {
       id = await getListPrevSelectId()
+      if (id === LIST_IDS.DEFAULT) id = LIST_IDS.HISTORY
       next({
         path: to.path,
         query: { id },
       })
-    } else next()
+    } else if (id === LIST_IDS.DEFAULT) next({ path: to.path, query: { id: LIST_IDS.HISTORY } })
+    else next()
   },
   beforeRouteUpdate(to, from) {
     // console.log(to, from)
     if (to.query.updated) return
     let id = to.query.id
     if (id == null) return
+    if (id === LIST_IDS.DEFAULT) return { path: to.path, query: { id: LIST_IDS.HISTORY } }
     // if (!getList(id)) {
     //   id = defaultList.id
     // }
@@ -55,6 +62,7 @@ export default {
   data() {
     return {
       listId: null,
+      HISTORY_ID: LIST_IDS.HISTORY,
     }
   },
   created() {

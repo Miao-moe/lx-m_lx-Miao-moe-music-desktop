@@ -1,4 +1,5 @@
 import { type Message } from '@root/lang'
+import type { DownloadFailureKind } from '../utils/download/errors'
 
 // interface DownloadList {
 
@@ -42,7 +43,7 @@ declare global {
         error?: keyof Message
         message?: string
         code?: string
-        kind?: import('../utils/download/errors').DownloadFailureKind
+        kind?: DownloadFailureKind
       }>
 
       interface ListItem {
@@ -56,8 +57,10 @@ declare global {
         speed: string
         writeQueue: number
         priority?: number
+        batchId?: string
+        batchLimitBytes?: number
         audioDownloaded?: boolean
-        failure?: { kind: import('../utils/download/errors').DownloadFailureKind, code?: string, message?: string }
+        failure?: { kind: DownloadFailureKind, code?: string, message?: string }
         metadata: {
           musicInfo: LX.Music.MusicInfoOnline
           url: string | null

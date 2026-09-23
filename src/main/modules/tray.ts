@@ -166,7 +166,7 @@ export const destroyTray = () => {
 }
 
 const handleUpdateConfig = (setting: Partial<LX.AppSetting>) => {
-  global.lx.event_app.update_config(setting)
+  void global.lx.event_app.update_config(setting)
 }
 
 const createPlayerMenu = () => {

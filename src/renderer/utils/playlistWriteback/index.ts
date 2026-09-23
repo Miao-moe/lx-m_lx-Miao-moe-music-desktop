@@ -46,6 +46,6 @@ export const startPlaylistWriteback = engine.start
 export const disposePlaylistWriteback = engine.dispose
 export const notifyPlaylistChanged = (ids: string[], reset = false) => {
   void engine.changed(ids, reset).catch(() => {
-    for (const id of ids) writebackStatus[id] = { enabled: writebackStatus[id]?.enabled === true, state: 'failed', error: 'storage' }
+    for (const id of ids) writebackStatus[id] = { enabled: !!writebackStatus[id]?.enabled, state: 'failed', error: 'storage' }
   })
 }

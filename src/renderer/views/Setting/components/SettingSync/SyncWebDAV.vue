@@ -50,7 +50,7 @@
         <span>{{ statusText }}</span>
         <span v-if="!webdav.busy && webdav.result">{{ $t('setting__sync_webdav_last_time', { time: lastTime }) }}</span>
       </div>
-      <SyncDiffPanel :diff="webdav.result?.diff" title="远端相对本地的差异（尚未覆盖）" />
+      <SyncDiffPanel :diff="webdav.result?.diff" :title="$t('setting__sync_webdav_diff_title')" />
       <WebDAVAudio />
     </div>
   </dd>
@@ -83,7 +83,7 @@ const dirty = computed(() => connectionKeys.some(key => form[key] != appSetting[
 const selected = computed(() => sections.filter(section => appSetting[`sync.webdav.${section}`]))
 const sectionEnabled = (section: LX.WebDAV.Section) => appSetting[`sync.webdav.${section}`]
 const canSync = computed(() => appSetting['sync.webdav.enable'] && selected.value.length && form.url.trim())
-const sectionNames = (items: readonly LX.WebDAV.Section[]) => items.map(section => t(`setting__sync_webdav_item_${section}`)).join('、')
+const sectionNames = (items: readonly LX.WebDAV.Section[]) => items.map(section => t(`setting__sync_webdav_item_${section}`)).join(t('sync_diff__list_separator'))
 
 const statusText = computed(() => {
   if (webdav.busy) return t('setting__sync_webdav_working')

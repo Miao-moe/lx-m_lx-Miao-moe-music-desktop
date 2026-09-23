@@ -59,10 +59,10 @@ test('distribution starts with its packaged database, playback and offline sourc
     await fs.writeFile(filePath, bytes)
     await page.evaluate(async filePath => {
       const song = { id: 'win7-package', name: '兼容测试', singer: 'LX-M', source: 'local', interval: '01:30', meta: { filePath, ext: 'wav' } }
-      await require('electron').ipcRenderer.invoke('player_list_data_overwire', { defaultList: [song], loveList: [], tempList: [], userList: [] })
+      await require('electron').ipcRenderer.invoke('player_list_data_overwire', { defaultList: [], loveList: [song], tempList: [], userList: [] })
       window.__lxPluginHost.player.setVolume(0)
     }, filePath)
-    await route(page, '/list?id=default')
+    await route(page, '/list?id=love')
     await page.locator('[data-song-id="win7-package"] [data-music-cell="index"]').dblclick()
     await page.waitForFunction(() => !window.__lxPluginHost.player.getAudioElement().paused && window.__lxPluginHost.player.getDuration() >= 89)
     await page.evaluate(() => window.__lxPluginHost.player.setVolumeNormalization(true))

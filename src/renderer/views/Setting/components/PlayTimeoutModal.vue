@@ -4,8 +4,9 @@ material-modal(:show="modelValue" teleport="#view" @close="handleCloseModal" @af
     h2 {{ $t('play_timeout') }}
     div(:class="$style.content")
       div(:class="[$style.row, $style.inputGroup]")
-        base-input(ref="dom_input" v-model="time" :class="$style.input" type="number")
+        base-input(ref="dom_input" v-model="time" :class="$style.input" type="number" min="1" max="1440" step="1" :aria-invalid="!!validationError" :aria-describedby="validationError ? 'play-timeout-error' : null" @update:model-value="validationError = ''")
         p(:class="$style.inputLabel") {{ $t('play_timeout_unit') }}
+      p#play-timeout-error(v-if="validationError" :class="$style.error" role="alert") {{ validationError }}
       div(:class="$style.row")
         base-checkbox(id="play_timeout_end" :model-value="appSetting['player.waitPlayEndStop']" :label="$t('play_timeout_end')" @update:model-value="updateSetting({'player.waitPlayEndStop': $event})")
       div(:class="[$style.row, $style.tip, { [$style.show]: !!timeLabel }]")
@@ -19,10 +20,9 @@ material-modal(:show="modelValue" teleport="#view" @close="handleCloseModal" @af
 import { useTimeout, startTimeoutStop, stopTimeoutStop } from '@renderer/core/player/timeoutStop'
 import { ref } from '@common/utils/vueTools'
 import { appSetting, updateSetting } from '@renderer/store/setting'
+import { normalizeTimeoutMinutes } from '@renderer/utils/timeoutInput'
 
 const MAX_MIN = 1440
-
-const rxp = /([1-9]\d*)/
 
 export default {
   props: {
@@ -35,8 +35,10 @@ export default {
   setup(props, { emit }) {
     const { timeLabel } = useTimeout()
     const time = ref(appSetting['player.waitPlayEndStopTime'])
+    const validationError = ref('')
 
     const handleCloseModal = () => {
+      validationError.value = ''
       emit('update:modelValue', false)
     }
     const handleCancel = () => {
@@ -46,25 +48,21 @@ export default {
       handleCloseModal()
     }
     const verify = () => {
-      const orgText = time.value
-      let text = time.value
-
-      if (rxp.test(text)) {
-        text = RegExp.$1
-        if (parseInt(text) > MAX_MIN) {
-          text = MAX_MIN
-        }
-      } else {
-        text = ''
+      const minutes = normalizeTimeoutMinutes(time.value, MAX_MIN)
+      if (minutes === null) {
+        validationError.value = window.i18n.t('play_timeout_invalid')
+        return null
       }
-      time.value = text
-      return text && orgText == text ? parseInt(text) : ''
+      validationError.value = ''
+      time.value = minutes
+      return minutes
     }
     const handleConfirm = () => {
-      let time = verify()
-      if (time == '') return
-      if (appSetting['player.waitPlayEndStopTime'] != time) updateSetting({ 'player.waitPlayEndStopTime': time })
-      startTimeoutStop(time * 60)
+      const minutes = verify()
+      if (minutes === null) return
+      const savedTime = String(minutes)
+      if (appSetting['player.waitPlayEndStopTime'] !== savedTime) void updateSetting({ 'player.waitPlayEndStopTime': savedTime })
+      startTimeoutStop(minutes * 60)
       handleCloseModal()
     }
     return {
@@ -72,6 +70,7 @@ export default {
       updateSetting,
       timeLabel,
       time,
+      validationError,
       handleCloseModal,
       handleCancel,
       handleConfirm,
@@ -125,6 +124,10 @@ export default {
   &.show {
     visibility: visible;
   }
+}
+.error {
+  color: var(--color-danger);
+  margin-top: 8px;
 }
 .footer {
   margin-top: 20px;

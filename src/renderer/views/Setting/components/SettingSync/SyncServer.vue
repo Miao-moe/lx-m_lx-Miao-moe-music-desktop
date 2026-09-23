@@ -56,7 +56,7 @@ export default {
     }
 
     const setSyncServerPort = debounce(port => {
-      updateSetting({ 'sync.server.port': port.trim() })
+      void updateSetting({ 'sync.server.port': port.trim() })
     }, 500)
 
     return {

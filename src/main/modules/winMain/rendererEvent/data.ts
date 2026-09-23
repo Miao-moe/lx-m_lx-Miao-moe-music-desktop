@@ -8,8 +8,8 @@ export default () => {
   mainHandle<unknown>(WIN_MAIN_RENDERER_EVENT_NAME.playlist_writeback_save, async({ params }) => {
     await getStore(STORE_NAMES.DATA).set(DATA_KEYS.playlistWriteback, params)
   })
-  mainHandle<string, any>(WIN_MAIN_RENDERER_EVENT_NAME.get_data, ({ params: path }) => {
-    return getStore(STORE_NAMES.DATA).get(path) as any
+  mainHandle<string, any>(WIN_MAIN_RENDERER_EVENT_NAME.get_data, async({ params: path }) => {
+    return getStore(STORE_NAMES.DATA).get(path)
   })
 
   mainOn<{

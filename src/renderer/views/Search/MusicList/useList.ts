@@ -1,7 +1,7 @@
 import { LIST_IDS } from '@common/constants'
 import { ref, computed, onBeforeUnmount } from '@common/utils/vueTools'
 import { playList } from '@renderer/core/player/action'
-import { getListMusics, addListMusics, setTempList } from '@renderer/store/list/action'
+import { setTempList } from '@renderer/store/list/action'
 import { addHistoryWord } from '@renderer/store/search/action'
 // import { useI18n } from '@renderer/plugins/i18n'
 // import { } from '@renderer/store/search/state'
@@ -35,7 +35,7 @@ export default () => {
     if (activeSource && activeSource !== source) resetListInfo(activeSource)
     activeSource = source
     const revision = ++searchRevision
-    listInfo.value = listInfos[source] as ListInfo
+    listInfo.value = listInfos[source]!
     if (text.length) void addHistoryWord(text)
     void searchMusic(text, page, source).then((list: LX.Music.MusicInfo[]) => {
       if (revision !== searchRevision) return
@@ -49,25 +49,13 @@ export default () => {
 
   const handlePlayList = async(index: number) => {
     const searchList = [...displayList.value]
-    let targetSong = searchList[index]
+    const targetSong = searchList[index]
     if (!targetSong) return
 
     if (!assertApiSupport(targetSong.source)) return
 
-    const defaultListMusics = await getListMusics(LIST_IDS.DEFAULT)
-
-    await addListMusics(LIST_IDS.DEFAULT, [targetSong])
-
-    // 播放列表加入当前搜索结果的整批歌曲
-    const targetIndex = searchList.findIndex(s => s.id === targetSong.id)
-    if (targetIndex > -1) {
-      await setTempList(`search__${listInfo.value.key ?? ''}`, [...searchList])
-      playList(LIST_IDS.TEMP, targetIndex)
-      return
-    }
-
-    let defaultIndex = defaultListMusics.findIndex(s => s.id === targetSong.id)
-    if (defaultIndex > -1) playList(LIST_IDS.DEFAULT, defaultIndex)
+    await setTempList(`search__${listInfo.value.key ?? ''}`, searchList)
+    playList(LIST_IDS.TEMP, index)
   }
 
   return {

@@ -75,6 +75,7 @@
     "test:request": "node --test tests/request.production.test.cjs",
     "lint": "eslint --ext .ts,.js,.vue -f node_modules/eslint-formatter-friendly src",
     "lint:fix": "eslint --ext .ts,.js,.vue -f node_modules/eslint-formatter-friendly --fix src",
+    "typecheck": "tsc --noEmit -p src/common && tsc --noEmit -p src/lang && tsc --noEmit -p src/main && tsc --noEmit -p src/renderer && tsc --noEmit -p src/renderer-lyric && tsc --noEmit -p src/optional-plugins",
     "postinstall": "electron-builder install-app-deps && node build-config/dependencies-patch.js",
     "dp": "cross-env ELECTRON_GET_USE_PROXY=true GLOBAL_AGENT_HTTPS_PROXY=http://127.0.0.1:2081 npm run pack",
     "up": "cross-env ELECTRON_GET_USE_PROXY=true GLOBAL_AGENT_HTTPS_PROXY=http://127.0.0.1:2081 npm i"

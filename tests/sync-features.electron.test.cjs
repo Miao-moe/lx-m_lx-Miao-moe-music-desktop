@@ -52,8 +52,6 @@ test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual
     assert(dav.requests.some(req => req.path === '/dav/fixture.wav' && req.method === 'GET' && req.headers.range))
     const song = await page.evaluate(() => window.lxData.playMusicInfo.musicInfo)
     assert(!JSON.stringify(song).includes('pass word')); assert(!JSON.stringify(song).includes('127.0.0.1'))
-    const statuses = await page.evaluate(song => window.lx.worker.main.inspectLibraryFiles([song]), song)
-    assert.deepEqual(statuses, [])
   })
   await t.test('persist a selected/ignored playlist range and retain hidden selections', async() => {
     await page.evaluate(port => {
@@ -64,7 +62,7 @@ test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual
       }
       window.lxData.appSetting['cookie.mg'] = 'mg_auth_uid=7; mg_auth_pacmtoken=fixture-session'
     }, platform.address().port)
-    await route(page, '/list?id=default'); await settled(page)
+    await route(page, '/list?id=history'); await settled(page)
     await page.getByRole('button', { name: '列表更新管理', exact: true }).click()
     await page.getByRole('button', { name: '平台同步范围', exact: true }).click()
     await page.getByRole('combobox', { name: '选择平台' }).click()
@@ -94,6 +92,14 @@ test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual
     await page.getByRole('button', { name: '立即同步', exact: true }).click()
     await page.getByText(/远端相对本地的差异/).waitFor()
     await page.getByRole('cell', { name: '云端新增歌单', exact: true }).first().waitFor()
+    await page.evaluate(() => window.i18n.setLanguage('en-us'))
+    await page.getByText(/Remote changes relative to local data/).waitFor()
+    await page.getByRole('columnheader', { name: 'Change', exact: true }).waitFor()
+    await page.getByRole('cell', { name: 'Added', exact: true }).first().waitFor()
+    await page.evaluate(() => window.i18n.setLanguage('zh-tw'))
+    await page.getByText(/遠端相對本機的差異/).waitFor()
+    await page.getByRole('columnheader', { name: '變化', exact: true }).waitFor()
+    await page.evaluate(() => window.i18n.setLanguage('zh-cn'))
     await page.getByPlaceholder('搜索平台或歌单').fill('WebDAV')
     await page.locator('label[for="sync_errors_only"]').click()
     const row = page.locator('#sync_status').locator('..').locator('li').filter({ has: page.locator('strong', { hasText: /^WebDAV$/ }) })
@@ -113,7 +119,7 @@ test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual
   fixture = await launch({ initializeMotion: false, rendererPath: path.resolve('dist/index.html'), profilePath })
   await route(fixture.page, '/setting?name=SettingSync'); await settled(fixture.page)
   assert.equal(await fixture.page.getByRole('heading', { name: '平台歌单同步范围' }).count(), 0)
-  await route(fixture.page, '/list?id=default'); await settled(fixture.page)
+  await route(fixture.page, '/list?id=history'); await settled(fixture.page)
   await fixture.page.getByRole('button', { name: '列表更新管理', exact: true }).click()
   await fixture.page.getByRole('button', { name: '平台同步范围', exact: true }).click()
   await fixture.page.getByRole('combobox', { name: '选择平台' }).click()

@@ -43,7 +43,7 @@ const handleSetPreset = async(value) => {
     await setMediaDeviceId('default').catch(_ => _)
     saveMediaDeviceId('default')
   }
-  updateSetting({ 'player.soundEffect.pitchShifter.playbackRate': value })
+  void updateSetting({ 'player.soundEffect.pitchShifter.playbackRate': value })
 }
 
 // const handleSetSemitones = (value) => {

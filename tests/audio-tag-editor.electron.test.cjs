@@ -32,10 +32,15 @@ test('the built-in audio tag editor edits downloaded and selected files offline'
       return global.__tagDialogResult
     })
   }, { downloads, mp3Path })
-  const openEditor = async() => {
+  const openEditor = async(id = 'mp3') => {
+    const activeEditor = page.locator('[data-audio-tag-editor]')
+    if (await activeEditor.isVisible()) {
+      await activeEditor.locator('form input').first().press('Escape')
+      await activeEditor.waitFor({ state: 'hidden' })
+    }
     await route(page, '/download')
     await settled(page)
-    await page.locator('.list-item').filter({ hasText: 'mp3 - 鎖那' }).click({ button: 'right' })
+    await page.locator('.list-item').filter({ hasText: `${id} - 鎖那` }).click({ button: 'right' })
     await page.getByRole('tab', { name: '修改音频标签', exact: true }).click()
     await page.locator('[data-audio-tag-editor]').waitFor()
   }
@@ -47,16 +52,14 @@ test('the built-in audio tag editor edits downloaded and selected files offline'
     await openEditor()
     const editor = page.locator('[data-audio-tag-editor]')
     await editor.waitFor()
-    await t.test('completed supported downloads can be searched and selected', async() => {
-      assert.equal(await editor.locator('aside li').count(), 3)
-      assert.equal(await editor.getByText('正在下载.mp3', { exact: true }).count(), 0)
-      await editor.getByRole('searchbox').fill('コーヒー')
-      assert.equal(await editor.locator('aside li').count(), 1)
-      await editor.locator('aside button').filter({ hasText: path.basename(mp3Path) }).click()
+    await t.test('the clicked download opens directly without a second file list', async() => {
+      assert.equal(await editor.locator('aside').count(), 0)
+      assert.equal(await editor.getByRole('searchbox').count(), 0)
+      assert.equal(await editor.getByRole('button', { name: '刷新下载列表' }).count(), 0)
       await page.waitForFunction(() => document.querySelector('[data-audio-tag-editor] form input')?.value === 'コーヒーカップ')
+      assert.match(await editor.locator('form h4').innerText(), /鎖那 - コーヒーカップ\.mp3/)
       assert.equal(await editor.getByLabel('艺术家', { exact: true }).inputValue(), '鎖那')
       assert.equal(await editor.getByLabel('专辑', { exact: true }).inputValue(), 'sigh.')
-      await editor.getByRole('searchbox').fill('')
     })
     await t.test('saving writes real MP3 tags and then disables the save button', async() => {
       await editor.getByLabel('标题', { exact: true }).fill('咖啡与晚风')
@@ -73,7 +76,7 @@ test('the built-in audio tag editor edits downloaded and selected files offline'
       assert.equal(await editor.getByRole('button', { name: '保存标签', exact: true }).isDisabled(), true)
       assert.deepEqual((await fs.readFile(mp3Path)).subarray(-originalMp3.audio.length), originalMp3.audio)
     })
-    await t.test('drafts survive closing and reopening; reset and canceled selection preserve the current file', async() => {
+    await t.test('drafts survive closing and reopening; reset and canceled file selection preserve the current file', async() => {
       await editor.getByLabel('标题', { exact: true }).fill('未保存的草稿')
       await editor.getByLabel('标题', { exact: true }).press('Escape')
       await editor.waitFor({ state: 'hidden' })
@@ -82,15 +85,13 @@ test('the built-in audio tag editor edits downloaded and selected files offline'
       await app.evaluate(() => { global.__tagDialogResult = { canceled: true, filePaths: [] } })
       await editor.getByRole('button', { name: '选择音频文件', exact: true }).click()
       assert.equal(await editor.getByLabel('标题', { exact: true }).inputValue(), '未保存的草稿')
-      await editor.locator('aside button').filter({ hasText: '晚风.flac' }).click()
-      await page.getByRole('button', { name: '继续编辑', exact: true }).click()
-      assert.equal(await editor.getByLabel('标题', { exact: true }).inputValue(), '未保存的草稿')
       await editor.getByRole('button', { name: '还原修改', exact: true }).click()
       assert.equal(await editor.getByLabel('标题', { exact: true }).inputValue(), '咖啡与晚风')
     })
     await t.test('the current download directory is used when an old file path no longer exists', async() => {
-      await editor.locator('aside button').filter({ hasText: '晚风.flac' }).click()
+      await openEditor('flac')
       await page.waitForFunction(() => document.querySelector('[data-audio-tag-editor] form input')?.value === '晚风')
+      assert.match(await editor.locator('form h4').innerText(), /晚风\.flac/)
       await editor.getByLabel('标题', { exact: true }).fill('新的 FLAC 标题')
       await editor.getByLabel('备注', { exact: true }).fill('')
       await editor.getByLabel('标题', { exact: true }).press('Control+s')
@@ -99,11 +100,6 @@ test('the built-in audio tag editor edits downloaded and selected files offline'
       const metadata = await parseFile(flacPath)
       assert.equal(metadata.common.title, '新的 FLAC 标题')
       assert.equal(metadata.common.comment, undefined)
-    })
-    await t.test('missing downloads report an error while keeping the current editor intact', async() => {
-      await editor.locator('aside button').filter({ hasText: path.basename(missingPath) }).click()
-      await editor.getByRole('alert').waitFor()
-      assert.equal(await editor.getByLabel('标题', { exact: true }).inputValue(), '新的 FLAC 标题')
     })
     await t.test('a local file can be selected and the form fits small and large windows', async() => {
       await app.evaluate((_electron, mp3Path) => { global.__tagDialogResult = { canceled: false, filePaths: [mp3Path] } }, mp3Path)

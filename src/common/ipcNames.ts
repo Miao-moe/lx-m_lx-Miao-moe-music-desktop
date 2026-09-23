@@ -61,7 +61,6 @@ const modules = {
     clear_cache: 'clear_cache',
     get_cache_size: 'get_cache_size',
     library_action: 'library_action',
-    library_folder_changed: 'library_folder_changed',
     inited: 'inited',
     show_save_dialog: 'show_save_dialog',
     show_select_dialog: 'show_select_dialog',
@@ -168,6 +167,7 @@ const modules = {
     remove_theme: 'remove_theme',
 
     download_list_get: 'download_list_get',
+    download_disk_space: 'download_disk_space',
     download_list_add: 'download_list_add',
     download_list_update: 'download_list_update',
     download_list_remove: 'download_list_remove',

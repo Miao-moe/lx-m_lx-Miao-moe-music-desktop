@@ -64,21 +64,22 @@
 </template>
 
 <script>
-import { computed, ref, watch } from '@common/utils/vueTools'
+import { computed, onBeforeUnmount, ref, watch } from '@common/utils/vueTools'
 import useMenuLocation from '@renderer/utils/compositions/useMenuLocation'
-import { debounce } from '@common/utils/common'
+import { createKeyedDebouncedWrite } from '@renderer/utils/keyedDebouncedWrite'
 import { saveLyricEdited, removeLyricEdited } from '@renderer/utils/ipc'
 import { appSetting, setPlayDetailLyricFont, setPlayDetailLyricAlign, updateSetting } from '@renderer/store/setting'
+import { playMusicInfo } from '@renderer/store/player/state'
+import { setMusicInfo } from '@renderer/store/player/action'
+import { setLyricOffset } from '@renderer/core/lyric'
+import { formatError } from '@common/utils/errorMessage'
+import { dialog } from '@renderer/plugins/Dialog'
 
 const offsetTagRxp = /(?:^|\n)\s*\[offset:\s*(\S+(?:\d+)*)\s*\]/
 const offsetTagAllRxp = /(^|\n)\s*\[offset:\s*(\S+(?:\d+)*)\s*\]/g
 
-const saveLyric = debounce((musicInfo, lyricInfo) => {
-  void saveLyricEdited(musicInfo, lyricInfo)
-})
-const removeLyric = debounce(musicInfo => {
-  void removeLyricEdited(musicInfo)
-})
+const persistLyric = createKeyedDebouncedWrite()
+const pendingLyrics = new Map()
 
 const getOffset = lrc => {
   let offset = offsetTagRxp.exec(lrc)
@@ -104,6 +105,8 @@ export default {
   },
   emits: ['updateLyric', 'update:modelValue'],
   setup(props, { emit }) {
+    let unmounted = false
+    onBeforeUnmount(() => { unmounted = true })
     // const appSetting = useRefGetter('appSetting')
     // const playDetailSetting = useRefGetter('playDetailSetting')
     // const setPlayDetailLyricAlign = useCommit('setPlayDetailLyricAlign')
@@ -137,46 +140,72 @@ export default {
       setPlayDetailLyricFont(100)
     }
     const toggleExtendedLyric = key => {
-      updateSetting({ [key]: !appSetting[key] })
+      void updateSetting({ [key]: !appSetting[key] })
     }
 
-    const updateLyric = offset => {
+    const updateLyric = nextOffset => {
       let lyric = props.lyricInfo.lyric
       let tlyric = props.lyricInfo.tlyric
       let rlyric = props.lyricInfo.rlyric
       let lxlyric = props.lyricInfo.lxlyric
       if (offsetTagRxp.test(lyric)) {
-        lyric = lyric.replace(offsetTagAllRxp, `$1[offset:${offset}]`)
-        tlyric &&= tlyric.replace(offsetTagAllRxp, `$1[offset:${offset}]`)
-        lxlyric &&= lxlyric.replace(offsetTagAllRxp, `$1[offset:${offset}]`)
-        rlyric &&= rlyric.replace(offsetTagAllRxp, `$1[offset:${offset}]`)
+        lyric = lyric.replace(offsetTagAllRxp, `$1[offset:${nextOffset}]`)
+        tlyric &&= tlyric.replace(offsetTagAllRxp, `$1[offset:${nextOffset}]`)
+        lxlyric &&= lxlyric.replace(offsetTagAllRxp, `$1[offset:${nextOffset}]`)
+        rlyric &&= rlyric.replace(offsetTagAllRxp, `$1[offset:${nextOffset}]`)
       } else {
-        lyric &&= `[offset:${offset}]\n` + lyric
-        tlyric &&= `[offset:${offset}]\n` + tlyric
-        lxlyric &&= `[offset:${offset}]\n` + lxlyric
-        rlyric &&= `[offset:${offset}]\n` + rlyric
+        lyric &&= `[offset:${nextOffset}]\n` + lyric
+        tlyric &&= `[offset:${nextOffset}]\n` + tlyric
+        lxlyric &&= `[offset:${nextOffset}]\n` + lxlyric
+        rlyric &&= `[offset:${nextOffset}]\n` + rlyric
       }
 
       const musicInfo = 'progress' in props.lyricInfo.musicInfo ? props.lyricInfo.musicInfo.metadata.musicInfo : props.lyricInfo.musicInfo
 
-      if (offset == originOffset.value) {
-        removeLyric(musicInfo)
-      } else {
-        saveLyric(musicInfo, {
-          lyric,
-          tlyric,
-          rlyric,
-          lxlyric,
-        })
+      const id = musicInfo.id
+      let pending = pendingLyrics.get(id)
+      if (!pending) {
+        pending = {
+          latest: 0,
+          confirmed: {
+            lyric: props.lyricInfo.lyric,
+            tlyric: props.lyricInfo.tlyric,
+            rlyric: props.lyricInfo.rlyric,
+            lxlyric: props.lyricInfo.lxlyric,
+            offset: getOffset(props.lyricInfo.lyric),
+          },
+        }
+        pendingLyrics.set(id, pending)
       }
-
-      emit('updateLyric', {
-        lyric,
-        tlyric,
-        rlyric,
-        lxlyric,
-        offset,
-      })
+      const revision = ++pending.latest
+      const changed = { lyric, tlyric, rlyric, lxlyric, offset: nextOffset }
+      const remove = nextOffset === originOffset.value
+      const apply = info => {
+        const current = playMusicInfo.musicInfo
+        if ((current && ('progress' in current ? current.metadata.musicInfo : current).id) !== id) return
+        if (!unmounted) emit('updateLyric', info)
+        else {
+          setMusicInfo({ lrc: info.lyric, tlrc: info.tlyric, rlrc: info.rlyric, lxlrc: info.lxlyric })
+          setLyricOffset(info.offset)
+        }
+      }
+      void persistLyric(id, async() => {
+        if (remove) await removeLyricEdited(musicInfo)
+        else await saveLyricEdited(musicInfo, { lyric, tlyric, rlyric, lxlyric })
+      }).then(applied => {
+        if (!applied) return
+        pending.confirmed = changed
+        if (pending.latest !== revision) return
+        apply(changed)
+        pendingLyrics.delete(id)
+      }, error => {
+        if (pending.latest !== revision) return
+        const current = playMusicInfo.musicInfo
+        if (!unmounted && current && ('progress' in current ? current.metadata.musicInfo : current).id === id) offset.value = pending.confirmed.offset
+        apply(pending.confirmed)
+        pendingLyrics.delete(id)
+        void dialog({ message: formatError(error, window.i18n.t('lyric_menu__save_failed'), 'LYRICS_SAVE_FAILED') }).catch(console.error)
+      }).catch(console.error)
     }
     const setOffset = step => {
       offset.value += step

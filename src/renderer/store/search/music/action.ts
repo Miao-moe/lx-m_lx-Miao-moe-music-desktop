@@ -104,11 +104,11 @@ const performSearch = async(text: string, page: number, sourceId: LX.OnlineSourc
   if (!isCurrent()) return []
   const listInfo = listInfos[sourceId]
   if (sourceId == 'all') {
-    return aggregateSearch.search(listInfo!, sources, source => music[source]?.musicSearch?.search(text, page, listInfos.all.limit), (results, pending) => {
+    return aggregateSearch.search(listInfo!, sources, async source => music[source]?.musicSearch?.search(text, page, listInfos.all.limit), (results, pending) => {
       setLists(results, page, text, pending)
     }).then(() => isCurrent() ? listInfo!.list : [])
   } else {
-    return Promise.resolve().then(() => music[sourceId].musicSearch.search(text, page, listInfo!.limit)).then((data: SearchResult) => {
+    return Promise.resolve().then(async() => music[sourceId].musicSearch.search(text, page, listInfo!.limit)).then((data: SearchResult) => {
       if (!isCurrent()) return []
       return setList(data, page, text)
     }).catch((error: any) => {

@@ -15,11 +15,13 @@ let mounted = false
 let observer
 let renderer
 let lyrics
-const bounds = () => {
+let lyricBounds
+const updateBounds = () => {
+  lyricBounds = undefined
   if (preferences.main !== 'radial' || !lyrics) return
   const region = lyrics.getBoundingClientRect()
   const surface = canvas.value.getBoundingClientRect()
-  return {
+  lyricBounds = {
     x: Math.max(0, region.left - surface.left),
     y: Math.max(0, region.top - surface.top),
     width: Math.min(region.width, surface.right - region.left),
@@ -33,17 +35,25 @@ const stop = () => {
 const render = (time = performance.now()) => {
   frame = null
   if (!mounted) return
-  renderer.draw(getFrequencyData(preferences.main), { style: preferences.main, time, bounds: bounds() })
+  renderer.draw(getFrequencyData(preferences.main), { style: preferences.main, time, bounds: lyricBounds })
   if (isPlay.value && !document.hidden) frame = requestAnimationFrame(render)
 }
-const refresh = () => { stop(); if (mounted) render() }
+const refresh = () => { stop(); if (mounted) { updateBounds(); render() } }
 watch(isPlay, refresh)
 watch(() => preferences.main, refresh)
 onMounted(() => {
   mounted = true
   renderer = createVisualizerRenderer(canvas.value)
   lyrics = canvas.value.closest('[data-player-detail]')?.querySelector('[data-detail-part="lyrics"]')
-  observer = new ResizeObserver(() => { stop(); frame = requestAnimationFrame(render) })
+  renderer.resize(canvas.value.clientWidth, canvas.value.clientHeight)
+  updateBounds()
+  observer = new ResizeObserver(entries => {
+    const surface = entries.find(entry => entry.target === canvas.value)
+    if (surface) renderer.resize(surface.contentRect.width, surface.contentRect.height)
+    updateBounds()
+    stop()
+    frame = requestAnimationFrame(render)
+  })
   observer.observe(canvas.value)
   if (lyrics) observer.observe(lyrics)
   document.addEventListener('visibilitychange', refresh)

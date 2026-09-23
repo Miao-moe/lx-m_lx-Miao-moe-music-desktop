@@ -79,8 +79,8 @@ test('mini player replaces desktop lyrics and controls the real player in a sepa
     page.setDefaultTimeout(8000)
     // Synthetic renderer hover must not conflict with the user's actual pointer.
     await app.evaluate(({ screen }) => { screen.getCursorScreenPoint = () => ({ x: -10000, y: -10000 }) })
-    await page.evaluate(songs => require('electron').ipcRenderer.invoke('player_list_data_overwire', { defaultList: songs, loveList: [], tempList: [], userList: [] }), songs)
-    await route(page, '/list?id=default')
+    await page.evaluate(songs => require('electron').ipcRenderer.invoke('player_list_data_overwire', { defaultList: [], loveList: songs, tempList: [], userList: [] }), songs)
+    await route(page, '/list?id=love')
     await settled(page)
     await page.locator('[data-song-id="mini-0"] [data-music-cell="index"]').dblclick()
     await page.waitForFunction(() => !window.__lxPluginHost.player.getAudioElement().paused && window.__lxPluginHost.player.getDuration() > 0)

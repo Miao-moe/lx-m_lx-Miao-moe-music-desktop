@@ -113,3 +113,49 @@ test('redirects to unsupported protocols fail through the normal error event', {
   const f = await fixture(t, (_req, res) => res.writeHead(302, { Location: 'file:///not-a-download' }).end())
   await assert.rejects(f.start('/audio').completed, /Unsupported download protocol/)
 })
+
+test('C20: advertised size over the task limit is rejected before opening a file', { timeout: 5000 }, async t => {
+  const f = await fixture(t, (_req, res) => res.end(bytes))
+  const dl = f.start('/audio', 'limited.mp3', { maxBytes: bytes.length - 1 })
+  await assert.rejects(dl.completed, { code: 'DOWNLOAD_TASK_SIZE_LIMIT' })
+  await assert.rejects(fs.stat(dl.filename), { code: 'ENOENT' })
+})
+
+test('C20: unknown-size streams stop before writing bytes past the task limit', { timeout: 5000 }, async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.write(bytes.subarray(0, 20))
+    setTimeout(() => res.end(bytes.subarray(20)), 20)
+  })
+  const dl = f.start('/audio', 'chunked.mp3', { maxBytes: 30 })
+  await assert.rejects(dl.completed, { code: 'DOWNLOAD_TASK_SIZE_LIMIT' })
+  assert.equal((await fs.stat(dl.filename)).size, 20)
+})
+
+test('C20: resuming an already oversized task leaves its partial file intact', { timeout: 5000 }, async t => {
+  const f = await fixture(t, (req, res) => {
+    const start = Number(/^bytes=(\d+)-$/.exec(req.headers.range)[1])
+    res.writeHead(206, { 'Content-Range': `bytes ${start}-${bytes.length - 1}/${bytes.length}` }).end(bytes.subarray(start))
+  })
+  const partial = bytes.subarray(0, 40)
+  await fs.writeFile(path.join(f.directory, 'resume.mp3'), partial)
+  const dl = f.start('/audio', 'resume.mp3', { maxBytes: 30 })
+  await assert.rejects(dl.completed, { code: 'DOWNLOAD_TASK_SIZE_LIMIT' })
+  assert.deepEqual(await fs.readFile(dl.filename), partial)
+})
+
+test('C20: shared batch reservation caps concurrent downloads', { timeout: 5000 }, async t => {
+  const f = await fixture(t, (_req, res) => res.end(bytes))
+  let reserved = 0
+  const limit = bytes.length + Math.floor(bytes.length / 2)
+  const reserveBytes = count => {
+    if (reserved + count > limit) return false
+    reserved += count
+    return true
+  }
+  const first = f.start('/first', 'first.mp3', { reserveBytes })
+  const second = f.start('/second', 'second.mp3', { reserveBytes })
+  const results = await Promise.allSettled([first.completed, second.completed])
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1)
+  assert.equal(results.find(result => result.status === 'rejected').reason.code, 'DOWNLOAD_BATCH_SIZE_LIMIT')
+  assert.equal(reserved, bytes.length)
+})

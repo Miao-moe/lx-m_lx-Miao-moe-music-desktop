@@ -24,10 +24,10 @@ export default {
   name: 'SettingNetwork',
   setup() {
     const setHost = debounce(host => {
-      updateSetting({ 'network.proxy.host': host.trim() })
+      void updateSetting({ 'network.proxy.host': host.trim() })
     }, 500)
     const setPort = debounce(port => {
-      updateSetting({ 'network.proxy.port': port.trim() })
+      void updateSetting({ 'network.proxy.port': port.trim() })
     }, 500)
 
     onBeforeUnmount(() => {

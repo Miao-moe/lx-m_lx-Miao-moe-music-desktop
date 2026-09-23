@@ -31,6 +31,19 @@ dd
     base-checkbox(id="setting_download_auto_resume" :model-value="appSetting['download.autoResume']" :label="$t('setting__download_auto_resume')" @update:model-value="updateSetting({'download.autoResume': $event})")
 
 dd
+  h3 {{ $t('setting__download_size_limits') }}
+  p {{ $t('setting__download_size_limits_tip') }}
+  .gap-top(:class="$style.limitRow")
+    label(for="setting_download_task_size_limit") {{ $t('setting__download_task_size_limit') }}
+    base-input(id="setting_download_task_size_limit" v-model="taskSizeLimit" type="number" :class="$style.limitInput" @change="handleSizeLimit('download.maxTaskSizeMiB', $event)")
+    span MiB
+  .gap-top(:class="$style.limitRow")
+    label(for="setting_download_batch_size_limit") {{ $t('setting__download_batch_size_limit') }}
+    base-input(id="setting_download_batch_size_limit" v-model="batchSizeLimit" type="number" :class="$style.limitInput" @change="handleSizeLimit('download.maxBatchSizeMiB', $event)")
+    span MiB
+  p(v-if="sizeLimitError" role="alert" :class="$style.limitError") {{ sizeLimitError }}
+
+dd
   h3#download_use_other_source
     | {{ $t('setting__download_use_other_source') }}
     svg-icon(class="help-icon" name="help-circle-outline" :aria-label="$t('setting__download_use_other_source_tip')")
@@ -84,7 +97,7 @@ common-setting-reveal(tag="dd" :show="appSetting['download.isDownloadLrc']" depe
 </template>
 
 <script>
-import { computed } from '@common/utils/vueTools'
+import { computed, ref, watch } from '@common/utils/vueTools'
 // import { getSystemFonts } from '@renderer/utils/tools'
 import { showSelectDialog, openDirInExplorer } from '@renderer/utils/ipc'
 import { useI18n } from '@renderer/plugins/i18n'
@@ -105,15 +118,30 @@ export default {
         properties: ['openDirectory'],
       }).then(result => {
         if (result.canceled) return
-        updateSetting({ 'download.savePath': result.filePaths[0] })
+        void updateSetting({ 'download.savePath': result.filePaths[0] })
       })
     }
 
     const maxNums = new Array(6).fill(null).map((_, i) => ({ id: i + 1 }))
     const rateLimits = computed(() => [0, 128, 256, 512, 1024, 2048, 5120].map(id => ({ id, name: id ? id + ' KiB/s' : t('setting__download_unlimited') })))
     const handleRateLimit = ({ id }) => {
-      updateSetting({ 'download.rateLimit': id })
+      void updateSetting({ 'download.rateLimit': id })
       void setDownloadRateLimit(id).catch(console.error)
+    }
+    const taskSizeLimit = ref(String(appSetting['download.maxTaskSizeMiB']))
+    const batchSizeLimit = ref(String(appSetting['download.maxBatchSizeMiB']))
+    const sizeLimitError = ref('')
+    watch(() => appSetting['download.maxTaskSizeMiB'], value => { taskSizeLimit.value = String(value) })
+    watch(() => appSetting['download.maxBatchSizeMiB'], value => { batchSizeLimit.value = String(value) })
+    const handleSizeLimit = (key, value) => {
+      if (!/^(?:0|[1-9]\d*)$/.test(value) || Number(value) > 102400) {
+        sizeLimitError.value = t('setting__download_size_limit_invalid')
+        if (key === 'download.maxTaskSizeMiB') taskSizeLimit.value = String(appSetting[key])
+        else batchSizeLimit.value = String(appSetting[key])
+        return
+      }
+      sizeLimitError.value = ''
+      void updateSetting({ [key]: Number(value) })
     }
     const namePreview = computed(() => formatDownloadFileName(appSetting['download.fileName'], {
       id: 'kw_12345', source: 'kw', name: t('setting__download_preview_title'), singer: t('setting__download_preview_artist'), meta: { albumName: t('setting__download_preview_album') },
@@ -122,7 +150,7 @@ export default {
       if (id > 3) {
         if (!await dialog.confirm(window.i18n.t('setting__download_max_num_tip'))) return
       }
-      updateSetting({ 'download.maxDownloadNum': id })
+      void updateSetting({ 'download.maxDownloadNum': id })
     }
 
     const musicNames = computed(() => {
@@ -150,6 +178,10 @@ export default {
       maxNums,
       rateLimits,
       handleRateLimit,
+      taskSizeLimit,
+      batchSizeLimit,
+      sizeLimitError,
+      handleSizeLimit,
       namePreview,
       handleUpdateMaxNum,
     }
@@ -168,5 +200,20 @@ export default {
   width: 360px;
   max-width: 100%;
   box-sizing: border-box;
+}
+.limitRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.limitRow label {
+  min-width: 150px;
+}
+.limitInput {
+  width: 100px;
+}
+.limitError {
+  color: var(--color-danger);
 }
 </style>

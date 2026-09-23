@@ -78,8 +78,8 @@ const saveListPrevSelectIdThrottle = throttle(() => {
 }, 200)
 export const getListPrevSelectId = async() => {
   // eslint-disable-next-line require-atomic-updates
-  listPrevSelectId ??= await getListPrevSelectIdFromData() ?? LIST_IDS.DEFAULT
-  return listPrevSelectId ?? LIST_IDS.DEFAULT
+  listPrevSelectId ??= await getListPrevSelectIdFromData() ?? LIST_IDS.HISTORY
+  return listPrevSelectId === LIST_IDS.DEFAULT ? LIST_IDS.HISTORY : listPrevSelectId ?? LIST_IDS.HISTORY
 }
 export const saveListPrevSelectId = (id: string) => {
   listPrevSelectId = id
