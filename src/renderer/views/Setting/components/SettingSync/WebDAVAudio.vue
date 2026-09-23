@@ -12,7 +12,7 @@
     <p v-if="error" class="p load-error-detail" role="alert">{{ error }}</p>
     <ul v-if="loaded" class="scroll" :class="$style.list">
       <li v-for="entry in filtered" :key="entry.path">
-        <button :disabled="busy" @click="entry.directory ? browse(entry.path) : play(entry)">{{ entry.directory ? '📁' : '▶' }} {{ entry.name }}</button>
+        <base-btn :class="$style.entryButton" outline :disabled="busy" @click="entry.directory ? browse(entry.path) : play(entry)">{{ entry.directory ? '📁' : '▶' }} {{ entry.name }}</base-btn>
         <span>{{ entry.directory ? '文件夹' : entry.size ? (entry.size / 1048576).toFixed(1) + ' MB' : '音频' }}</span>
       </li>
       <li v-if="!filtered.length">此目录没有可播放的音频或子文件夹。</li>
@@ -61,5 +61,6 @@ onBeforeUnmount(() => { generation++ })
 <style lang="less" module>
 .panel { margin-top: 20px; }
 .tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; input { max-width: 220px; } }
-.list { max-height: 300px; overflow: auto; margin-top: 10px; li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 13px; } button { flex: 1; color: inherit; text-align: left; border: none; padding: 7px; background: var(--color-primary-background-hover); cursor: pointer; overflow-wrap: anywhere; } span { flex: none; } }
+.list { max-height: 300px; overflow: auto; margin-top: 10px; li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 13px; } span { flex: none; } }
+.entryButton { flex: 1; min-width: 0; padding: 7px 10px; text-align: left; font-size: 13px; overflow-wrap: anywhere; }
 </style>

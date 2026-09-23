@@ -14,8 +14,8 @@
             <span :class="$style.count">{{ playQueueList.length }}</span>
           </div>
           <div :class="$style.headerActions">
-          <button :class="$style.clearBtn" :disabled="!playQueueList.length" @click="openSaveQueue">{{ $t('player__queue_save') }}</button>
-          <button :class="$style.clearBtn" :disabled="!playQueueList.length" :aria-label="$t('player__play_list_clear')" @click="handleClear">
+          <button :class="$style.clearBtn" data-motion-button :disabled="!playQueueList.length" @click="openSaveQueue">{{ $t('player__queue_save') }}</button>
+          <button :class="$style.clearBtn" data-motion-button :disabled="!playQueueList.length" :aria-label="$t('player__play_list_clear')" @click="handleClear">
             {{ $t('player__play_list_clear') }}
           </button>
           </div>
@@ -439,7 +439,7 @@ onBeforeUnmount(() => {
   padding: 5px 8px;
   border-radius: var(--radius-sm);
   transition: var(--duration-fast) var(--ease-standard);
-  transition-property: color, background-color;
+  transition-property: color, background-color, scale;
 
   &:hover {
     color: var(--color-primary);

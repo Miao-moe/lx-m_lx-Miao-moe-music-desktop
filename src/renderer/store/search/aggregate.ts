@@ -1,4 +1,3 @@
-import { formatError, getErrorInfo } from '@common/utils/errorMessage'
 import { withRequestDeadline } from '@renderer/utils/requestContext'
 
 interface SourceProgress {
@@ -6,8 +5,6 @@ interface SourceProgress {
   status: 'loading' | 'success' | 'empty' | 'failed'
   elapsedMs: number
   count: number
-  errorCode?: string
-  errorMessage?: string
 }
 
 export interface AggregateSearchState {
@@ -51,7 +48,7 @@ export const createAggregateSearch = <T extends { list: unknown[] }>() => {
       sources: context.sources.flatMap(source => context.progress.has(source) ? [{ ...context.progress.get(source)! }] : []),
     }
     context.update(results, pending && !context.retrying)
-    if (failed && !list.list.length) list.noItemLabel = pending ? window.i18n.t('list__loading') : window.i18n.t('list__load_failed') + '\n' + [...context.progress.values()].filter(item => item.status === 'failed').map(item => item.source + ': ' + item.errorMessage).join('\n')
+    if (failed && !list.list.length) list.noItemLabel = window.i18n.t(pending ? 'list__loading' : 'list__load_failed')
   }
   const run = async(list: AggregateSearchList, context: Context, sources: LX.OnlineSource[]) => {
     for (const source of sources) {
@@ -69,11 +66,9 @@ export const createAggregateSearch = <T extends { list: unknown[] }>() => {
         context.failed.delete(source)
         progress.status = result.list.length ? 'success' : 'empty'
         progress.count = result.list.length
-      } catch (error: any) {
+      } catch {
         context.failed.add(source)
         progress.status = 'failed'
-        progress.errorCode = getErrorInfo(error, 'SEARCH_LOAD_FAILED').code
-        progress.errorMessage = formatError(error, '', 'SEARCH_LOAD_FAILED')
       } finally {
         progress.elapsedMs = Date.now() - started
         context.pending.delete(source)

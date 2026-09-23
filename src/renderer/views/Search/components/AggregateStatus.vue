@@ -1,9 +1,9 @@
 <template>
   <div v-if="state" :class="$style.notice" role="status" data-search-progress :data-search-failures="state.failedSources.length ? '' : undefined">
     <span>{{ $t('search__progress', { done: state.sources.length - state.pendingSources.length, total: state.sources.length }) }}</span>
-    <span v-for="item in state.sources" :key="item.source" :class="$style.platform" :data-search-platform="item.source" :title="item.errorMessage">
+    <span v-for="item in state.sources" :key="item.source" :class="$style.platform" :data-search-platform="item.source">
       <span>{{ sourceName(item.source) }} · {{ item.status === 'loading' ? $t('list__loading') : `${(item.elapsedMs / 1000).toFixed(1)}s` }}</span>
-      <span v-if="item.status === 'failed'" class="load-error-detail" data-error-detail>{{ item.errorMessage }}</span>
+      <span v-if="item.status === 'failed'" data-search-failed>{{ $t('list__load_failed') }}</span>
       <base-btn v-if="item.status === 'failed'" min :data-retry-source="item.source" @click="$emit('retry', item.source)">{{ $t('reload') }}</base-btn>
     </span>
     <span v-if="state.failedSources.length" data-failed-sources>{{ $t('search__failed_sources', { sources: failedSourceNames }) }}</span>
@@ -39,5 +39,5 @@ const failedSourceNames = computed(() => props.state?.failedSources.map((source:
   line-height: 1.5;
 }
 .platform { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; max-width: 100%; }
-.platform [data-error-detail] { flex: 1 1 240px; }
+.platform [data-search-failed] { flex: 1 1 240px; }
 </style>

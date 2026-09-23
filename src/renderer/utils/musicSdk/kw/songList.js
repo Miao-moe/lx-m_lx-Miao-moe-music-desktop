@@ -190,17 +190,17 @@ export default {
     if (tryNum > 2) return Promise.reject(new Error('try max num'))
     const requestObj = httpFetch(`http://qukudata.kuwo.cn/q.k?op=query&cont=ninfo&node=${id}&pn=0&rn=1&fmt=json&src=mbox&level=2`)
     return requestObj.promise.then(({ statusCode, body }) => {
-      if (statusCode != 200 || !body.child) return this.getListDetail(id, ++tryNum)
+      if (statusCode != 200 || !body.child) return this.getListDetailDigest5Info(id, tryNum + 1)
       // console.log(body)
       return body.child.length ? body.child[0].sourceid : null
     })
   },
   getListDetailDigest5Music(id, page, tryNum = 0) {
     if (tryNum > 2) return Promise.reject(new Error('try max num'))
-    const requestObj = httpFetch(`http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=${id}&pn=${page - 1}}&rn=${this.limit_song}&encode=utf-8&keyset=pl2012&identity=kuwo&pcmp4=1`)
+    const requestObj = httpFetch(`http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=${id}&pn=${page - 1}&rn=${this.limit_song}&encode=utf-8&keyset=pl2012&identity=kuwo&pcmp4=1`)
     return requestObj.promise.then(({ body }) => {
       // console.log(body)
-      if (body.result !== 'ok') return this.getListDetail(id, page, ++tryNum)
+      if (body.result !== 'ok') return this.getListDetailDigest5Music(id, page, tryNum + 1)
       return {
         list: this.filterListDetail(body.musiclist),
         page,

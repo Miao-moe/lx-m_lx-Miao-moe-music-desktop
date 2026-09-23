@@ -392,6 +392,8 @@
   "list_writeback__error_storage": "同步記錄儲存失敗，已暫停回傳，請檢查本機儲存空間。",
   "list_writeback__error_failed": "平台請求失敗，本機修改已保留，請檢查登入和網路後重試。",
   "list_update_modal__title": "清單更新管理",
+  "list_update_modal__imported": "已匯入歌單",
+  "list_update_modal__selection": "平台同步範圍",
   "list_update_modal__update": "立即更新",
   "lists__add_local_file_desc": "選取歌曲檔案",
   "lists__dislike_music_singer_tip": "你真的不喜歡「{singer}」的「{name}」嗎？",

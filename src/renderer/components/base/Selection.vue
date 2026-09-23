@@ -1,8 +1,9 @@
 <template>
-  <div class="content" :class="[$style.select, show ? $style.active : '']">
+  <div class="content" :class="[$style.select, show ? $style.active : '', disabled ? $style.disabled : '']">
     <div
-      ref="dom_btn" class="label-content" :class="$style.label" role="combobox" tabindex="0"
-      :aria-expanded="show" @click="handleShow" @keydown.enter.space.prevent="handleShow" @keydown.esc.prevent="handleKeyboardHide"
+      ref="dom_btn" class="label-content" :class="$style.label" role="combobox" :tabindex="disabled ? -1 : 0"
+      :aria-label="$attrs['aria-label']" :aria-labelledby="$attrs['aria-labelledby']" :aria-disabled="disabled" :aria-expanded="show"
+      @click="handleShow" @keydown.enter.space.prevent="handleShow" @keydown.esc.prevent="handleKeyboardHide"
     >
       <span class="label">{{ label }}</span>
       <div class="icon" :class="$style.icon">
@@ -38,6 +39,10 @@ export default {
       type: [String, Number],
       required: true,
     },
+    disabled: {
+      type: Boolean,
+      default: false,
+    },
     itemName: {
       type: String,
       default: '',
@@ -70,6 +75,11 @@ export default {
       return item[this.itemName]
     },
   },
+  watch: {
+    disabled(value) {
+      if (value) this.show = false
+    },
+  },
   mounted() {
     document.addEventListener('click', this.handleHide, true)
   },
@@ -88,12 +98,14 @@ export default {
       this.show = false
     },
     handleClick(item) {
+      if (this.disabled) return
       // console.log(this.modelValue)
       if (item === this.modelValue) return
       this.$emit('update:modelValue', this.itemKey ? item[this.itemKey] : item)
       this.$emit('change', item)
     },
     handleShow() {
+      if (this.disabled) return
       this.show = true
       this.$nextTick(() => {
         if (!this.show || !this.$refs.dom_list) return
@@ -128,6 +140,12 @@ export default {
   font-size: 12px;
   position: relative;
   width: var(--selection-width, 300px);
+
+  &.disabled .label {
+    opacity: .4;
+    cursor: not-allowed;
+    &:hover, &:active { background-color: var(--color-button-background); }
+  }
 
   &.active {
     .label {

@@ -34,11 +34,17 @@
       <p :class="$style.note">{{ $t('setting__backup_selection') }}</p>
       <div :class="$style.sections">
         <section v-for="section in availableSections" :key="section" :class="$style.section">
-          <label><input v-model="selected" type="checkbox" :value="section" :disabled="busy" :data-backup-section="section">{{ $t(`setting__backup_section_${section}`) }} <span>{{ preview.counts[section] }}</span></label>
+          <base-checkbox :id="'backup_section_' + section" v-model="selected" :class="$style.backupCheckbox" :value="section" :disabled="busy" :data-backup-section="section">
+            {{ $t(`setting__backup_section_${section}`) }} <span>{{ preview.counts[section] }}</span>
+          </base-checkbox>
           <p :class="$style.note">{{ $t(`setting__backup_replace_${section}`) }}</p>
-          <div v-if="section === 'playlists' && selected.includes('playlists')" :class="$style.lists">
-            <label v-for="list in preview.playlists" :key="list.id"><input v-model="playlistIds" type="checkbox" :value="list.id" :disabled="busy">{{ listName(list) }} <span>{{ list.count }}</span></label>
-          </div>
+          <transition name="backup-lists">
+            <div v-if="section === 'playlists' && selected.includes('playlists')" :class="$style.lists">
+              <base-checkbox v-for="(list, index) in preview.playlists" :id="'backup_list_' + index" :key="list.id" v-model="playlistIds" :class="$style.backupCheckbox" :value="list.id" :disabled="busy" :data-backup-list="list.id">
+                {{ listName(list) }} <span>{{ list.count }}</span>
+              </base-checkbox>
+            </div>
+          </transition>
         </section>
       </div>
       <p v-if="notice && failed" role="alert">{{ notice }}</p>
@@ -140,8 +146,10 @@ const exportText = async csv => run(async() => {
 .section { padding: 12px 0; border-bottom: 1px solid var(--color-border-background); }
 .section label { display: flex; align-items: center; gap: 10px; line-height: 1.6; }
 .section label span { margin-left: auto; opacity: .7; }
-.section input { accent-color: var(--color-primary); flex-shrink: 0; }
+.section .backupCheckbox { display: block; width: 100%; }
 .lists { padding-left: 22px; }
-.lists label { margin: 6px 0; }
+.lists .backupCheckbox { margin: 6px 0; }
+:global(.backup-lists-enter-active), :global(.backup-lists-leave-active) { transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
+:global(.backup-lists-enter-from), :global(.backup-lists-leave-to) { opacity: 0; transform: translateY(-5px); }
 .actions { display: flex; justify-content: flex-end; gap: 12px; }
 </style>

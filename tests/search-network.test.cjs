@@ -1,7 +1,28 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const loadSearchSdk = require('./helpers/load-search-sdk.cjs')
+const loadTypeScript = require('./helpers/load-typescript.cjs')
 const flush = () => new Promise(resolve => setImmediate(resolve))
+
+test('aggregate request failures show a generic message without exposing codes or reasons', async() => {
+  const previousWindow = globalThis.window
+  globalThis.window = { i18n: { t: key => key } }
+  try {
+    const { createAggregateSearch } = loadTypeScript({
+      '@renderer/utils/requestContext': { withRequestDeadline: (_timeout, request) => request() },
+    })('src/renderer/store/search/aggregate.ts')
+    const aggregate = createAggregateSearch()
+    const list = { key: 'query', list: [], noItemLabel: '' }
+    await aggregate.search(list, ['kw', 'tx'], () => Promise.reject(new Error('HTTP 403: SECRET_REASON')), () => {})
+    assert.equal(list.aggregate.status, 'failed')
+    assert.deepEqual(list.aggregate.failedSources, ['kw', 'tx'])
+    assert.equal(list.noItemLabel, 'list__load_failed')
+    assert.doesNotMatch(JSON.stringify(list), /HTTP 403|SECRET_REASON|errorCode|errorMessage/)
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
 
 test('B14: an old page cannot overwrite a concurrent forced refresh', async() => {
   const waiting = []

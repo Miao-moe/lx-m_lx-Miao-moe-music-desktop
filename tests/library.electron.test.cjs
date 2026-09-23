@@ -10,6 +10,11 @@ const wav = () => {
 }
 const rpc = (page, method, ...args) => page.evaluate(({ method, args }) => require('electron').ipcRenderer.invoke('winMain_library_action', { method, args }), { method, args })
 const songs = (page, listId = 'one') => page.evaluate(listId => require('electron').ipcRenderer.invoke('player_list_music_get', listId), listId)
+const choose = async(panel, label, option) => {
+  const selection = panel.getByRole('combobox', { name: label })
+  await selection.click()
+  await selection.locator('..').locator('li').filter({ hasText: option }).click()
+}
 
 test('E10–E17: library controls work in the production renderer and persist', { timeout: 180000 }, async t => {
   let f = await launch({ rendererPath: path.resolve('dist/index.html') })
@@ -31,14 +36,16 @@ test('E10–E17: library controls work in the production renderer and persist', 
     await rpc(f.page, 'captureListHistory', 'one', '手动保存')
     await f.page.evaluate(() => require('electron').ipcRenderer.invoke('player_list_music_remove', { listId: 'one', ids: ['missing'] }))
     await route(f.page, '/list?id=one'); await settled(f.page)
-    await f.page.getByRole('button', { name: '歌单与本地曲库', exact: true }).click()
+    const libraryEntry = f.page.locator('button[aria-label="歌单与本地曲库"]')
+    assert.equal(await libraryEntry.isVisible(), false)
+    await libraryEntry.evaluate(element => element.click())
     let panel = f.page.locator('[data-library-manager]')
     await panel.getByRole('button', { name: '保存分类', exact: true }).waitFor()
 
     await t.test('folders, tags and pins persist and update the sidebar', async() => {
       await panel.getByLabel('文件夹', { exact: true }).fill('工作')
       await panel.getByLabel('标签', { exact: true }).fill('学习, 纯音')
-      await panel.getByLabel('置顶此歌单').check()
+      await panel.locator('label[for="library_pinned"]').click()
       await panel.getByRole('button', { name: '保存分类', exact: true }).click()
       await panel.getByText('分类已保存', { exact: true }).waitFor()
       const prefs = await rpc(f.page, 'getLibraryPreferences')
@@ -56,8 +63,8 @@ test('E10–E17: library controls work in the production renderer and persist', 
     })
     await t.test('smart rules generate songs and exclude their own output', async() => {
       await panel.getByRole('button', { name: '智能歌单', exact: true }).click()
-      await panel.getByLabel('目标歌单').selectOption('smart')
-      await panel.getByLabel('歌曲来源').selectOption('one')
+      await choose(panel, '目标歌单', '智能测试')
+      await choose(panel, '歌曲来源', '测试歌单')
       await panel.getByRole('button', { name: '保存规则并更新', exact: true }).click()
       await f.page.getByRole('button', { name: '保存并更新', exact: true }).click()
       await panel.getByText('智能歌单已更新', { exact: true }).waitFor()
@@ -69,9 +76,9 @@ test('E10–E17: library controls work in the production renderer and persist', 
       await panel.getByRole('button', { name: '立即扫描与检查', exact: true }).click()
       await panel.getByText(/检查完成，1 首文件失效/).waitFor()
       await panel.getByRole('button', { name: '本地曲库', exact: true }).click()
-      await panel.getByLabel('年份').selectOption('2024')
+      await choose(panel, '年份', '2024')
       await panel.getByText('共 2 首；每页 50 首。', { exact: true }).waitFor()
-      await panel.getByLabel('只看失效文件').check()
+      await panel.locator('label[for="library_missing"]').click()
       await panel.getByText('共 1 首；每页 50 首。', { exact: true }).waitFor()
       assert.equal(await panel.getByText('文件失效', { exact: true }).count(), 1)
     })

@@ -11,7 +11,6 @@
           <p v-if="item.error" class="load-error-detail" role="status">{{ item.error }}</p>
         </li>
       </ul>
-      <PlatformSyncSelection />
     </div>
   </dd>
 </template>
@@ -25,7 +24,6 @@ import { retryPlaylistWriteback } from '@renderer/utils/playlistWriteback'
 import { syncCookiePlaylists } from '@renderer/utils/cookieSync'
 import { type CookieSource } from '@renderer/utils/cookieManager'
 import { updatePlatformLists } from '@renderer/core/useApp/listAutoUpdate'
-import PlatformSyncSelection from './PlatformSyncSelection.vue'
 const query = ref(''); const errorsOnly = ref(false)
 const retrying = reactive<Record<string, boolean>>({})
 const labels = { running: '进行中', success: '成功', failed: '失败', idle: '待机' }

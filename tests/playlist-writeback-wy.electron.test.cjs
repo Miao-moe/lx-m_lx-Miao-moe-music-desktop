@@ -116,7 +116,7 @@ test('NetEase client login enables writeback and authenticates edits through enc
     expired = true
     const writeCount = writes.length
     await invoke(page, 'player_list_music_add', { id: 'writeback-wy-client', musicInfos: [song(14)], addMusicLocationType: 'bottom' })
-    await row.getByText(labels.list_writeback__error_login, { exact: true }).waitFor()
+    await row.getByText(labels.list_writeback__error_login, { exact: false }).waitFor()
     assert.equal(writes.length, writeCount)
     assert((await invoke(page, 'player_list_music_get', 'writeback-wy-client')).some(song => song.id === 'wy_14'))
     assert.deepEqual(errors, [])

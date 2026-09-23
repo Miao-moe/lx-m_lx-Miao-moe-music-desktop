@@ -2,8 +2,14 @@
   <material-modal :show="visible" bg-close teleport="#view" @close="$emit('update:visible', false)">
     <div :class="$style.header">
       <h2>{{ $t('list_update_modal__title') }}</h2>
+      <nav :class="$style.tabs" :aria-label="$t('list_update_modal__title')">
+        <base-btn min :class="{ [$style.activeTab]: activeTab === 'updates' }" :aria-pressed="activeTab === 'updates'" @click="activeTab = 'updates'">{{ $t('list_update_modal__imported') }}</base-btn>
+        <base-btn min :class="{ [$style.activeTab]: activeTab === 'selection' }" :aria-pressed="activeTab === 'selection'" @click="activeTab = 'selection'">{{ $t('list_update_modal__selection') }}</base-btn>
+      </nav>
     </div>
     <main class="scroll" :class="$style.main">
+      <transition name="list-update-view" mode="out-in">
+      <div v-if="activeTab === 'updates'">
       <ul v-if="lists.length" ref="dom_list" :class="$style.list">
         <li v-for="list in lists" :key="list.id" :class="[$style.listItem, {[$style.fetching]: fetchingListStatus[list.id]}]">
           <div :class="$style.listLeft">
@@ -52,8 +58,11 @@
       <div v-else :class="$style.noItem">
         <p v-text="$t('no_item')" />
       </div>
+      </div>
+      <PlatformSyncSelection v-else />
+      </transition>
     </main>
-    <div :class="$style.footer">
+    <div v-if="activeTab === 'updates'" :class="$style.footer">
       <div :class="$style.tips">{{ $t('list_update_modal__tips') }}</div>
       <div :class="$style.tips">{{ $t('list_writeback__tips') }}</div>
     </div>
@@ -64,6 +73,7 @@
 import { computed, ref, reactive } from '@common/utils/vueTools'
 import { formatError } from '@common/utils/errorMessage'
 import SyncDiffPanel from '@renderer/components/common/SyncDiffPanel.vue'
+import PlatformSyncSelection from './PlatformSyncSelection.vue'
 import { userLists, fetchingListStatus, listUpdateTimes } from '@renderer/store/list/state'
 import handleSyncSourceList from '@renderer/store/list/syncSourceList'
 import musicSdk from '@renderer/utils/musicSdk'
@@ -72,7 +82,7 @@ import { getListUpdateInfo, setListAutoUpdate } from '@renderer/utils/data'
 import { isWritebackSupported, setPlaylistWriteback, retryPlaylistWriteback, writebackStatus, WritebackError } from '@renderer/utils/playlistWriteback'
 
 export default {
-  components: { SyncDiffPanel },
+  components: { SyncDiffPanel, PlatformSyncSelection },
   props: {
     visible: {
       type: Boolean,
@@ -81,6 +91,7 @@ export default {
   },
   emits: ['update:visible'],
   setup() {
+    const activeTab = ref('updates')
     const lists = computed(() => userLists.filter(l => !!l.source && !!musicSdk[l.source]?.songList))
     const updateInfo = ref({})
     const changing = reactive({})
@@ -128,6 +139,7 @@ export default {
     }
 
     return {
+      activeTab,
       formatError,
       lists,
       updateInfo,
@@ -159,6 +171,16 @@ export default {
     word-break: break-all;
   }
 }
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.activeTab { color: var(--color-primary); background-color: var(--color-selected); }
+:global(.list-update-view-enter-active), :global(.list-update-view-leave-active) { transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
+:global(.list-update-view-enter-from), :global(.list-update-view-leave-to) { opacity: 0; transform: translateY(5px); }
 .main {
   min-height: 115px;
   width: @width;

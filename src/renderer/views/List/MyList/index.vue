@@ -20,7 +20,7 @@
         </button>
       </div>
     </div>
-    <button :class="$style.libraryButton" aria-label="歌单与本地曲库" @click="isShowLibrary = true">曲库管理<span v-if="libraryMissingCount"> · {{ libraryMissingCount }} 个失效文件</span></button>
+    <button v-show="showLibraryManagerEntry" :class="$style.libraryButton" aria-label="歌单与本地曲库" @click="isShowLibrary = true">曲库管理<span v-if="libraryMissingCount"> · {{ libraryMissingCount }} 个失效文件</span></button>
     <ul ref="dom_lists_list" class="scroll" :class="[$style.listsContent, { [$style.sortable]: isModDown || isDragging }]">
       <li
         class="default-list" :class="[$style.listsItem, {[$style.active]: defaultList.id == listId}, {[$style.clicked]: rightClickItemIndex == -2}, {[$style.fetching]: fetchingListStatus[defaultList.id]}]"
@@ -261,6 +261,7 @@ export default {
     return {
       isShowRecycleBin: ref(false),
       isShowLibrary: ref(false),
+      showLibraryManagerEntry: false, // 暂时隐藏入口，保留弹窗以便后续恢复
       libraryMissingCount,
       rightClickItemIndex,
       defaultList,
@@ -299,7 +300,19 @@ export default {
 @import '@renderer/assets/styles/layout.less';
 
 @lists-item-height: 36px;
-.libraryButton { flex: none; padding: 7px; color: var(--color-primary); border-bottom: var(--color-list-header-border-bottom); &:hover { background: var(--color-primary-light-100-alpha-700); } }
+.libraryButton {
+  flex: none;
+  padding: 7px;
+  border: 0;
+  border-bottom: var(--color-list-header-border-bottom);
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+  &:hover { background: var(--color-primary-background-hover); }
+  &:active { background: var(--color-primary-background-active); }
+  &:focus-visible { box-shadow: inset var(--focus-ring); }
+}
 .lists {
   flex: auto;
   width: 100%;
@@ -437,16 +450,18 @@ export default {
     color: inherit;
     cursor: pointer;
     text-align: left;
+    transition: background-color var(--duration-fast) var(--ease-standard);
     &:hover, &:focus-visible {
       background-color: var(--color-primary-background-hover);
     }
+    &:active { background-color: var(--color-primary-background-active); }
   }
 }
 .folderArrow {
   flex: none;
   width: 8px;
   height: 8px;
-  transition: transform .15s ease;
+  transition: transform var(--duration-fast) var(--ease-standard);
   &.folderExpanded {
     transform: rotate(90deg);
   }

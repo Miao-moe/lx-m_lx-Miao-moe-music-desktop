@@ -392,6 +392,8 @@
   "list_writeback__error_storage": "Sync records could not be saved. Writeback paused; check local storage.",
   "list_writeback__error_failed": "The platform request failed. Local edits are kept. Check your login and connection, then retry.",
   "list_update_modal__title": "List Update Management",
+  "list_update_modal__imported": "Imported Playlists",
+  "list_update_modal__selection": "Platform Sync Scope",
   "list_update_modal__update": "Sync",
   "lists__add_local_file_desc": "Choose song file",
   "lists__dislike_music_singer_tip": "Do you really dislike {singer}'s \"{name}\"?",

@@ -63,9 +63,10 @@ test('B12/B13/B21/B22: production search streams, retries one platform, merges s
     await rows.first().waitFor({ state: 'visible', timeout: 2000 })
     assert.equal(await rows.first().isVisible(), true, 'fast rows appear even when the general setting waits for all')
     await page.locator('[data-retry-source="tx"]').waitFor()
-    const diagnostic = await page.locator('[data-search-platform="tx"] [data-error-detail]').innerText()
-    assert.match(diagnostic, /403/)
-    assert.match(diagnostic, /原因|Reason/)
+    const failedPlatform = page.locator('[data-search-platform="tx"]')
+    assert.match(await failedPlatform.locator('[data-search-failed]').innerText(), /加载失败|loading failed/i)
+    assert.doesNotMatch(await failedPlatform.innerText(), /403|原因|Reason/)
+    assert.equal(await failedPlatform.getAttribute('title'), null)
     await page.screenshot({ path: path.join(output, 'network-search-error.png') })
     assert.match(await page.locator('[data-search-platform="mg"]').innerText(), /加载|Loading/)
     const before = [...calls]
