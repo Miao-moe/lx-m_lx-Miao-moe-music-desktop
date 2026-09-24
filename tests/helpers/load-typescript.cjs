@@ -15,7 +15,7 @@ module.exports = function loader(overrides = {}) {
     const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText
-    const execute = vm.runInThisContext('(function(require,module,exports){' + code + '\n})', { filename })
+    const execute = vm.runInThisContext('(function(require,module,exports,__dirname){' + code + '\n})', { filename })
     execute(name => {
       if (Object.hasOwn(overrides, name)) return overrides[name]
       if (name.startsWith('node:')) return require(name)
@@ -24,7 +24,7 @@ module.exports = function loader(overrides = {}) {
       if (name === '@renderer/utils/musicSdk/requestCache') return load('src/renderer/utils/musicSdk/requestCache.js')
       if (name.startsWith('.')) return load(path.resolve(path.dirname(filename), name))
       throw Error('Unexpected dependency: ' + name)
-    }, module, module.exports)
+    }, module, module.exports, path.dirname(filename))
     return module.exports
   }
   return load

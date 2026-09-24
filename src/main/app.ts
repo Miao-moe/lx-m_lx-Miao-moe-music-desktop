@@ -11,7 +11,6 @@ import { createAppEvent, createDislikeEvent, createListEvent } from '@main/event
 import { isMac, log } from '@common/utils'
 import createWorkers from './worker'
 import { migrateDBData } from './utils/migrate'
-import { openDirInExplorer } from '@common/utils/electron'
 import { setProxyByHost } from '@common/utils/request'
 import { flushStores } from '@main/utils/store'
 
@@ -449,20 +448,6 @@ const initTheme = () => {
   })
 }
 
-const backupDB = (backupPath: string) => {
-  const dbPath = path.join(global.lxDataPath, 'lx.data.db')
-  try {
-    renameSync(dbPath, backupPath)
-  } catch {}
-  try {
-    renameSync(`${dbPath}-wal`, `${backupPath}-wal`)
-  } catch {}
-  try {
-    renameSync(`${dbPath}-shm`, `${backupPath}-shm`)
-  } catch {}
-  openDirInExplorer(backupPath)
-}
-
 let isInitialized = false
 export const initAppSetting = async() => {
   if (!global.lx.inited) {
@@ -473,17 +458,7 @@ export const initAppSetting = async() => {
   }
 
   if (!isInitialized) {
-    let dbFileExists = await global.lx.worker.dbService.init(global.lxDataPath)
-    if (dbFileExists === null) {
-      const backupPath = path.join(global.lxDataPath, `lx.data.db.${Date.now()}.bak`)
-      dialog.showMessageBoxSync({
-        type: 'warning',
-        message: 'Database verify failed',
-        detail: `数据库表结构校验失败，我们将把有问题的数据库备份到：${backupPath}\n若此问题导致你的数据丢失，你可以尝试从备份文件找回它们。\n\nThe database table structure verification failed, we will back up the problematic database to: ${backupPath}\nIf this problem causes your data to be lost, you can try to retrieve them from the backup file.`,
-      })
-      backupDB(backupPath)
-      dbFileExists = await global.lx.worker.dbService.init(global.lxDataPath)
-    }
+    const dbFileExists = await global.lx.worker.dbService.init(global.lxDataPath)
     global.lx.appSetting = (await initSetting()).setting
     if (!dbFileExists) await migrateDBData().catch(err => { log.error(err) })
     initTheme()

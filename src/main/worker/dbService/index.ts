@@ -9,7 +9,7 @@ import { bumpSyncRevision } from './syncRevision'
 const common = {
   init: async(root: string) => {
     const result = init(root)
-    if (result !== null) await backup.recoverBackup(root)
+    await backup.recoverBackup(root)
     return result
   },
 }
