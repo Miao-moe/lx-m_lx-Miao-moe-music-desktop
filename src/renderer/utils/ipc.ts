@@ -288,6 +288,45 @@ export const saveSearchSetting = (setting: typeof DEFAULT_SETTING['search']) => 
 export const getSearchSetting = async() => {
   return (await rendererInvoke<string, typeof DEFAULT_SETTING['search']>(WIN_MAIN_RENDERER_EVENT_NAME.get_data, DATA_KEYS.searchSetting)) ?? { ...DEFAULT_SETTING.search }
 }
+
+export interface HomePlaylistItem {
+  id: string
+  name: string
+  img: string
+  author: string
+  play_count: string
+  total: string
+  desc: string
+  source: string
+}
+export interface HomeBoardItem {
+  id: string
+  name: string
+}
+export interface HomeFeedData {
+  lastSource: LX.OnlineSource | ''
+  sources: Partial<Record<LX.OnlineSource, {
+    playlists: HomePlaylistItem[]
+    playlistsAt: number
+    playlistsOffline: boolean
+    hotWords: string[]
+    hotWordsAt: number
+    hotWordsOffline: boolean
+    boards: HomeBoardItem[]
+    boardsAt: number
+    boardsOffline: boolean
+  }>
+  > | null
+}
+export const saveHomeFeed = (data: Exclude<HomeFeedData, null>) => {
+  rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.save_data, {
+    path: DATA_KEYS.homeFeed,
+    data,
+  })
+}
+export const getHomeFeed = async(): Promise<Exclude<HomeFeedData, null> | null> => {
+  return await rendererInvoke<string, Exclude<HomeFeedData, null> | null>(WIN_MAIN_RENDERER_EVENT_NAME.get_data, DATA_KEYS.homeFeed) ?? null
+}
 export const saveViewPrevState = (state: typeof DEFAULT_SETTING['viewPrevState']) => {
   rendererSend(WIN_MAIN_RENDERER_EVENT_NAME.save_data, {
     path: DATA_KEYS.viewPrevState,

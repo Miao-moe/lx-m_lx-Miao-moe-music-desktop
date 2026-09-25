@@ -799,6 +799,7 @@ declare global {
       'ui.sidebar.locked': boolean
       /** 全部六个导航按钮的顺序，以逗号分隔 */
       'ui.sidebar.order': string
+      'ui.sidebar.showHome': boolean
       'ui.sidebar.showSearch': boolean
       'ui.sidebar.showSongList': boolean
       'ui.sidebar.showLeaderboard': boolean

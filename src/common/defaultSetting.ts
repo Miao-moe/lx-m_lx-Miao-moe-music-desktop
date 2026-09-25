@@ -204,6 +204,7 @@ const defaultSetting: LX.AppSetting = {
   'ui.sidebar.width': 0,
   'ui.sidebar.locked': false,
   'ui.sidebar.order': DEFAULT_SIDEBAR_ORDER,
+  'ui.sidebar.showHome': true,
   'ui.sidebar.showSearch': true,
   'ui.sidebar.showSongList': true,
   'ui.sidebar.showLeaderboard': true,

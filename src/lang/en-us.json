@@ -1251,5 +1251,12 @@
   "user_api_import_online__input_confirm": "Import",
   "user_api_import_online__input_loading": "Importing...",
   "user_api_import_online__input_tip": "Please enter an HTTP link",
-  "user_api_import_online__title": "Import Music API from network."
+  "user_api_import_online__title": "Import Music API from network.",
+  "home": "Home",
+  "home__greeting_morning": "Good morning",
+  "home__greeting_afternoon": "Good afternoon",
+  "home__greeting_evening": "Good evening",
+  "home__recommend": "Made for you",
+  "home__offline_tip": "Some content is from offline cache, it updates automatically when online",
+  "home__source_select": "Choose recommendation source"
 }
