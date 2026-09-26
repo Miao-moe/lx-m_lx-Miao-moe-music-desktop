@@ -1267,5 +1267,12 @@
   "user_api_import_online__input_confirm": "导入",
   "user_api_import_online__input_loading": "导入中...",
   "user_api_import_online__input_tip": "请输入 HTTP 链接",
-  "user_api_import_online__title": "在线导入自定义源"
+  "user_api_import_online__title": "在线导入自定义源",
+  "home": "首页",
+  "home__greeting_morning": "早上好",
+  "home__greeting_afternoon": "下午好",
+  "home__greeting_evening": "晚上好",
+  "home__recommend": "为你推荐",
+  "home__offline_tip": "部分内容来自离线缓存，联网后自动更新",
+  "home__source_select": "选择推荐音源"
 }

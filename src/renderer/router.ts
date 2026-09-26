@@ -7,6 +7,14 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     {
+      path: '/home',
+      name: 'Home',
+      component: require('./views/Home/index.vue').default,
+      meta: {
+        name: 'Home',
+      },
+    },
+    {
       path: '/search',
       name: 'Search',
       component: require('./views/Search/index.vue').default,
@@ -70,7 +78,7 @@ const router = createRouter({
         name: 'Setting',
       },
     },
-    { path: '/:pathMatch(.*)*', redirect: '/search' },
+    { path: '/:pathMatch(.*)*', redirect: '/home' },
   ],
   linkActiveClass: 'active-link',
   linkExactActiveClass: 'exact-active-link',

@@ -50,6 +50,7 @@ export const DATA_KEYS = {
   leaderboardSetting: 'leaderboardSetting',
   songListSetting: 'songListSetting',
   searchSetting: 'searchSetting',
+  homeFeed: 'homeFeed',
 
   // 降级判断只读取 LX-M 自己的记录，不继承 LX 的 lastStartInfo。
   lastStartInfo: 'lx-m:lastStartInfo',

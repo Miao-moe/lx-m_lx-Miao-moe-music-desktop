@@ -1246,5 +1246,12 @@
   "user_api_import_online__input_confirm": "匯入",
   "user_api_import_online__input_loading": "匯入中...",
   "user_api_import_online__input_tip": "請輸入 HTTP 連結",
-  "user_api_import_online__title": "從線上匯入自訂來源 API"
+  "user_api_import_online__title": "從線上匯入自訂來源 API",
+  "home": "首頁",
+  "home__greeting_morning": "早上好",
+  "home__greeting_afternoon": "下午好",
+  "home__greeting_evening": "晚上好",
+  "home__recommend": "為你推薦",
+  "home__offline_tip": "部分內容來自離線快取，連網後自動更新",
+  "home__source_select": "選擇推薦音源"
 }
