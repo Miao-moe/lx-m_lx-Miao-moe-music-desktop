@@ -15,5 +15,6 @@ installation is required.
 
 Supported files: MP3 with ordinary ID3v2.3/ID3v2.4 tags (or no ID3v2 tag), and
 native FLAC. Extended, globally unsynchronised, compressed or older ID3 tags
-are rejected before writing. This version edits text fields; artwork, lyrics,
-ratings and other fields are retained.
+are rejected before writing. Text fields, front artwork (JPEG/PNG) and embedded
+unsynchronised lyrics can be edited or cleared. Other pictures, lyric formats,
+ratings and unknown fields are retained.

@@ -116,34 +116,32 @@ export default {
 
       const types = []
       const _types = {}
-      let size
-      item.privilege.chargeInfoList.forEach(i => {
+      item.privilege?.chargeInfoList?.forEach(i => {
+        let type
+        let music
         switch (i.rate) {
           case 128000:
-            size = item.lMusic ? sizeFormate(item.lMusic.size) : null
-            types.push({ type: '128k', size })
-            _types['128k'] = {
-              size,
-            }
+          case 192000:
+            type = '128k'
+            music = item.lMusic
+            break
           case 320000:
-            size = item.hMusic ? sizeFormate(item.hMusic.size) : null
-            types.push({ type: '320k', size })
-            _types['320k'] = {
-              size,
-            }
+            type = '320k'
+            music = item.hMusic
+            break
           case 999000:
-            size = item.sqMusic ? sizeFormate(item.sqMusic.size) : null
-            types.push({ type: 'flac', size })
-            _types.flac = {
-              size,
-            }
+            type = 'flac'
+            music = item.sqMusic
+            break
           case 1999000:
-            size = item.hrMusic ? sizeFormate(item.hrMusic.size) : null
-            types.push({ type: 'flac24bit', size })
-            _types.flac24bit = {
-              size,
-            }
+            type = 'flac24bit'
+            music = item.hrMusic
+            break
         }
+        if (!type || _types[type]) return
+        const size = music ? sizeFormate(music.size) : null
+        types.push({ type, size })
+        _types[type] = { size }
       })
 
       list.push({

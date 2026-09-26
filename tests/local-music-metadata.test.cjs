@@ -15,7 +15,7 @@ function fixture(t, { hasTags = false, pic = '', lyric = null, edited = { lyric:
   const previous = global.window
   t.after(() => { global.window = previous })
   const calls = { online: [], saves: [], updates: [], cachedLyrics: 0 }
-  global.window = { lx: { worker: { main: {
+  global.window = { i18n: { t: key => key === 'webdav_audio_removed' ? 'WebDAV audio browsing has been removed' : key }, lx: { worker: { main: {
     hasMusicFileTags: async() => hasTags,
     getMusicFilePic: async() => pic,
     getMusicFileLyric: async() => lyric,
@@ -27,7 +27,6 @@ function fixture(t, { hasTags = false, pic = '', lyric = null, edited = { lyric:
     return result
   }
   const local = loader({
-    '@common/rendererIpc': { rendererInvoke: async() => 'http://127.0.0.1:1234/temporary-audio-token' },
     '@common/utils/common': { encodePath: value => value },
     '@renderer/store/list/action': { updateListMusics: async items => { calls.updates.push(...items) } },
     '@renderer/utils/ipc': {
@@ -49,11 +48,11 @@ function fixture(t, { hasTags = false, pic = '', lyric = null, edited = { lyric:
   return { local, calls }
 }
 
-test('WebDAV songs use the authenticated media bridge without probing disk or matching online metadata', async t => {
+test('legacy WebDAV songs fail clearly without probing disk or matching online metadata', async t => {
   const { local, calls } = fixture(t, { hasTags: true, pic: onlinePic, lyric: onlineLyric })
   const musicInfo = localSong()
   musicInfo.meta.webdav = { path: 'folder/song.wav', identity: 'account' }
-  assert.equal(await local.getMusicUrl({ musicInfo, isRefresh: false }), 'http://127.0.0.1:1234/temporary-audio-token')
+  await assert.rejects(local.getMusicUrl({ musicInfo, isRefresh: false }), { code: 'WEBDAV_AUDIO_REMOVED', message: 'WebDAV audio browsing has been removed' })
   assert.equal(await local.getPicUrl({ musicInfo, isRefresh: false }), '')
   assert.equal((await local.getLyricInfo({ musicInfo, isRefresh: false })).lyric, '')
   assert.deepEqual(calls, { online: [], saves: [], updates: [], cachedLyrics: 0 })

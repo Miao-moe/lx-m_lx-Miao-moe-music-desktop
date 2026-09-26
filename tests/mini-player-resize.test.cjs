@@ -40,6 +40,8 @@ function fixture(t) {
   const main = loader({
     'node:path': path,
     electron: { BrowserWindow },
+    '@main/utils/windowLoadError': { observeWindowLoadErrors() {} },
+    '@main/utils/ipcPolicy': { registerIpcWindow() {} },
     '@common/utils': { getPlatform: () => 'windows', isWin: true, isLinux: false },
     '@common/mainIpc': { mainSend() {} },
     '@common/ipcNames': loader()('src/common/ipcNames.ts'),

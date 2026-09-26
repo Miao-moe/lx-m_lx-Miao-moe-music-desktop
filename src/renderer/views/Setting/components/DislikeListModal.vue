@@ -1,11 +1,12 @@
 <template lang="pug">
 material-modal(:show="modelValue" teleport="#view" height="80%" width="80%" @close="$emit('update:modelValue', false)")
   main(:class="$style.main")
-    h2 {{ $t('setting__dislike_list_title') }}
+    h2
+      | {{ $t('setting__dislike_list_title') }}
+      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__dislike_list_tips')")
     div(:class="$style.content")
       textarea.scroll(v-model="rules" :class="$style.textarea" :placeholder="$t('setting__dislike_list_input_tip')")
   div(:class="$style.footer")
-    div(:class="$style.tips") {{ $t('setting__dislike_list_tips') }}
     base-btn(:class="$style.btn" @click="handleSave") {{ $t('setting__dislike_list_save_btn') }}
 </template>
 
@@ -97,15 +98,8 @@ export default {
   padding: 15px 15px;
   // padding: 2px 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-}
-.tips {
-  // padding: 10px 15px;
-  font-size: 12px;
-  line-height: 1.25;
-  color: var(--color-550);
-  white-space: pre-wrap;
 }
 .btn {
   min-width: 80px;

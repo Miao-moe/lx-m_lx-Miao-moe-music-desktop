@@ -1,6 +1,5 @@
 <template>
   <div data-cache-manager>
-    <p>包含可重新获取的封面、歌词、播放地址和本地临时封面。已下载歌曲、自定义歌词和歌单会保留。内存占用单独显示；正在显示的封面在离开界面后释放。</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <div v-for="(label, key) in labels" :key="key" :class="$style.row">
       <span>{{ label }}：{{ sizeFormate(usage[key] ?? 0) }}</span>

@@ -35,6 +35,7 @@
         :total="listDetailInfo.total"
         :list="listDetailInfo.list"
         :no-item="listDetailInfo.noItemLabel"
+        refresh-download-quality
         @play-list="handlePlayList"
         @toggle-page="togglePage"
         @retry="handleRetry"

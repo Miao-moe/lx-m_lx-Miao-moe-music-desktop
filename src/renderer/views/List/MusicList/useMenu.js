@@ -18,6 +18,7 @@ export default ({
   handleCopyName,
   handleDislikeMusic,
   handleRemoveMusic,
+  hiddenActions = /** @type {string[]} */ ([]),
 }) => {
   const itemMenuControl = reactive({
     play: true,
@@ -93,7 +94,7 @@ export default ({
         action: 'remove',
         disabled: !itemMenuControl.remove,
       },
-    ]
+    ].filter(item => !hiddenActions.includes(item.action))
   })
 
   const showMenu = (event, musicInfo) => {

@@ -1,8 +1,8 @@
 <template lang="pug">
-dt#update {{ $t('setting__update') }}
+dt#update
+  | {{ $t('setting__update') }}
+  svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__update_start_tip')")
 dd
-  .gap-top
-    .p.small {{ $t('setting__update_start_tip') }}
   .gap-top
     base-checkbox(id="setting__update_showChangeLog" :model-value="appSetting['common.showChangeLog']" :label="$t('setting__update_show_change_log')" @update:model-value="updateSetting({'common.showChangeLog': $event})")
   .gap-top

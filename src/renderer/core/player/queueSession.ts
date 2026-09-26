@@ -19,10 +19,15 @@ export const createSavedPlayInfo = (
   items: LX.Player.PlayMusicInfo[], current: LX.Player.PlayMusicInfo | null,
   index: number, sourceListId: string | null, played: LX.Player.PlayMusicInfo[],
   time: number, maxTime: number, listIndex: number,
-): LX.Player.SavedPlayInfo => ({
-  time: Number.isFinite(time) ? Math.max(0, time) : 0,
-  maxTime: Number.isFinite(maxTime) ? Math.max(0, maxTime) : 0,
-  listId: current?.listId ?? '',
-  index: listIndex,
-  queue: { version: 1, items, current, index, sourceListId, played },
-})
+): LX.Player.SavedPlayInfo => {
+  // Queue entries can contain reactive download tasks. A shallow toRaw() leaves
+  // nested proxies in place, which Electron's IPC cannot clone.
+  const queue = JSON.parse(JSON.stringify({ version: 1, items, current, index, sourceListId, played })) as NonNullable<LX.Player.SavedPlayInfo['queue']>
+  return {
+    time: Number.isFinite(time) ? Math.max(0, time) : 0,
+    maxTime: Number.isFinite(maxTime) ? Math.max(0, maxTime) : 0,
+    listId: queue.current?.listId ?? '',
+    index: listIndex,
+    queue,
+  }
+}

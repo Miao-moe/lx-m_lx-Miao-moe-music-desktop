@@ -1,8 +1,7 @@
 <template lang="pug">
-dt#cookie {{ $t('setting__cookie') }}
-dd
-  p.p.gap-top(style="color: var(--color-500); font-size: 12px; line-height: 1.6;")
-    | {{ $t('setting__cookie_desc') }}
+dt#cookie
+  | {{ $t('setting__cookie') }}
+  svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__cookie_desc')")
 dd
   h3#cookie_sync {{ $t('setting__cookie_sync') }}
   div
@@ -21,8 +20,7 @@ dd
         :label="$t('setting__cookie_sync_play_history')"
         @update:model-value="updateSetting({ 'cookie.enablePlayHistorySync': $event })"
       )
-      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__cookie_sync_play_history_tip')")
-      p(style="color: var(--color-font-label); font-size: 11px; margin-top: 8px; padding-left: 22px; line-height: 1.5;") {{ $t('setting__cookie_sync_play_history_unsupported') }}
+      svg-icon.help-icon(name="help-circle-outline" :aria-label="[$t('setting__cookie_sync_play_history_tip'), $t('setting__cookie_sync_play_history_unsupported')].join(String.fromCharCode(10))")
     .p.gap-top.setting-actions
       base-btn.btn(min :disabled="syncing" @click="handleSyncNow") {{ syncing ? $t('setting__cookie_sync_now_running') : $t('setting__cookie_sync_now') }}
       span(v-if="syncTip" :style="{ color: syncError ? 'var(--color-font-label)' : 'var(--color-primary)', fontSize: '12px' }") {{ syncTip }}

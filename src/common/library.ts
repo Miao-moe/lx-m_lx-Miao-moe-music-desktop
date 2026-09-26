@@ -8,6 +8,7 @@ export interface LibraryService {
   saveLibraryPreferences: (data: LibraryPreferences) => void
   recordListening: (song: LX.Music.MusicInfo) => void
   getListeningHistory: (query?: ListeningQuery) => { rows: Array<{ id: number, time: number, song: LX.Music.MusicInfo }>, stats: { plays: number, songs: number, singers: number }, artists: Array<{ singer: string, count: number }> }
+  removeListeningHistory: (ids: number[]) => void
   clearListeningHistory: () => void
   getDatabaseCacheSizes: () => { lyrics: number, urls: number, sources: number }
 }

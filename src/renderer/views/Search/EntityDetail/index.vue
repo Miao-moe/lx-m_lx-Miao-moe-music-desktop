@@ -40,6 +40,7 @@
         :total="entityDetailInfo.total"
         :list="entityDetailInfo.list"
         :no-item="entityDetailInfo.noItemLabel"
+        refresh-download-quality
         @play-list="handlePlayList"
         @toggle-page="togglePage"
         @retry="handleRetry"

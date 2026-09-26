@@ -116,7 +116,9 @@ test('volume normalization works on real audio, settings, overlapping tracks and
     await t.test('retry loads the packaged worklet, reveals the description and narrows actual track levels', async() => {
       await click()
       await page.waitForFunction(() => window.__normalization.nodes.length === 2)
-      await page.locator('[data-setting-reveal][data-setting-search-depends="setting_player_volume_normalization"]').waitFor()
+      const help = page.locator('#play_volume_normalization .help-icon')
+      await help.waitFor()
+      assert.equal(await help.getAttribute('aria-label'), await page.evaluate(() => window.i18n.t('setting__play_volume_normalization_tip')))
       await page.waitForTimeout(5000)
       const quiet = await rms(page)
       await play(urls[1])

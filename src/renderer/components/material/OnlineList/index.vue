@@ -117,7 +117,7 @@
     <common-download-multiple-modal v-model:show="isShowDownloadMultiple" :list="selectedList" teleport="#view" @confirm="removeAllSelect" /> -->
     <common-list-add-modal v-model:show="isShowListAdd" :music-info="selectedAddMusicInfo" teleport="#view" />
     <common-list-add-multiple-modal v-model:show="isShowListAddMultiple" :music-list="selectedList" teleport="#view" @confirm="removeAllSelect" />
-    <common-download-modal v-model:show="isShowDownload" :music-info="selectedDownloadMusicInfo" teleport="#view" />
+    <common-download-modal v-model:show="isShowDownload" :music-info="selectedDownloadMusicInfo" :resolve-quality-from-search="refreshDownloadQuality" teleport="#view" />
     <common-download-multiple-modal v-model:show="isShowDownloadMultiple" :list="selectedList" teleport="#view" @confirm="removeAllSelect" />
     <base-menu v-model="isShowItemMenu" :menus="menus" :xy="menuLocation" item-name="name" @menu-click="handleMenuClick" />
   </common-list-loading>
@@ -178,6 +178,7 @@ export default {
       type: Boolean,
       default: false,
     },
+    refreshDownloadQuality: { type: Boolean, default: false },
   },
   emits: ['show-menu', 'play-list', 'togglePage', 'retry'],
   setup(props, { emit }) {
@@ -308,6 +309,7 @@ export default {
       const maxQ = getMaxQuality(item, qualityList.value[item.source] || [])
       switch (maxQ) {
         case 'master': return 'tag__master'
+        case 'atmos_plus': return 'tag__atmos_plus'
         case 'atmos': return 'tag__atmos'
         case 'hires': return 'tag__hires'
         case 'flac24bit': return 'tag__lossless_24bit'

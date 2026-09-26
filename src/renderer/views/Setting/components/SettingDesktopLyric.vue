@@ -7,8 +7,7 @@ dd
     base-checkbox(id="setting_mini_player_show_player" :model-value="appSetting['desktopLyric.showPlayer']" :label="$t('setting__desktop_lyric_show_player')" @update:model-value="updateSetting({ 'desktopLyric.showPlayer': $event })")
   .gap-top
     base-checkbox(id="setting_mini_player_hide_controls" :model-value="appSetting['desktopLyric.autoHideControls']" :label="$t('setting__desktop_lyric_hide_controls')" @update:model-value="updateSetting({ 'desktopLyric.autoHideControls': $event })")
-  common-setting-reveal(:show="appSetting['desktopLyric.autoHideControls']" depends="setting_mini_player_hide_controls")
-    p.p.gap-top.setting-value {{ $t('mini_player__hide_tip') }}
+    svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('mini_player__hide_tip')")
   .gap-top
     base-checkbox(id="setting_desktop_lyric_lock" :model-value="appSetting['desktopLyric.isLock']" :label="$t('setting__desktop_lyric_lock')" @update:model-value="updateSetting({ 'desktopLyric.isLock': $event })")
   .gap-top
@@ -89,7 +88,9 @@ dd
     .p.gap-top
       base-btn.btn(min @click="resetColor") {{ $t('setting__desktop_lyric_color_reset') }}
 dd
-  h3#desktop_lyric_background_opacity {{ $t('setting__desktop_lyric_background_opacity', { num: appSetting['desktopLyric.style.backgroundOpacity'] }) }}
+  h3#desktop_lyric_background_opacity
+    | {{ $t('setting__desktop_lyric_background_opacity', { num: appSetting['desktopLyric.style.backgroundOpacity'] }) }}
+    svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__desktop_lyric_background_opacity_tip')")
   .p(:class="$style.backgroundControl")
     base-input(
       v-model="backgroundOpacity"
@@ -102,7 +103,6 @@ dd
     )
     span %
     base-btn.btn(min @click="changeBackgroundOpacity(100)") {{ $t('setting__desktop_lyric_background_opaque') }}
-  p.p(:class="$style.backgroundTip") {{ $t('setting__desktop_lyric_background_opacity_tip') }}
 dd
   h3#desktop_lyric_font {{ $t('setting__desktop_lyric_font') }}
   div
@@ -358,10 +358,6 @@ export default {
 .backgroundInput {
   width: 80px;
   max-width: 100%;
-}
-.backgroundTip {
-  color: var(--color-font-label);
-  font-size: 12px;
 }
 .item {
   width: 70px;

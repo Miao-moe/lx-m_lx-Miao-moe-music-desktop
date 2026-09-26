@@ -214,7 +214,7 @@ test('window layouts fit small, HD, 2K, 4K and short ultrawide viewports', { tim
         assert.ok(layout.rects[0].width <= 100 * layout.fontSize / 16 + 1, 'Sidebar must stay compact on wide displays')
         await assertBetween(page.locator('#toolbar'), labels, true)
 
-        await route(page, '/list')
+        await route(page, '/list?id=love')
         await settled(page)
         await page.evaluate(() => {
           const component = window.__motionComponents().find(c => c.type.name === 'MusicList' && 'list' in c.setupState)

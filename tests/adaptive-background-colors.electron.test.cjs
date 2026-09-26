@@ -141,7 +141,7 @@ test('adaptive background colors cover app controls and selections, restore them
       await update(page, { [settingKey]: true })
       await page.locator(flag).waitFor()
     })
-    await route(page, '/list')
+    await route(page, '/list?id=love')
     await settled(page)
     await page.evaluate(() => {
       const component = window.__motionComponents().find(c => c.type.name === 'MusicList' && 'list' in c.setupState)

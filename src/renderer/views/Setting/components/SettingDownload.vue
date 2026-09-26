@@ -31,8 +31,9 @@ dd
     base-checkbox(id="setting_download_auto_resume" :model-value="appSetting['download.autoResume']" :label="$t('setting__download_auto_resume')" @update:model-value="updateSetting({'download.autoResume': $event})")
 
 dd
-  h3 {{ $t('setting__download_size_limits') }}
-  p {{ $t('setting__download_size_limits_tip') }}
+  h3
+    | {{ $t('setting__download_size_limits') }}
+    svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__download_size_limits_tip')")
   .gap-top(:class="$style.limitRow")
     label(for="setting_download_task_size_limit") {{ $t('setting__download_task_size_limit') }}
     base-input(id="setting_download_task_size_limit" v-model="taskSizeLimit" type="number" :class="$style.limitInput" @change="handleSizeLimit('download.maxTaskSizeMiB', $event)")
@@ -51,16 +52,16 @@ dd
     base-checkbox(id="setting_download_isUseOtherSource" :model-value="appSetting['download.isUseOtherSource']" :label="$t('setting__is_enable')" @update:model-value="updateSetting({'download.isUseOtherSource': $event})")
   div
 dd(:aria-label="$t('setting__download_name_title')")
-  h3#download_name {{ $t('setting__download_name') }}
+  h3#download_name
+    | {{ $t('setting__download_name') }}
+    svg-icon.help-icon(name="help-circle-outline" :aria-label="[$t('setting__download_name_fields'), $t('setting__download_collision_rule')].join(String.fromCharCode(10))")
   div.setting-options
     base-checkbox.gap-left(
         v-for="item in musicNames" :id="`setting_download_musicName_${item.value}`" :key="item.value" name="setting_download_musicName" :value="item.value"
         need :model-value="appSetting['download.fileName']" :label="item.name" @update:model-value="updateSetting({'download.fileName': $event})")
   .gap-top
     base-input(id="setting_download_name_template" :class="$style.nameTemplate" :model-value="appSetting['download.fileName']" :aria-label="$t('setting__download_name_template')" :trim="false" :auto-paste="false" @change="updateSetting({'download.fileName': $event || '歌名 - 歌手'})")
-  p {{ $t('setting__download_name_fields') }}
   p(data-download-name-preview) {{ $t('setting__download_name_preview') }}{{ namePreview }}
-  p {{ $t('setting__download_collision_rule') }}
 dd
   h3#download_data_embed {{ $t('setting__download_data_embed') }}
   .gap-top

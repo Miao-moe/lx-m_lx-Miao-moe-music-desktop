@@ -160,6 +160,7 @@ test('settings search handles all categories, input methods, dependencies and ke
       await find('同步服务地址', 'SettingSync')
       await page.locator('label[for="setting_sync_mode_client"]').click()
       const host = page.getByPlaceholder(await label('setting__sync_client_host_tip'), { exact: true })
+      await host.waitFor({ state: 'visible' })
       await host.focus()
       await host.press('Control+f')
       assert.equal(await host.evaluate(element => element === document.activeElement), true)

@@ -33,7 +33,7 @@ function fixture(t) {
     '@renderer/core/player/playbackSession': session,
     '@renderer/core/player/bufferRecovery': loader()('src/renderer/core/player/bufferRecovery.ts'),
     '@renderer/core/player/queueSession': loader()('src/renderer/core/player/queueSession.ts'),
-    '@renderer/utils/ipc': { savePlayInfo: info => saved.push(JSON.parse(JSON.stringify(info))) },
+    '@renderer/utils/ipc': { savePlayInfo: info => saved.push(structuredClone(info)) },
   })
   const scope = vue.effectScope()
   t.after(() => { cleanups.forEach(fn => fn()); scope.stop(); global.window = previous })
@@ -112,4 +112,21 @@ test('A03: queue edits save while paused, progress is coalesced, and unload flus
   await vue.nextTick()
   assert.equal(f.saved.at(-1).queue.items.length, 0)
   assert.equal(f.saved.at(-1).queue.current, null)
+})
+
+test('download tasks in the playback queue are cloneable when playback is saved', async t => {
+  const f = fixture(t)
+  f.init('src/renderer/core/useApp/usePlayer/usePlaybackPersistence.ts')
+  const task = vue.reactive({
+    id: 'download-1', status: 'completed', name: 'Download task',
+    metadata: vue.reactive({ musicInfo: vue.reactive({ ...song, id: 'download-song', meta: { albumName: 'Album' } }), filePath: 'C:\\music\\song.mp3' }),
+  })
+  f.state.playQueueList.push({ musicInfo: task, listId: 'download', isTempPlay: false })
+  Object.assign(f.state.playMusicInfo, { musicInfo: task, listId: 'download', isTempPlay: false })
+  f.state.playbackReady.value = true
+  await vue.nextTick()
+  const saved = f.saved.at(-1)
+  assert.equal(saved.queue.items[0].musicInfo.metadata.musicInfo.id, 'download-song')
+  assert.equal(saved.queue.current.musicInfo.metadata.filePath, 'C:\\music\\song.mp3')
+  assert.equal(saved.queue.items[0].musicInfo.metadata.musicInfo.meta.albumName, 'Album')
 })

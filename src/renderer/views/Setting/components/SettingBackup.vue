@@ -10,8 +10,7 @@
     </div>
   </dd>
   <dd>
-    <h3 id="backup_all">{{ $t('setting__backup_all') }}</h3>
-    <p :class="$style.note">{{ $t('setting__backup_scope') }}</p>
+    <h3 id="backup_all">{{ $t('setting__backup_all') }}<svg-icon class="help-icon" name="help-circle-outline" :aria-label="$t('setting__backup_scope')" /></h3>
     <div class="setting-actions">
       <base-btn class="btn gap-left" min :disabled="busy" @click="openImport('all')">{{ $t('setting__backup_all_import') }}</base-btn>
       <base-btn class="btn gap-left" min :disabled="busy" @click="exportBackup('all')">{{ $t('setting__backup_all_export') }}</base-btn>
@@ -28,16 +27,17 @@
   </dd>
   <material-modal :show="!!preview" :bg-close="!busy" max-width="640px" @close="closePreview">
     <form v-if="preview" :class="$style.preview" data-backup-preview @submit.prevent="restore">
-      <h2>{{ $t('setting__backup_preview') }}</h2>
+      <h2>{{ $t('setting__backup_preview') }}<svg-icon class="help-icon" name="help-circle-outline" :aria-label="$t('setting__backup_selection')" /></h2>
       <p :class="$style.filename">{{ preview.filename }}</p>
       <p v-if="preview.createdAt" :class="$style.note">{{ new Date(preview.createdAt).toLocaleString() }}</p>
-      <p :class="$style.note">{{ $t('setting__backup_selection') }}</p>
       <div :class="$style.sections">
         <section v-for="section in availableSections" :key="section" :class="$style.section">
-          <base-checkbox :id="'backup_section_' + section" v-model="selected" :class="$style.backupCheckbox" :value="section" :disabled="busy" :data-backup-section="section">
-            {{ $t(`setting__backup_section_${section}`) }} <span>{{ preview.counts[section] }}</span>
-          </base-checkbox>
-          <p :class="$style.note">{{ $t(`setting__backup_replace_${section}`) }}</p>
+          <div :class="$style.sectionHeader">
+            <base-checkbox :id="'backup_section_' + section" v-model="selected" :class="$style.backupCheckbox" :value="section" :disabled="busy" :data-backup-section="section">
+              {{ $t(`setting__backup_section_${section}`) }} <span>{{ preview.counts[section] }}</span>
+            </base-checkbox>
+            <svg-icon class="help-icon" name="help-circle-outline" :aria-label="$t(`setting__backup_replace_${section}`)" />
+          </div>
           <transition name="backup-lists">
             <div v-if="section === 'playlists' && selected.includes('playlists')" :class="$style.lists">
               <base-checkbox v-for="(list, index) in preview.playlists" :id="'backup_list_' + index" :key="list.id" v-model="playlistIds" :class="$style.backupCheckbox" :value="list.id" :disabled="busy" :data-backup-list="list.id">
@@ -144,6 +144,9 @@ const exportText = async csv => run(async() => {
 .filename { overflow-wrap: anywhere; }
 .sections { overflow-y: auto; max-height: 42vh; }
 .section { padding: 12px 0; border-bottom: 1px solid var(--color-border-background); }
+.sectionHeader { display: flex; align-items: center; gap: 8px; }
+.sectionHeader .backupCheckbox { flex: 1; min-width: 0; width: auto; }
+.sectionHeader :global(.help-icon) { margin: 0; }
 .section label { display: flex; align-items: center; gap: 10px; line-height: 1.6; }
 .section label span { margin-left: auto; opacity: .7; }
 .section .backupCheckbox { display: block; width: 100%; }

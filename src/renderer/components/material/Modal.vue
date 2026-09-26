@@ -2,7 +2,11 @@
   <teleport :to="teleport">
     <div v-if="showModal" ref="dom_container" :class="$style.container">
       <transition enter-active-class="ui-backdrop-enter" leave-active-class="ui-backdrop-leave">
-        <div v-show="showContent" :class="[$style.modal, {[$style.filter]: filter}]" @click="bgClose && close()">
+        <div
+          v-show="showContent" :class="[$style.modal, {[$style.filter]: filter}]"
+          @pointerdown="handleBackdropPointerDown" @pointerup="handleBackdropPointerUp"
+          @pointercancel="resetBackdropPointer" @click="handleBackdropClick"
+        >
           <transition :enter-active-class="inClass" :leave-active-class="outClass" @after-enter="$emit('after-enter', $event)" @after-leave="handleAfterLeave">
             <div v-show="showContent" :class="$style.content" :style="contentStyle" @click.stop>
               <header :class="$style.header">
@@ -145,6 +149,8 @@ export default {
       showContent: false,
       modalCount: false,
       isAddedClass: false,
+      backdropPointerId: null,
+      backdropPointerReleased: false,
       // ai: 0,
     }
   },
@@ -176,6 +182,7 @@ export default {
   },
   methods: {
     handleShowChange(val) {
+      this.resetBackdropPointer()
       if (val) {
         // const dom = document.getElementById(this.teleport)
         // if (dom) {
@@ -219,6 +226,22 @@ export default {
     close() {
       this.$emit('close')
     },
+    handleBackdropPointerDown(event) {
+      this.backdropPointerId = event.target === event.currentTarget ? event.pointerId : null
+      this.backdropPointerReleased = false
+    },
+    handleBackdropPointerUp(event) {
+      this.backdropPointerReleased = this.backdropPointerId === event.pointerId && event.target === event.currentTarget
+    },
+    resetBackdropPointer() {
+      this.backdropPointerId = null
+      this.backdropPointerReleased = false
+    },
+    handleBackdropClick(event) {
+      const shouldClose = this.bgClose && event.target === event.currentTarget && this.backdropPointerReleased
+      this.resetBackdropPointer()
+      if (shouldClose) this.close()
+    },
     handleAfterLeave(event) {
       this.$emit('after-leave', event)
       this.showModal = false
@@ -238,6 +261,7 @@ export default {
   width: 100%;
   height: 100%;
   z-index: 99;
+  -webkit-app-region: no-drag;
 }
 
 .modal {
@@ -292,21 +316,29 @@ export default {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  height: 18px;
+  height: 30px;
 
   button {
     border: none;
     cursor: pointer;
-    padding: 4px 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
     background-color: transparent;
     color: var(--color-primary-dark-500-alpha-500);
     border-radius: var(--radius-sm);
     outline: none;
     transition: background-color var(--duration-fast) var(--ease-standard);
     line-height: 0;
+    -webkit-app-region: no-drag;
 
     svg {
-      height: .7em;
+      width: 12px;
+      height: 12px;
+      pointer-events: none;
     }
 
     &:hover {

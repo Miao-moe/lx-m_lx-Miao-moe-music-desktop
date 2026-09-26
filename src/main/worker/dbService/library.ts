@@ -30,6 +30,13 @@ export const getListeningHistory = (query: ListeningQuery = {}) => {
 export const clearListeningHistory = () => {
   getDB().prepare('DELETE FROM listening_history').run()
 }
+export const removeListeningHistory = (ids: number[]) => {
+  if (!Array.isArray(ids) || !ids.length || ids.length > 50 || ids.some(id => !Number.isSafeInteger(id) || id < 1)) {
+    throw Object.assign(new Error('无效的听歌历史记录'), { code: 'HISTORY_REMOVE_INVALID' })
+  }
+  const placeholders = ids.map(() => '?').join(',')
+  getDB().prepare(`DELETE FROM listening_history WHERE id IN (${placeholders})`).run(...ids)
+}
 
 export const getDatabaseCacheSizes = () => {
   const db = getDB()

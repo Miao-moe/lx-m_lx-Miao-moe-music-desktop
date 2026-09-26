@@ -6,24 +6,8 @@ const { launch, route, settled } = require('./helpers/motion-fixture.cjs')
 const { createDAV, playlists, song } = require('./helpers/webdav-fixture.cjs')
 const invoke = (page, channel, params) => page.evaluate(({ channel, params }) => require('electron').ipcRenderer.invoke(channel, params), { channel, params })
 
-test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual WebDAV audio playback', { timeout: 100000 }, async t => {
+test('F06/F11: sync status, playlist selection and visible conflicts', { timeout: 100000 }, async t => {
   const dav = await createDAV()
-  const bytes = Buffer.alloc(44 + 16000 * 20 * 2)
-  bytes.write('RIFF'); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WAVEfmt ', 8); bytes.writeUInt32LE(16, 16)
-  bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(1, 22); bytes.writeUInt32LE(16000, 24); bytes.writeUInt32LE(32000, 28)
-  bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34); bytes.write('data', 36); bytes.writeUInt32LE(bytes.length - 44, 40)
-  const xmlRow = (href, name, folder = false) => `<d:response><d:href>${href}</d:href><d:propstat><d:prop><d:displayname>${name}</d:displayname><d:resourcetype>${folder ? '<d:collection/>' : ''}</d:resourcetype><d:getcontentlength>${bytes.length}</d:getcontentlength></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
-  const root = xmlRow('/dav/', 'Root', true) + xmlRow('/dav/album/', '我的专辑', true) + xmlRow('/dav/fixture.wav', '远程试听.wav') + xmlRow('/dav/notes.txt', 'notes.txt')
-  dav.control.beforeRequest = (req, res) => {
-    if (req.method === 'PROPFIND' && req.headers.depth === '1') {
-      res.writeHead(207, { 'Content-Type': 'application/xml' }).end(`<d:multistatus xmlns:d="DAV:">${req.url === '/dav/' ? root : xmlRow('/dav/album/', '我的专辑', true) + xmlRow('/dav/album/next.wav', '子目录试听.wav')}</d:multistatus>`); return true
-    }
-    if (req.url.endsWith('.wav')) {
-      const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? '')
-      const start = range ? Number(range[1]) : 0, end = range?.[2] ? Number(range[2]) : bytes.length - 1
-      res.writeHead(range ? 206 : 200, { 'Content-Type': 'audio/wav', 'Content-Length': end - start + 1, 'Accept-Ranges': 'bytes', ...(range ? { 'Content-Range': `bytes ${start}-${end}/${bytes.length}` } : {}) }).end(bytes.subarray(start, end + 1)); return true
-    }
-  }
   const platform = http.createServer((req, res) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ code: '000000', data: { myCreatedMusicLists: { createdMusicLists: [{ musicListId: 'one', title: '平台歌单一' }, { musicListId: 'two', title: '平台歌单二' }] } } })))
   await new Promise(resolve => platform.listen(0, '127.0.0.1', resolve))
   let fixture
@@ -35,24 +19,7 @@ test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual
   }, dav.config)
   await route(page, '/setting?name=SettingSync'); await settled(page)
   assert.equal(await page.getByRole('heading', { name: '平台歌单同步范围' }).count(), 0)
-  const audio = page.getByRole('region', { name: 'WebDAV 音频目录' })
-  await t.test('browse root and nested directories, filter nonaudio and play with seeking', async() => {
-    await audio.getByRole('button', { name: '打开根目录' }).click()
-    await audio.getByRole('button', { name: /我的专辑/ }).click()
-    await audio.getByRole('button', { name: /子目录试听/ }).waitFor()
-    await audio.getByRole('button', { name: '上一级' }).click()
-    await audio.getByRole('button', { name: /远程试听/ }).waitFor()
-    assert.equal(await audio.getByText('notes.txt', { exact: true }).count(), 0)
-    assert.equal(await audio.getByRole('button', { name: '上一级' }).isDisabled(), true)
-    await audio.getByRole('button', { name: /远程试听/ }).click()
-    await page.waitForFunction(() => window.lxData.playMusicInfo.musicInfo?.meta.webdav?.path === 'fixture.wav')
-    await page.waitForFunction(() => window.__motionComponents().some(c => c.setupState.maxPlayTimeStr === '00:20' && c.setupState.nowPlayTimeStr !== '00:00'), undefined, { timeout: 10000 })
-    await page.evaluate(() => window.app_event.setProgress(10))
-    await page.waitForFunction(() => window.__motionComponents().some(c => /^00:1\d$/.test(c.setupState.nowPlayTimeStr)))
-    assert(dav.requests.some(req => req.path === '/dav/fixture.wav' && req.method === 'GET' && req.headers.range))
-    const song = await page.evaluate(() => window.lxData.playMusicInfo.musicInfo)
-    assert(!JSON.stringify(song).includes('pass word')); assert(!JSON.stringify(song).includes('127.0.0.1'))
-  })
+  assert.equal(await page.getByRole('region', { name: 'WebDAV 音频目录' }).count(), 0)
   await t.test('persist a selected/ignored playlist range and retain hidden selections', async() => {
     await page.evaluate(port => {
       const https = require('https'), http = require('http'), request = https.request
@@ -96,20 +63,31 @@ test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual
     await page.getByText(/Remote changes relative to local data/).waitFor()
     await page.getByRole('columnheader', { name: 'Change', exact: true }).waitFor()
     await page.getByRole('cell', { name: 'Added', exact: true }).first().waitFor()
+    assert.equal(await page.getByRole('button', { name: 'View sync status', exact: true }).count(), 1)
     await page.evaluate(() => window.i18n.setLanguage('zh-tw'))
     await page.getByText(/遠端相對本機的差異/).waitFor()
     await page.getByRole('columnheader', { name: '變化', exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: '查看同步狀態', exact: true }).count(), 1)
     await page.evaluate(() => window.i18n.setLanguage('zh-cn'))
-    await page.getByPlaceholder('搜索平台或歌单').fill('WebDAV')
-    await page.locator('label[for="sync_errors_only"]').click()
-    const row = page.locator('#sync_status').locator('..').locator('li').filter({ has: page.locator('strong', { hasText: /^WebDAV$/ }) })
+    const statusButton = page.getByRole('button', { name: '查看同步状态', exact: true })
+    const statusDialog = page.getByRole('dialog', { name: '同步状态', exact: true })
+    assert.equal(await statusDialog.count(), 0)
+    await statusButton.click()
+    await statusDialog.getByPlaceholder('搜索平台或歌单').fill('WebDAV')
+    await statusDialog.locator('label[for="sync_errors_only"]').click()
+    const row = statusDialog.locator('li').filter({ has: page.locator('strong', { hasText: /^WebDAV$/ }) })
     await row.getByText(/WEBDAV_CONFLICT/).waitFor()
     assert((await row.textContent()).includes('最近成功'))
     assert.equal((await invoke(page, 'winMain_webdav_last_result')).lastSuccess, baseline.lastSuccess)
     dav.seed({ playlists: playlists('local-change') })
     await row.getByRole('button', { name: '重试', exact: true }).click()
     await row.waitFor({ state: 'detached' })
-    await page.locator('label[for="sync_errors_only"]').click()
+    await statusDialog.locator('label[for="sync_errors_only"]').click()
+    await statusDialog.locator('xpath=..').locator('header button').click()
+    await statusDialog.waitFor({ state: 'hidden' })
+    await statusButton.click()
+    await statusDialog.getByText('WebDAV', { exact: true }).first().waitFor()
+    await page.waitForTimeout(400)
     await page.screenshot({ path: path.resolve('logs/sync-features.png') })
   })
   assert.deepEqual(fixture.errors, [])
@@ -129,9 +107,9 @@ test('F06/F11/F12: sync status, playlist selection, visible conflicts and actual
   await route(fixture.page, '/setting?name=SettingSync'); await settled(fixture.page)
   const restoredStatus = await fixture.page.evaluate(() => JSON.parse(localStorage.getItem('lx-sync-status-v1')).webdav)
   assert.equal(restoredStatus.state, 'success'); assert(restoredStatus.lastSuccess > 0)
-  await fixture.app.evaluate(async() => global.lx.event_app.update_config({ 'sync.webdav.password': 'invalid' }))
-  await fixture.page.getByRole('button', { name: '打开根目录', exact: true }).click()
-  await fixture.page.getByRole('alert').filter({ hasText: 'WEBDAV_AUTH' }).waitFor()
-  assert((await fixture.page.getByRole('alert').filter({ hasText: 'WEBDAV_AUTH' }).textContent()).includes('原因'))
+  await fixture.page.getByLabel('密码 / 应用专用密码').fill('invalid')
+  await fixture.page.getByRole('button', { name: '测试连接', exact: true }).click()
+  await fixture.page.getByRole('status').filter({ hasText: 'HTTP_401' }).waitFor()
+  assert((await fixture.page.getByRole('status').filter({ hasText: 'HTTP_401' }).textContent()).includes('原因'))
   assert.deepEqual(fixture.errors, [])
 })

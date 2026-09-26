@@ -456,7 +456,11 @@ export default {
       if ((e.ctrlKey || e.metaKey) && e.key.toLocaleLowerCase() === 'f') {
         const target = e.target
         const isEditingControl = target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable)
-        if (isEditingControl && target !== dom_filter_input.value?.$el) return
+        if (isEditingControl && target !== dom_filter_input.value?.$el) {
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
         e.preventDefault()
         e.stopPropagation()
         dom_filter_input.value?.focus()
@@ -819,8 +823,9 @@ export default {
       padding: 0;
       margin: 0 0 0 var(--setting-row-gap);
       border: none;
-      background: none;
-      color: var(--color-button-font);
+      border-radius: 50%;
+      background: #fff;
+      color: #000;
       cursor: pointer;
       transition: opacity 0.2s ease;
       &:hover {
@@ -832,6 +837,16 @@ export default {
       vertical-align: middle;
     }
   }
+}
+
+:global(#view .help-icon), :global([data-backup-preview] .help-icon) {
+  color: #000;
+  background: #fff;
+  border-radius: 50%;
+  cursor: help;
+  flex: none;
+  transition: opacity 0.2s ease;
+  &:hover { opacity: 0.7; }
 }
 
 .searchFiltering {

@@ -67,7 +67,7 @@ test('production UI recovers search failures, local imports and missing download
         const failed = await page.evaluate(() => window.__aggregateState().failedSources)
         assert(failed.includes('kw') && failed.length > 1)
         const notice = page.locator('[data-search-failures]')
-        assert((await notice.textContent()).includes(await label(page, 'search__all_failed')))
+        assert(!/错误代码|原因：/.test(await notice.textContent()), 'aggregate failures must not expose codes or reasons')
         const sourceNames = await page.evaluate(() => {
           const sources = window.__motionComponents().find(c => Array.isArray(c.setupState.sources) && c.setupState.sources.some(source => source.id === 'all')).setupState.sources
           return Object.fromEntries(sources.map(source => [source.id, source.label]))
@@ -75,18 +75,19 @@ test('production UI recovers search failures, local imports and missing download
         const failedNames = notice.locator('[data-failed-sources]')
         for (const source of failed) assert((await failedNames.textContent()).includes(sourceNames[source]))
         const retry = notice.getByRole('button', { name: await label(page, 'search__retry_failed'), exact: true })
-        assert.equal(await notice.getByRole('button').count(), 1)
+        assert.equal(await notice.locator('[data-retry-source]').count(), failed.length)
+        assert.equal(await notice.locator('[data-retry-failed-sources]').count(), 1)
         assert.equal(await page.locator('.ui-state-retry').count(), 0, 'the empty list must not add a second retry button')
         const beforeRetry = calls.length
         recoverKw = true
         await retry.click()
         await page.waitForFunction(() => window.__aggregateState()?.status === 'partial')
         await page.getByText('recovered ' + kind, { exact: true }).first().waitFor()
-        assert.equal(await page.locator('[data-retry-source]').count(), 0)
-        assert.equal(await notice.getByRole('button').count(), 1)
+        assert.equal(await notice.locator('[data-retry-source]').count(), failed.length - 1)
+        assert.equal(await notice.locator('[data-retry-failed-sources]').count(), 1)
         assert(!(await failedNames.textContent()).includes(sourceNames.kw))
         for (const source of failed.filter(source => source !== 'kw')) assert((await failedNames.textContent()).includes(sourceNames[source]))
-        assert((await notice.textContent()).includes(await label(page, 'search__partial_failed')))
+        assert((await failedNames.textContent()).includes(sourceNames[failed.find(source => source !== 'kw')]))
         assert.deepEqual(requestedPlatforms(calls.slice(beforeRetry)), new Set(failed))
         const beforeSecondRetry = calls.length
         await retry.click()

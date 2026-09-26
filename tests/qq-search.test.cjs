@@ -154,6 +154,8 @@ function storeFixture() {
   const make = () => ({ list: [], key: null, page: 0, maxPage: 0, total: 0, limit: 30, noItemLabel: '' })
   const listInfos = { tx: make(), all: make() }
   const store = load('src/renderer/store/search/music/action.ts', {
+    '@common/utils/errorMessage': { formatError: (error, context, code) => `${context}\n错误代码：${code}\n原因：${error.message}` },
+    '@common/utils/searchScore': { searchScore: () => 1 },
     '../aggregate': load('src/renderer/store/search/aggregate.ts', { '@renderer/store/setting': { appSetting: { 'list.loadingMode': 'together' } } }),
     '@renderer/store/setting': { appSetting: { 'list.loadingMode': 'together' } },
     '@common/utils/vueTools': { markRaw: value => value },
@@ -219,7 +221,7 @@ test('a failed search displays retry state and a later click can succeed', async
   await flush()
   f.calls[0].reject(new Error('QQ rejected the query'))
   await failure
-  assert.equal(f.listInfos.tx.noItemLabel, 'list__load_failed')
+  assert.match(f.listInfos.tx.noItemLabel, /^list__load_failed\n错误代码：LIST_LOAD_FAILED\n原因：QQ rejected the query$/)
   const retry = f.search('A', 1, 'tx')
   await flush()
   f.calls[1].resolve(f.result('A'))

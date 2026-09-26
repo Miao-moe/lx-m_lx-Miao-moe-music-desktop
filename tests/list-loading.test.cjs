@@ -51,7 +51,8 @@ for (const kind of ['music', 'songlist', 'singer', 'album']) {
     await flush()
     assert.equal(f.list.aggregate.sources[0].status, 'success')
     assert(f.list.aggregate.sources[0].elapsedMs >= 0)
-    assert.equal(f.list.aggregate.sources[1].errorCode, 'ECONNRESET')
+    assert.equal(f.list.aggregate.sources[1].status, 'failed')
+    assert.equal(f.list.aggregate.sources[1].errorCode, undefined, 'aggregate search must not expose error codes')
     assert.equal(f.list.aggregate.pendingSources.length, 3)
     const retry = f.retry(platforms[1])
     await flush()
@@ -104,7 +105,7 @@ for (const kind of ['music', 'songlist', 'singer', 'album']) {
     for (const call of f.calls) call.reject(Error('offline'))
     await search
     assert.equal(f.list.aggregate.status, 'failed')
-    assert.match(f.list.noItemLabel, /^list__load_failed\n/); assert.match(f.list.noItemLabel, /SEARCH_LOAD_FAILED/)
+    assert.equal(f.list.noItemLabel, 'list__load_failed', 'aggregate search shows no error code or reason')
     const retry = f.retry()
     await flush()
     assert.equal(f.list.noItemLabel, 'list__loading', 'retrying failed platforms must not flash an empty result')

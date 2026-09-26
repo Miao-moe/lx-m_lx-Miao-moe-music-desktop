@@ -64,19 +64,35 @@ export const findTheme = (themeInfo: LX.ThemeInfo, id: string): LX.Theme | undef
   return theme
 }
 
+let themeApplyRevision = 0
 export const applyTheme = (id: string, lightId: string, darkId: string, dataPath: string) => {
-  getThemes((themeInfo) => {
+  const revision = ++themeApplyRevision
+  const apply = (info: LX.ThemeInfo, refreshOnMiss: boolean) => {
+    if (revision !== themeApplyRevision) return
     let themeId = id == 'auto'
       ? themeShouldUseDarkColors.value
         ? darkId
         : lightId
       : id
 
-    let theme = findTheme(themeInfo, themeId)
+    let theme = findTheme(info, themeId)
+    if (!theme && refreshOnMiss) {
+      // The initial theme list may predate an imported theme. Re-read it before
+      // falling back so selecting a saved custom theme takes effect immediately.
+      void getTheme().then(fresh => {
+        if (revision !== themeApplyRevision) return
+        themeInfo.themes = markRaw(fresh.themes)
+        themeInfo.userThemes = shallowReactive(fresh.userThemes)
+        themeInfo.dataPath = fresh.dataPath
+        apply(themeInfo, false)
+      }).catch(() => { apply(info, false) })
+      return
+    }
     if (!theme) {
       themeId = id == 'auto' && themeShouldUseDarkColors.value ? 'black' : 'green'
-      theme = themeInfo.themes.find(theme => theme.id == themeId)!
+      theme = info.themes.find(theme => theme.id == themeId)!
     }
-    window.setTheme(buildThemeColors(theme, dataPath))
-  })
+    window.setTheme(buildThemeColors(theme, info.dataPath || dataPath))
+  }
+  getThemes(info => { apply(info, true) })
 }

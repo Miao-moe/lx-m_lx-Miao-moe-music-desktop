@@ -63,6 +63,7 @@ const qualityOptions: Array<{ quality: LX.Quality, label: string, display: strin
   { quality: 'flac24bit', label: 'download__lossless', display: 'FLAC 24Bit' },
   { quality: 'hires', label: 'download__lossless', display: 'HIRES' },
   { quality: 'atmos', label: 'download__lossless', display: 'ATMOS' },
+  { quality: 'atmos_plus', label: 'download__lossless', display: 'ATMOS PLUS' },
   { quality: 'master', label: 'download__lossless', display: 'MASTER' },
 ]
 const selectedQuality = ref<LX.Quality>('128k')

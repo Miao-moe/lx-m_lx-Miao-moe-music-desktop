@@ -7,10 +7,13 @@ import { deflateRaw } from 'zlib'
 import { proxy } from '@renderer/store'
 import { getRequestSignal, throwIfRequestCancelled } from './requestContext'
 import { withRequestMessage } from '@common/utils/requestError'
+import { probeAudioFileSize } from '@common/utils/audioFileSize'
 // import fs from 'fs'
 
 const proxyAgent = createProxyAgentPool()
 const getRequestAgent = url => proxyAgent(url, proxy.enable && proxy.host ? proxy : proxy.envProxy)
+
+export const getAudioFileSize = (url, signal) => probeAudioFileSize(url, signal, getRequestAgent)
 
 const defaultHeaders = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36',

@@ -2,8 +2,11 @@ const fs = require('node:fs/promises')
 const path = require('node:path')
 const { createHash, randomUUID } = require('node:crypto')
 const NodeID3 = require('node-id3')
+const { imageSize } = require('image-size')
 
 const MAX_METADATA = 64 * 1024 * 1024
+const MAX_COVER = 8 * 1024 * 1024
+const MAX_LYRICS = 256 * 1024
 const fields = {
   title: ['TIT2', 'TITLE'],
   subtitle: ['TIT3', 'SUBTITLE'],
@@ -22,9 +25,45 @@ const fields = {
 }
 const fail = code => { throw Object.assign(new Error(code), { code }) }
 const hash = data => createHash('sha256').update(data).digest('hex')
-const blankTags = () => Object.fromEntries(Object.keys(fields).map(key => [key, '']))
+const blankTags = () => ({ ...Object.fromEntries(Object.keys(fields).map(key => [key, ''])), lyrics: '' })
 const supported = filename => typeof filename === 'string' && /\.(mp3|flac)$/i.test(filename)
 const revision = stat => [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':')
+
+function decodeCover(value) {
+  if (!value || typeof value !== 'object' || typeof value.data !== 'string' || typeof value.mime !== 'string' ||
+    value.data.length > Math.ceil(MAX_COVER / 3) * 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value.data) || value.data.length % 4) fail('INVALID_IMAGE')
+  const bytes = Buffer.from(value.data, 'base64')
+  if (!bytes.length || bytes.length > MAX_COVER || bytes.toString('base64') !== value.data) fail('INVALID_IMAGE')
+  const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  const mime = png ? 'image/png' : jpeg ? 'image/jpeg' : ''
+  if (!mime || value.mime !== mime) fail('INVALID_IMAGE')
+  let size
+  try { size = imageSize(bytes) } catch { fail('INVALID_IMAGE') }
+  const { width, height } = size
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 16384 || height > 16384 || width * height > 100_000_000) fail('INVALID_IMAGE')
+  const depth = png ? bytes[24] * ({ 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[bytes[25]] ?? 0) : 24
+  if (!depth) fail('INVALID_IMAGE')
+  return { mime, bytes, width, height, depth }
+}
+
+async function readCoverFile(filePath) {
+  const filename = path.resolve(filePath)
+  const stat = await fs.lstat(filename)
+  if (!stat.isFile() || stat.isSymbolicLink() || !stat.size || stat.size > MAX_COVER) fail('INVALID_IMAGE')
+  const bytes = await fs.readFile(filename)
+  if (revision(await fs.lstat(filename)) !== revision(stat)) fail('FILE_CHANGED')
+  const mime = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ? 'image/png' : 'image/jpeg'
+  const cover = { mime, data: bytes.toString('base64') }
+  decodeCover(cover)
+  return { ...cover, size: bytes.length }
+}
+
+const previewCover = (mime, bytes) => ({
+  mime,
+  data: bytes.length <= MAX_COVER && ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mime) ? bytes.toString('base64') : null,
+  size: bytes.length,
+})
 
 async function readAt(file, offset, length) {
   if (length < 0 || length > MAX_METADATA) fail('INVALID_FILE')
@@ -72,6 +111,10 @@ function parseFrames(data, version) {
   return frames
 }
 
+function readFrame(frame, version, id) {
+  try { return NodeID3.read(id3Tag([frame.raw], version), { onlyRaw: true })[id] } catch { return null }
+}
+
 async function readMp3(file, stat) {
   const header = await readAt(file, 0, 10)
   let version = 3
@@ -104,6 +147,15 @@ async function readMp3(file, stat) {
   const comment = comments.find(item => item.value && !item.value.shortText)
   if (comment) tags.comment = comment.value.text ?? ''
 
+  const lyricsFrames = frames.filter(frame => frame.id === 'USLT').map(frame => ({ frame, value: readFrame(frame, version, 'USLT') }))
+  const lyric = lyricsFrames.find(item => item.value && !item.value.shortText) ?? lyricsFrames.find(item => item.value)
+  if (lyric) tags.lyrics = lyric.value.text ?? ''
+  const pictures = frames.filter(frame => frame.id === 'APIC').map(frame => ({ frame, value: readFrame(frame, version, 'APIC') }))
+  const frontPictures = pictures.filter(item => item.value?.type?.id === 3)
+  const picture = frontPictures[0] ?? pictures.find(item => item.value?.imageBuffer)
+  const cover = picture?.value?.imageBuffer ? previewCover(picture.value.mime, picture.value.imageBuffer) : null
+  const coverFrames = frontPictures.length ? frontPictures.map(item => item.frame) : picture ? [picture.frame] : []
+
   let trailer = stat.size >= 128 ? await readAt(file, stat.size - 128, 128) : null
   if (trailer?.toString('ascii', 0, 3) !== 'TAG') trailer = null
   if (trailer) {
@@ -113,7 +165,7 @@ async function readMp3(file, stat) {
     }
     if (!tags.track && trailer[125] === 0 && trailer[126]) tags.track = String(trailer[126])
   }
-  return { format: 'MP3', tags, version, frames, comment, trailer, audioOffset, audioEnd: stat.size - (trailer ? 128 : 0) }
+  return { format: 'MP3', tags, cover, coverFrames, lyricValue: lyric?.value, version, frames, comment, trailer, audioOffset, audioEnd: stat.size - (trailer ? 128 : 0) }
 }
 
 function parseComments(data) {
@@ -143,6 +195,37 @@ function encodeComments(vendor, comments) {
   const number = value => { const buffer = Buffer.alloc(4); buffer.writeUInt32LE(value); return buffer }
   return Buffer.concat([number(vendor.length), vendor, number(comments.length), ...comments.flatMap(value => [number(value.length), value])])
 }
+function readFlacPicture(data) {
+  let offset = 4
+  const number = () => {
+    if (offset + 4 > data.length) return null
+    const value = data.readUInt32BE(offset)
+    offset += 4
+    return value
+  }
+  const bytes = () => {
+    const length = number()
+    if (length == null || offset + length > data.length) return null
+    const value = data.subarray(offset, offset + length)
+    offset += length
+    return value
+  }
+  const mime = bytes()
+  const description = bytes()
+  if (!mime || !description) return null
+  for (let i = 0; i < 4; i++) if (number() == null) return null
+  const image = bytes()
+  return image ? { mime: mime.toString('ascii'), bytes: image } : null
+}
+function encodeFlacPicture(cover) {
+  const number = value => { const bytes = Buffer.alloc(4); bytes.writeUInt32BE(value); return bytes }
+  const mime = Buffer.from(cover.mime, 'ascii')
+  return Buffer.concat([
+    number(3), number(mime.length), mime, number(0),
+    number(cover.width), number(cover.height), number(cover.depth), number(0),
+    number(cover.bytes.length), cover.bytes,
+  ])
+}
 async function readFlac(file, stat) {
   if ((await readAt(file, 0, 4)).toString('ascii') !== 'fLaC') fail('INVALID_FILE')
   const blocks = []
@@ -164,7 +247,15 @@ async function readFlac(file, stat) {
   for (const [key, [, ...names]] of Object.entries(fields)) {
     tags[key] = comments.filter(value => names.includes(commentKey(value))).map(value => value.toString('utf8').slice(value.indexOf(0x3d) + 1)).join('; ')
   }
-  return { format: 'FLAC', tags, blocks, vendor, comments, audioOffset: offset, audioEnd: stat.size }
+  const lyric = comments.find(value => commentKey(value) === 'LYRICS') ?? comments.find(value => commentKey(value) === 'UNSYNCEDLYRICS')
+  if (lyric) tags.lyrics = lyric.toString('utf8').slice(lyric.indexOf(0x3d) + 1)
+  const pictures = blocks.filter(block => block.type === 6 && block.data.length >= 4)
+  const frontPictures = pictures.filter(block => block.data.readUInt32BE(0) === 3)
+  const picture = frontPictures[0] ?? pictures[0]
+  const parsed = picture && readFlacPicture(picture.data)
+  const cover = picture ? previewCover(parsed?.mime ?? '', parsed?.bytes ?? Buffer.alloc(0)) : null
+  const coverBlocks = frontPictures.length ? frontPictures : picture ? [picture] : []
+  return { format: 'FLAC', tags, cover, coverBlocks, blocks, vendor, comments, audioOffset: offset, audioEnd: stat.size }
 }
 
 async function inspect(filePath, format = path.extname(filePath).slice(1).toUpperCase()) {
@@ -181,17 +272,21 @@ async function inspect(filePath, format = path.extname(filePath).slice(1).toUppe
 
 async function readTags(filePath) {
   const info = await inspect(path.resolve(filePath))
-  return { filePath: info.filePath, format: info.format, size: info.stat.size, revision: info.revision, tags: info.tags }
+  return { filePath: info.filePath, format: info.format, size: info.stat.size, revision: info.revision, tags: info.tags, cover: info.cover }
 }
 
 function updateMp3(info, changes) {
-  const removed = new Set(Object.keys(changes).filter(key => key !== 'comment').map(key => fields[key][0]))
+  const removed = new Set(Object.keys(changes).filter(key => Object.hasOwn(fields, key) && key !== 'comment').map(key => fields[key][0]))
   if ('year' in changes) { removed.add('TDRC'); removed.add('TYER') }
-  const kept = info.frames.filter(frame => !removed.has(frame.id) && !(frame === info.comment?.frame && 'comment' in changes)).map(frame => frame.raw)
-  const values = Object.fromEntries(Object.entries(changes).map(([key, value]) => [
+  const coverFrames = new Set('cover' in changes ? info.coverFrames : [])
+  const kept = info.frames.filter(frame => !removed.has(frame.id) && !(frame === info.comment?.frame && 'comment' in changes) &&
+    !(frame.id === 'USLT' && 'lyrics' in changes) && !coverFrames.has(frame)).map(frame => frame.raw)
+  const values = Object.fromEntries(Object.entries(changes).filter(([key]) => Object.hasOwn(fields, key)).map(([key, value]) => [
     key === 'year' && info.version === 4 ? 'TDRC' : fields[key][0],
     key === 'comment' ? { language: info.comment?.value.language ?? 'eng', text: value } : value,
   ]))
+  if (changes.lyrics) values.USLT = { language: info.lyricValue?.language ?? 'eng', shortText: info.lyricValue?.shortText ?? '', text: changes.lyrics }
+  if (changes.cover) values.APIC = { mime: changes.cover.mime, type: { id: 3 }, description: 'Cover', imageBuffer: changes.cover.bytes }
   const generated = parseFrames(NodeID3.create(values).subarray(10), 3).map(frame => {
     if (info.version === 4) encodeSize(frame.raw.length - 10).copy(frame.raw, 4)
     return frame.raw
@@ -209,15 +304,33 @@ function updateMp3(info, changes) {
   return { header: id3Tag([...kept, ...generated], info.version), trailer }
 }
 function updateFlac(info, changes) {
-  const removed = new Set(Object.keys(changes).flatMap(key => fields[key].slice(1)))
+  const removed = new Set(Object.keys(changes).filter(key => Object.hasOwn(fields, key)).flatMap(key => fields[key].slice(1)))
+  if ('lyrics' in changes) { removed.add('LYRICS'); removed.add('UNSYNCEDLYRICS') }
   const comments = info.comments.filter(value => !removed.has(commentKey(value)))
-  for (const [key, value] of Object.entries(changes)) {
+  for (const [key, value] of Object.entries(changes).filter(([key]) => Object.hasOwn(fields, key))) {
     if (value) comments.push(Buffer.from(fields[key][1] + '=' + value, 'utf8'))
   }
+  if (changes.lyrics) comments.push(Buffer.from('LYRICS=' + changes.lyrics, 'utf8'))
   const data = encodeComments(info.vendor, comments)
   if (data.length > 0xffffff) fail('INVALID_TAGS')
-  const blocks = info.blocks.map(block => block.type === 4 ? { type: 4, data } : block)
+  let blocks = info.blocks.map(block => block.type === 4 ? { type: 4, data } : block)
   if (!blocks.some(block => block.type === 4)) blocks.push({ type: 4, data })
+  if ('cover' in changes) {
+    const removedPictures = new Set(info.coverBlocks)
+    const picture = changes.cover ? { type: 6, data: encodeFlacPicture(changes.cover) } : null
+    if (picture?.data.length > 0xffffff) fail('INVALID_IMAGE')
+    let inserted = false
+    blocks = blocks.flatMap(block => {
+      if (!removedPictures.has(block)) return [block]
+      if (!picture || inserted) return []
+      inserted = true
+      return [picture]
+    })
+    if (picture && !inserted) {
+      const padding = blocks.findIndex(block => block.type === 1)
+      blocks.splice(padding < 0 ? blocks.length : padding, 0, picture)
+    }
+  }
   const encoded = blocks.flatMap((block, index) => {
     const header = Buffer.alloc(4)
     header[0] = block.type | (index === blocks.length - 1 ? 0x80 : 0)
@@ -239,7 +352,12 @@ async function saveTags(snapshot, updates, beforeReplace = async() => {}) {
     if (info.revision !== snapshot.revision) fail('FILE_CHANGED')
     const changes = {}
     for (const [key, value] of Object.entries(updates)) {
-      if (!Object.hasOwn(fields, key) || typeof value !== 'string' || value.length > 10000 || value.includes('\0')) fail('INVALID_TAGS')
+      if (key === 'cover') {
+        if (value !== null && (typeof value !== 'object' || value.data !== info.cover?.data || value.mime !== info.cover?.mime)) changes.cover = decodeCover(value)
+        else if (value === null && info.cover) changes.cover = null
+        continue
+      }
+      if ((key !== 'lyrics' && !Object.hasOwn(fields, key)) || typeof value !== 'string' || value.length > (key === 'lyrics' ? MAX_LYRICS : 10000) || value.includes('\0')) fail('INVALID_TAGS')
       if (value !== info.tags[key]) changes[key] = value
     }
     if (!Object.keys(changes).length) return readTags(filePath)
@@ -277,4 +395,4 @@ async function saveTags(snapshot, updates, beforeReplace = async() => {}) {
   }
 }
 
-module.exports = { readTags, saveTags, supported }
+module.exports = { readTags, readCoverFile, saveTags, supported }

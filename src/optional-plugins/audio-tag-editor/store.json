@@ -1,9 +1,9 @@
 {
   "name": { "zh-cn": "音频标签编辑", "zh-tw": "音訊標籤編輯", "en-us": "Audio Tag Editor" },
   "description": {
-    "zh-cn": "在下载列表右键修改 MP3、FLAC 的音频标签，也可选择本地文件，保留音频、封面与歌词。",
-    "zh-tw": "在下載列表按右鍵修改 MP3、FLAC 的音訊標籤，也可選擇本機檔案，保留音訊、封面與歌詞。",
-    "en-us": "Right-click a download to edit MP3 or FLAC tags, or choose a local file, preserving audio, artwork and lyrics."
+    "zh-cn": "在下载列表右键修改 MP3、FLAC 的文字标签、封面和内嵌歌词，也可选择本地文件。",
+    "zh-tw": "在下載列表按右鍵修改 MP3、FLAC 的文字標籤、封面和內嵌歌詞，也可選擇本機檔案。",
+    "en-us": "Right-click a download or choose a local MP3 or FLAC file to edit tags, artwork and embedded lyrics."
   },
   "icon": "#icon-music"
 }

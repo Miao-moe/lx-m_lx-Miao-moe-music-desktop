@@ -1,7 +1,7 @@
 <template>
   <material-modal :show="modelValue" bg-close="bg-close" teleport="#view" @close="$emit('update:modelValue', false)">
     <main :class="$style.main">
-      <h2>{{ $t('theme_selector_modal__title') }}</h2>
+      <h2>{{ $t('theme_selector_modal__title') }}<svg-icon class="help-icon" name="help-circle-outline" :aria-label="$t('theme_selector_modal__title_tip')" /></h2>
       <div class="scroll" :class="$style.content">
         <div>
           <h3>{{ $t('theme_selector_modal__light_title') }}</h3>
@@ -29,9 +29,6 @@
             </li>
           </ul>
         </div>
-      </div>
-      <div :class="$style.note">
-        <p>{{ $t('theme_selector_modal__title_tip') }}</p>
       </div>
     </main>
   </material-modal>
@@ -216,18 +213,6 @@ export default {
       font-size: 14px;
     }
   }
-}
-
-.note {
-  padding: 8px 15px;
-  font-size: 13px;
-  line-height: 1.25;
-  color: var(--color-font);
-  // p {
-  //   + p {
-  //     margin-top: 5px;
-  //   }
-  // }
 }
 
 </style>

@@ -38,15 +38,26 @@ test('distribution starts with its packaged database, playback and offline sourc
     const page = await app.firstWindow()
     page.setDefaultTimeout(20000)
     await page.waitForSelector('#container')
-    const versions = await app.evaluate(({ app }) => ({ ...process.versions, arch: process.arch, qrc: typeof process.mainModule.require(app.getAppPath() + '/build/Release/qrc_decode.node').qrc_decode === 'function' }))
+    const usesNativeQrc = expectedElectron === '22.3.27'
+    const versions = await app.evaluate(({ app }, usesNativeQrc) => ({
+      ...process.versions,
+      arch: process.arch,
+      qrc: usesNativeQrc ? typeof process.mainModule.require(app.getAppPath() + '/build/Release/qrc_decode.node').qrc_decode === 'function' : null,
+    }), usesNativeQrc)
     assert.equal(versions.electron, expectedElectron)
     if (expectedElectron === '22.3.27') assert.equal(versions.node, '16.17.1')
-    assert.equal(versions.qrc, true)
+    if (usesNativeQrc) assert.equal(versions.qrc, true)
     await page.evaluate(() => {
       Object.assign(window.lxData.appSetting, { 'common.isAgreePact': true, 'common.showChangeLog': false })
       window.lxData.versionInfo.showModal = false
       window.lxData.versionInfo.newVersion = { version: window.lxData.versionInfo.version, history: [], desc: '' }
     })
+    const decoded = await page.evaluate(() => require('electron').ipcRenderer.invoke('winMain_handle_tx_decode_lyric', {
+      lrc: '32dabb4c5e9846faa7e76c9531cc4d78e9c22f000fd0945e831b422b53b4537f86edbb1d70963667dd72c858c66ec28b6acec8f144928bad',
+      tlrc: '',
+      rlrc: '',
+    }))
+    assert.equal(decoded.lyric, '[00:00.00]测试歌词 🎵\n[00:01.23]Line two')
     const window = await app.browserWindow(page)
     await window.evaluate(window => window.showInactive())
     await window.dispose()

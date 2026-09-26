@@ -9,7 +9,7 @@ material-modal(:show="modelValue" bg-close teleport="#view" @close="handleClose"
             | {{ api.name }}
             span(v-if="api.version") {{ /^\d/.test(api.version) ? `v${api.version}` : api.version }}
             span(v-if="api.author") {{ api.author }}
-          p {{ api.description }}
+            svg-icon.help-icon(v-if="api.description" name="help-circle-outline" :aria-label="api.description")
           div
             base-checkbox(:id="`user_api_${api.id}`" v-model="api.allowShowUpdateAlert" :class="$style.checkbox" :label="$t('user_api__allow_show_update_alert')" @change="handleChangeAllowUpdateAlert(api, $event)")
         base-btn(:class="$style.listBtn" outline :aria-label="$t('user_api__btn_remove')" @click.stop="handleRemove(index)")
@@ -199,12 +199,6 @@ export default {
       color: var(--color-font-label);
       margin-left: 6px;
     }
-  }
-  p {
-    margin-top: 5px;
-    font-size: 14px;
-    color: var(--color-font-label);
-    word-break: break-all;
   }
 }
 .noitem {

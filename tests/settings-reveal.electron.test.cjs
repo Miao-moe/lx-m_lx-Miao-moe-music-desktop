@@ -75,14 +75,22 @@ test('dependent settings expand smoothly, retain values and remain usable with s
     })
 
     await t.test('rapid reversals finish without stale height, hidden focus targets or lost state', async() => {
-      await page.evaluate(async id => {
+      const toggles = await page.evaluate(async id => {
+        const values = []
         for (let i = 0; i < 7; ++i) {
           document.querySelector(`label[for="${id}"]`).click()
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+          values.push({ checked: document.getElementById(id).checked, setting: window.lxData.appSetting['player.gaplessPlayback'] })
         }
+        return values
       }, gapless)
       await idle(page)
       const panel = page.locator(reveal(gapless))
+      if (await panel.isVisible()) t.diagnostic('Rapid toggle state: ' + JSON.stringify({ toggles, state: await page.evaluate(id => ({
+        checked: document.getElementById(id).checked,
+        value: window.lxData.appSetting['player.gaplessPlayback'],
+        panel: document.querySelector(`[data-setting-search-depends~="${id}"]`)?.outerHTML.slice(0, 200),
+      }), gapless) }))
       assert.equal(await panel.isVisible(), false)
       assert.equal(await panel.getAttribute('inert'), '')
       assert.equal(await panel.evaluate(element => element.getBoundingClientRect().height), 0)

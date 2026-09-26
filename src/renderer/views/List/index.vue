@@ -4,7 +4,7 @@
       <MyList ref="myList" :list-id="listId" @show-menu="$refs.musicList?.handleMenuClick()" />
     </common-resizable-sidebar>
     <common-motion-view :motion-key="listId">
-      <ListeningHistory v-if="listId === HISTORY_ID" />
+      <ListeningHistory v-if="listId === HISTORY_ID" @show-menu="$refs.myList.handleMenuClick()" />
       <MusicList v-else ref="musicList" :list-id="listId" @show-menu="$refs.myList.handleMenuClick()" />
     </common-motion-view>
   </div>

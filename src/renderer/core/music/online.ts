@@ -54,7 +54,7 @@ export const getMusicUrl = async({ musicInfo, quality, isRefresh, allowToggleSou
   // }
   // 先按候选音质顺序探测缓存，命中即可直接播放（无需等待音源初始化）
   if (!isRefresh) {
-    for (const itemQuality of getTryQualityList(quality ?? appSetting['player.playQuality'], musicInfo)) {
+    for (const itemQuality of getTryQualityList(quality ?? appSetting['player.playQuality'], musicInfo, quality != null)) {
       const cachedUrl = await getStoreMusicUrl(musicInfo, itemQuality)
       if (cachedUrl) {
         setLastTryQuality(musicInfo.id, itemQuality)

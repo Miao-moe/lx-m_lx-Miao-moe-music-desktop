@@ -21,6 +21,30 @@
             <input v-else v-model="editor.tags[field]" type="text" maxlength="10000" :placeholder="field === 'track' || field === 'disc' ? '1/12' : ''">
           </label>
         </fieldset>
+        <div :class="$style.mediaFields">
+          <section :class="$style.coverEditor" :aria-label="text.cover">
+            <h4>{{ text.cover }}</h4>
+            <div :class="$style.coverRow">
+              <div :class="$style.coverPreview">
+                <img v-if="coverPreview" :src="coverPreview" :alt="text.cover">
+                <svg v-else aria-hidden="true" viewBox="0 0 24 24"><use xlink:href="#icon-music" /></svg>
+              </div>
+              <div :class="$style.coverControls">
+                <p>{{ editor.cover ? coverPreview ? text.coverPresent : text.coverUnpreviewable : text.noCover }}</p>
+                <div :class="$style.coverButtons">
+                  <base-btn min :disabled="editor.busy" @click="chooseCover">{{ text.chooseCover }}</base-btn>
+                  <base-btn min outline :disabled="editor.busy || !editor.cover" @click="removeCover">{{ text.removeCover }}</base-btn>
+                </div>
+                <p :class="$style.hint">{{ text.coverHint }}</p>
+              </div>
+            </div>
+          </section>
+          <label :class="$style.lyricsEditor">
+            <span>{{ text.lyrics }}</span>
+            <textarea v-model="editor.tags.lyrics" :aria-label="text.lyrics" :disabled="editor.busy" rows="8" maxlength="262144" :placeholder="text.lyricsHint" />
+            <span :class="$style.hint">{{ text.lyricsHint }}</span>
+          </label>
+        </div>
         <div :class="$style.actions">
           <base-btn min :disabled="editor.busy || !dirty" @click="save">{{ editor.busy ? text.working : text.save }}</base-btn>
           <base-btn min outline :disabled="editor.busy || !dirty" @click="reset">{{ text.reset }}</base-btn>
@@ -42,13 +66,15 @@ import { ipcRenderer } from 'electron'
 import path from 'node:path'
 import { WIN_MAIN_RENDERER_EVENT_NAME } from '@common/ipcNames'
 import { appSetting } from '@renderer/store/setting'
-import { saveTags } from './metadata'
+import { readCoverFile, saveTags } from './metadata'
 import { editor } from './session'
 import { text, fieldNames } from './text'
 import { dirty, errorText, confirmDiscard, report, loadFile, validateDownloadTarget, withEditorAction } from './actions'
 
 const fileName = computed(() => editor.snapshot ? path.basename(editor.snapshot.filePath) : '')
+const coverPreview = computed(() => editor.cover?.data ? `data:${editor.cover.mime};base64,${editor.cover.data}` : '')
 watch(() => JSON.stringify(editor.tags), () => { editor.saved = false })
+watch(() => editor.cover, () => { editor.saved = false })
 
 const chooseFile = async() => withEditorAction(async() => {
   const result = await ipcRenderer.invoke(WIN_MAIN_RENDERER_EVENT_NAME.show_select_dialog, {
@@ -63,7 +89,24 @@ const chooseFile = async() => withEditorAction(async() => {
 const reset = () => {
   if (editor.busy || !editor.snapshot) return
   editor.tags = { ...editor.snapshot.tags }
+  editor.cover = editor.snapshot.cover
   editor.error = ''
+  editor.saved = false
+}
+const chooseCover = async() => withEditorAction(async() => {
+  if (!editor.snapshot) return
+  const result = await ipcRenderer.invoke(WIN_MAIN_RENDERER_EVENT_NAME.show_select_dialog, {
+    title: text.value.chooseCover,
+    defaultPath: path.dirname(editor.snapshot.filePath),
+    properties: ['openFile'],
+    filters: [{ name: 'JPEG / PNG', extensions: ['jpg', 'jpeg', 'png'] }],
+  })
+  if (result.canceled || !result.filePaths.length) return
+  editor.cover = await readCoverFile(result.filePaths[0])
+})
+const removeCover = () => {
+  if (editor.busy || !editor.snapshot) return
+  editor.cover = null
   editor.saved = false
 }
 const save = async() => {
@@ -73,9 +116,12 @@ const save = async() => {
   editor.saved = false
   try {
     await validateDownloadTarget()
-    const snapshot = await saveTags(editor.snapshot, { ...editor.tags }, validateDownloadTarget)
+    const updates = { ...editor.tags }
+    if (editor.cover !== editor.snapshot.cover) updates.cover = editor.cover
+    const snapshot = await saveTags(editor.snapshot, updates, validateDownloadTarget)
     editor.snapshot = snapshot
     editor.tags = { ...snapshot.tags }
+    editor.cover = snapshot.cover
     // Let the dirty-state watcher settle before showing the saved confirmation.
     await nextTick()
     editor.saved = true
@@ -103,6 +149,18 @@ const save = async() => {
 .fields label { min-width: 0; }
 .fields label > span { display: block; margin-bottom: 8px; font-size: 12px; }
 .wide { grid-column: 1 / -1; }
+.mediaFields { display: grid; gap: 20px; margin-top: 20px; }
+.coverEditor h4 { margin-bottom: 8px; }
+.coverRow { display: flex; gap: 16px; align-items: center; }
+.coverPreview { flex: none; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--color-primary-light-100-alpha-700); border-radius: var(--radius-md); background: var(--color-app-background); }
+.coverPreview img { width: 100%; height: 100%; object-fit: cover; }
+.coverPreview svg { width: 40px; height: 40px; color: var(--color-primary); }
+.coverControls { min-width: 0; }
+.coverControls p { margin: 0 0 8px; color: var(--color-font-label); }
+.coverButtons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.lyricsEditor > span:first-child { display: block; margin-bottom: 8px; font-size: 12px; }
+.lyricsEditor textarea { min-height: 120px; }
+.lyricsEditor .hint { display: block; margin-top: 6px; }
 .actions { margin: 16px 0 0; }
 .placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; padding: 30px; text-align: center; color: var(--color-font-label); }
 .placeholder svg { width: 48px; height: 48px; margin-bottom: 16px; color: var(--color-primary); }

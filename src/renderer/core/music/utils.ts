@@ -174,14 +174,14 @@ export const getOnlineOtherSourcePicByLocal = async(musicInfo: LX.Music.MusicInf
   })
 }
 
-export const TRY_QUALITYS_LIST = ['master', 'atmos', 'hires', 'flac24bit', 'flac', '320k'] as const
+export const TRY_QUALITYS_LIST = ['master', 'atmos_plus', 'atmos', 'hires', 'flac24bit', 'flac', '320k'] as const
 type TryQualityType = typeof TRY_QUALITYS_LIST[number]
 
 /**
  * 构建从指定音质开始逐级降级的尝试列表
  * 例如设置为 flac24bit 时返回 [flac24bit, flac, 320k, 128k]（按音源/歌曲支持度过滤）
  */
-export const getTryQualityList = (highQuality: LX.Quality, musicInfo: LX.Music.MusicInfoOnline): LX.Quality[] => {
+export const getTryQualityList = (highQuality: LX.Quality, musicInfo: LX.Music.MusicInfoOnline, explicitQuality = false): LX.Quality[] => {
   const list = qualityList.value[musicInfo.source]
   const tryList: LX.Quality[] = TRY_QUALITYS_LIST.includes(highQuality as TryQualityType)
     ? TRY_QUALITYS_LIST
@@ -189,7 +189,8 @@ export const getTryQualityList = (highQuality: LX.Quality, musicInfo: LX.Music.M
       .filter(q => {
         if (list) {
           if (!list.includes(q)) return false
-          if ((q === 'master' || q === 'atmos' || q === 'hires') && !musicInfo.meta._qualitys.flac24bit) return false
+          if ((q === 'master' || q === 'atmos_plus' || q === 'atmos' || q === 'hires') && !musicInfo.meta._qualitys.flac24bit &&
+            !(explicitQuality && q === 'master' && musicInfo.meta._qualitys.flac)) return false
           return true
         }
         return !!musicInfo.meta._qualitys[q]
@@ -222,7 +223,7 @@ export const getNextTryQuality = (highQuality: LX.Quality, musicInfo: LX.Music.M
   return index == -1 ? tryList[0] : (tryList[index + 1] ?? null)
 }
 
-const EXTRA_QUALITY_TIERS = ['master', 'atmos', 'hires'] as const
+const EXTRA_QUALITY_TIERS = ['master', 'atmos_plus', 'atmos', 'hires'] as const
 
 const pendingMusicUrls = new Map()
 const requestOnlineMusicUrl = async(musicInfo: LX.Music.MusicInfoOnline, quality: LX.Quality, isRefresh: boolean) => {
@@ -272,7 +273,7 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
     onToggleSource(musicInfo)
 
     // 该源的候选音质从高到低逐个尝试，全部失败再换下一个源
-    const tryQualitys = getTryQualityList(quality ?? appSetting['player.playQuality'], musicInfo)
+    const tryQualitys = getTryQualityList(quality ?? appSetting['player.playQuality'], musicInfo, quality != null)
     for (const itemQuality of tryQualitys) {
       throwIfRequestCancelled()
       const cachedUrl = await getStoreMusicUrl(musicInfo, itemQuality)
@@ -321,7 +322,7 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
   if (!await window.lx.apiInitPromise[0]) throw new Error('source init failed')
 
   // 从目标音质开始逐级降级尝试，全部失败后才进入换源流程
-  const tryQualitys = getTryQualityList(quality ?? appSetting['player.playQuality'], musicInfo)
+  const tryQualitys = getTryQualityList(quality ?? appSetting['player.playQuality'], musicInfo, quality != null)
   let lastErr: any = new Error('get music url failed')
   for (const targetQuality of tryQualitys) {
     throwIfRequestCancelled()

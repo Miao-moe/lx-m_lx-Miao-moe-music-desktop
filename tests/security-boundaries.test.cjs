@@ -111,7 +111,11 @@ test('H06: malformed, oversized, cyclic and prototype-bearing payloads are rejec
   policy.registerIpcWindow(sender, 'main', sender.mainFrame.url)
   const event = { sender, senderFrame: sender.mainFrame }
   assert.throws(() => policy.assertIpcRequest(event, 'common_set_app_setting', { 'cookie.wy': 1 }), { code: 'IPC_ARGUMENT_INVALID' })
+  policy.assertIpcRequest(event, 'player_list_music_clear', ['default', 'love'])
+  assert.throws(() => policy.assertIpcRequest(event, 'player_list_music_clear', 'love'), { code: 'IPC_ARGUMENT_INVALID' })
+  policy.assertIpcRequest(event, 'winMain_open_api_action', { action: 'enable', data: { enable: false } })
   assert.throws(() => policy.assertIpcRequest(event, 'winMain_open_api_action', { action: 'enable', data: { enable: true, bindLan: false, port: '3000junk' } }), { code: 'IPC_ARGUMENT_INVALID' })
+  assert.throws(() => policy.assertIpcRequest(event, 'winMain_open_api_action', { action: 'enable', data: { enable: true } }), { code: 'IPC_ARGUMENT_INVALID' })
 })
 
 test('H09: source manifests require version pinning, digest and explicit public origins', () => {

@@ -21,7 +21,7 @@
       </div>
       <p v-if="saveError" class="p small" role="alert">{{ saveError }}</p>
 
-      <h3>{{ $t('setting__sync_webdav_items') }}</h3>
+      <h3 id="sync_webdav_items">{{ $t('setting__sync_webdav_items') }}<svg-icon class="help-icon" name="help-circle-outline" :aria-label="$t('setting__sync_webdav_download_tip') + '\n' + $t('setting__sync_webdav_settings_tip')" /></h3>
       <div :class="$style.options">
         <base-checkbox
           v-for="section in sections" :id="'setting_sync_webdav_' + section" :key="section" :disabled="disabled"
@@ -29,8 +29,6 @@
           @update:model-value="updateOption('sync.webdav.' + section, $event)"
         />
       </div>
-      <p class="p small">{{ $t('setting__sync_webdav_download_tip') }}</p>
-      <p class="p small">{{ $t('setting__sync_webdav_settings_tip') }}</p>
 
       <div class="p">
         <base-checkbox id="setting_sync_webdav_auto" :disabled="disabled" :model-value="appSetting['sync.webdav.autoSync']" :label="$t('setting__sync_webdav_auto')" @update:model-value="updateOption('sync.webdav.autoSync', $event)" />
@@ -51,7 +49,6 @@
         <span v-if="!webdav.busy && webdav.result">{{ $t('setting__sync_webdav_last_time', { time: lastTime }) }}</span>
       </div>
       <SyncDiffPanel :diff="webdav.result?.diff" :title="$t('setting__sync_webdav_diff_title')" />
-      <WebDAVAudio />
     </div>
   </dd>
 </template>
@@ -65,7 +62,6 @@ import { webdav, runWebDAVAction } from '@renderer/store/webdav'
 import { useI18n } from '@renderer/plugins/i18n'
 import { dialog } from '@renderer/plugins/Dialog'
 import SyncDiffPanel from '@renderer/components/common/SyncDiffPanel.vue'
-import WebDAVAudio from './WebDAVAudio.vue'
 
 const t = useI18n()
 const sections = ['playlists', 'downloadHistory', 'downloadTasks', 'settings', 'dislike'] as const

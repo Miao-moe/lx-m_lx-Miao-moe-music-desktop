@@ -1,7 +1,9 @@
 <template lang="pug">
 material-modal(:show="modelValue" bg-close teleport="#view" @close="$emit('update:modelValue', false)")
   main(:class="$style.main")
-    h2 {{ $t('setting__sync_server_device_list_title') }}
+    h2
+      | {{ $t('setting__sync_server_device_list_title') }}
+      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__sync_server_device_list_tips')")
     ul.scroll(v-if="historyDeviceList.length" :class="$style.content")
       li(v-for="(device, index) in historyDeviceList" :key="device.id" :class="$style.listItem")
         div(:class="$style.listLeft")
@@ -14,8 +16,6 @@ material-modal(:show="modelValue" bg-close teleport="#view" @close="$emit('updat
             use(xlink:href="#icon-delete")
     div(v-else :class="$style.content")
       div(:class="$style.noitem") {{ $t('setting__sync_server_device_list_noitem') }}
-  div(:class="$style.footer")
-    div(:class="$style.tips") {{ $t('setting__sync_server_device_list_tips') }}
 </template>
 
 <script>
@@ -153,11 +153,5 @@ export default {
 // .footer {
 //   width: @width;
 // }
-.tips {
-  padding: 8px 15px;
-  font-size: 13px;
-  line-height: 1.25;
-  color: var(--color-font);
-}
 
 </style>

@@ -6,9 +6,10 @@ const flush = () => new Promise(resolve => setImmediate(resolve))
 const song = (id = 'kw_1') => ({ id, source: 'kw', name: 'song', singer: 'artist', interval: '03:00', meta: { albumName: 'album', _qualitys: { '128k': {}, '320k': {} } } })
 function fixture(respond, findMusic = async() => []) {
   const calls = [], apiSource = { value: 'first' }
+  const qualityList = { value: {} }
   global.window = { lx: { apiInitPromise: [Promise.resolve(true)] }, i18n: { t: key => key } }
   const utils = loader({
-    '@renderer/store': { apiSource, qualityList: { value: {} } },
+    '@renderer/store': { apiSource, qualityList },
     '@renderer/store/utils': { assertApiSupport: () => true },
     '@renderer/utils/musicSdk': { findMusic, ...Object.fromEntries(['kw', 'kg', 'tx'].map(source => [source, { getMusicUrl: (song, quality) => { calls.push({ song, quality, source }); return { promise: respond(calls.length, quality, source) } } }])) },
     '@renderer/utils/musicCover': { getMusicCoverUrl: async() => '' },
@@ -19,8 +20,27 @@ function fixture(respond, findMusic = async() => []) {
     '@renderer/utils/musicSdk/api-source': {},
   })('src/renderer/core/music/utils.ts')
   const get = (options = {}) => utils.handleGetOnlineMusicUrl({ musicInfo: song(), isRefresh: false, allowToggleSource: false, onToggleSource() {}, ...options })
-  return { get, calls, apiSource, utils }
+  return { get, calls, apiSource, qualityList, utils }
 }
+
+test('an explicit Master download tries Master for a FLAC-only playlist entry', async() => {
+  const f = fixture(async(_count, quality) => ({ url: 'https://audio.test/master', type: quality }))
+  f.qualityList.value.kw = ['128k', '320k', 'flac', 'master']
+  const info = { ...song(), meta: { albumName: 'album', _qualitys: { flac: {} } } }
+  assert.deepEqual(f.utils.getTryQualityList('master', info), ['flac', '320k', '128k'], 'automatic playback keeps its existing quality policy')
+  assert.deepEqual(f.utils.getTryQualityList('master', info, true), ['master', 'flac', '320k', '128k'])
+  await f.get({ musicInfo: info, quality: 'master' })
+  assert.equal(f.calls[0].quality, 'master')
+})
+
+test('an exact search match lets a playlist Atmos Plus request reach the source', async() => {
+  const f = fixture(async(_count, quality) => ({ url: 'https://audio.test/atmos-plus', type: quality }))
+  f.qualityList.value.kw = ['128k', '320k', 'flac', 'flac24bit', 'atmos', 'atmos_plus', 'master']
+  const info = { ...song(), meta: { albumName: 'album', _qualitys: { flac: {}, flac24bit: {} } } }
+  assert.deepEqual(f.utils.getTryQualityList('atmos_plus', info, true), ['atmos_plus', 'atmos', 'flac24bit', 'flac', '320k', '128k'])
+  await f.get({ musicInfo: info, quality: 'atmos_plus' })
+  assert.equal(f.calls[0].quality, 'atmos_plus')
+})
 
 test('B16: a fast match with an unavailable URL falls through to an untried platform', async() => {
   const searched = []

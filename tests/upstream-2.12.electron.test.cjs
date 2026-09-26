@@ -111,7 +111,15 @@ test('playlist order, initial Open API volume and custom theme artwork survive a
       const state = window.__motionComponents().find(c => typeof c.setupState.toggleTheme === 'function').setupState
       state.toggleTheme({ id: 'upstream-theme-test' })
     })
-    await fixture.page.waitForFunction(url => getComputedStyle(document.querySelector('#root')).backgroundImage.includes(url), backgroundUrl)
+    await fixture.page.waitForFunction(url => getComputedStyle(document.querySelector('#root')).backgroundImage.includes(url), backgroundUrl).catch(async error => {
+      t.diagnostic('Theme state: ' + JSON.stringify(await fixture.page.evaluate(async channel => ({
+        id: window.lxData.appSetting['theme.id'],
+        background: getComputedStyle(document.querySelector('#root')).backgroundImage,
+        variable: getComputedStyle(document.documentElement).getPropertyValue('--background-image'),
+        persisted: (await require('electron').ipcRenderer.invoke(channel)).userThemes.map(theme => theme.id),
+      }), ipc.get_themes)))
+      throw error
+    })
   })
 
   await t.test('Open API reports the saved volume and mute state before the user changes them', async() => {
@@ -123,7 +131,10 @@ test('playlist order, initial Open API volume and custom theme artwork survive a
       action: 'enable', data: { enable: true, port: String(port), bindLan: false },
     }), { channel: ipc.open_api_action, port })
     assert.equal(status.status, true)
-    const data = await fetch(`http://127.0.0.1:${port}/status?filter=volume,mute`).then(response => response.json())
+    assert.ok(status.token)
+    const data = await fetch(`http://127.0.0.1:${port}/status?filter=volume,mute`, {
+      headers: { Authorization: `Bearer ${status.token}` },
+    }).then(response => response.json())
     assert.equal(data.volume, 37)
     assert.equal(data.mute, true)
     await fixture.page.evaluate(channel => require('electron').ipcRenderer.invoke(channel, { action: 'enable', data: { enable: false } }), ipc.open_api_action)

@@ -1,10 +1,7 @@
 <template lang="pug">
-dt#advanced {{ $t('setting__advanced') }}
-dd
-  p.p.gap-top(style="color: var(--color-500); font-size: 12px; line-height: 1.6;")
-    | {{ $t('setting__advanced_desc') }}
-  p.p.gap-top(style="color: var(--color-500); font-size: 12px; line-height: 1.6;")
-    | {{ $t('setting__advanced_nav_tip') }}
+dt#advanced
+  | {{ $t('setting__advanced') }}
+  svg-icon.help-icon(name="help-circle-outline" :aria-label="[$t('setting__advanced_desc'), $t('setting__advanced_nav_tip')].join(String.fromCharCode(10))")
 
 dd
   h3#advanced_ui {{ $t('setting__advanced_ui') }}
@@ -68,12 +65,12 @@ dd
     .gap-top
       base-checkbox(
         id="setting_advanced_play_gapless"
-        :model-value="appSetting['player.gaplessPlayback']"
+        :model-value="gaplessValue"
         :label="$t('setting__advanced_play_gapless')"
-        @update:model-value="updateSetting({ 'player.gaplessPlayback': $event })"
+        @update:model-value="updateGapless"
       )
       svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__advanced_play_gapless_tip')")
-    common-setting-reveal(:show="appSetting['player.gaplessPlayback']" depends="setting_advanced_play_gapless")
+    common-setting-reveal(:show="gaplessValue" depends="setting_advanced_play_gapless")
       .gap-top
         base-checkbox(
           id="setting_advanced_play_fade"
@@ -98,13 +95,35 @@ dd
 
 <script>
 import { appSetting, updateSetting } from '@renderer/store/setting'
+import { ref, watch } from '@common/utils/vueTools'
 
 export default {
   name: 'SettingAdvanced',
   setup() {
+    const gaplessValue = ref(appSetting['player.gaplessPlayback'])
+    let pendingSaves = 0
+    let saveQueue = Promise.resolve()
+    watch(() => appSetting['player.gaplessPlayback'], value => {
+      if (!pendingSaves) gaplessValue.value = value
+    })
+    const updateGapless = (value) => {
+      gaplessValue.value = value
+      pendingSaves++
+      saveQueue = saveQueue.then(async() => {
+        let saved = false
+        try {
+          await updateSetting({ 'player.gaplessPlayback': value })
+          saved = true
+        } catch { /* updateSetting already reports the write error. */ }
+        pendingSaves--
+        if (!pendingSaves && !saved) gaplessValue.value = appSetting['player.gaplessPlayback']
+      })
+    }
     return {
       appSetting,
       updateSetting,
+      gaplessValue,
+      updateGapless,
     }
   },
 }

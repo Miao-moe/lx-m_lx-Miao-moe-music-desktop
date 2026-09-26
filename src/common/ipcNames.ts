@@ -110,8 +110,6 @@ const modules = {
     get_data: 'get_data',
     save_data: 'save_data',
     playlist_writeback_save: 'playlist_writeback_save',
-    webdav_browse: 'webdav_browse',
-    webdav_audio_url: 'webdav_audio_url',
     get_sound_effect_eq_preset: 'get_sound_effect_eq_preset',
     save_sound_effect_eq_preset: 'save_sound_effect_eq_preset',
     get_sound_effect_convolution_preset: 'get_sound_effect_convolution_preset',

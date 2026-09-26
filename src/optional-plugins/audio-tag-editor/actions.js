@@ -7,7 +7,7 @@ import { resolveDownloadFile, sameFilePath } from './downloadFile'
 import { editor } from './session'
 import { text, fieldNames } from './text'
 
-export const dirty = computed(() => editor.snapshot && fieldNames.some(key => editor.tags[key] !== editor.snapshot.tags[key]))
+export const dirty = computed(() => editor.snapshot && (editor.cover !== editor.snapshot.cover || editor.tags.lyrics !== editor.snapshot.tags.lyrics || fieldNames.some(key => editor.tags[key] !== editor.snapshot.tags[key])))
 export const errorText = computed(() => {
   const reason = text.value.errors[editor.error] ?? text.value.errors.UNKNOWN
   const detail = editor.errorDetail && editor.errorDetail !== editor.error && editor.errorDetail !== reason ? ` ${editor.errorDetail}` : ''
@@ -20,6 +20,7 @@ const fail = code => { throw Object.assign(new Error(code), { code }) }
 export const applySnapshot = (snapshot, id = '') => {
   editor.snapshot = snapshot
   editor.tags = { ...snapshot.tags }
+  editor.cover = snapshot.cover
   editor.downloadId = id
   editor.saved = false
 }

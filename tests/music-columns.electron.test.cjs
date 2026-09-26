@@ -101,7 +101,7 @@ test('all song table headers resize with their rows and remember the selected la
   }, server.address().port)
   page.setDefaultTimeout(7000)
   await settings(page, { 'common.langId': 'zh-cn', 'list.actionButtonsVisible': true, 'list.loadingMode': 'progressive', 'download.enable': true })
-  await route(page, '/list')
+  await route(page, '/list?id=love')
   await settled(page)
   await seed(page)
 
@@ -246,7 +246,7 @@ test('all song table headers resize with their rows and remember the selected la
   fixture = restored
   await t.test('column preferences survive a full application restart', async() => {
     assert.deepEqual(await saved(fixture.page), expected)
-    await route(fixture.page, '/list')
+    await route(fixture.page, '/list?id=love')
     await settled(fixture.page)
     await seed(fixture.page)
     await alignment(fixture.page)

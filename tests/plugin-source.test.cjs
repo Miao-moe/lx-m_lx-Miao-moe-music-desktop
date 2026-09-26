@@ -115,7 +115,7 @@ test('the bundled compiler rebuilds all four source ZIPs outside the repository 
     for (const filename of ['build-config/build-pack.js', 'build-config/build-pack-newdir.js']) {
       // Use the installer's real file filters, without starting an installer build.
       const text = await fs.readFile(filename, 'utf8')
-      const files = runInNewContext(text.match(/files:\s*(\[[\s\S]*?\])/)[1])
+      const files = runInNewContext(text.match(/files:\s*(\[[\s\S]*?\])\s*,\s*asar:/)[1], { isWin7Build: false })
       const info = { projectDir: process.cwd(), buildResourcesDir: 'resources', config: { files }, debugLogger: { isEnabled: false } }
       const [matcher] = getMainFileMatchers(process.cwd(), compiler, value => value, {}, { info }, temporary, false)
       filters.push(matcher.createFilter())

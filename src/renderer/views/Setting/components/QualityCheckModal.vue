@@ -8,8 +8,9 @@ material-modal(
   @close="handleClose"
 )
   main(:class="$style.main")
-    h2 {{ $t('setting__basic_source_check_quality') }}
-    p(:class="$style.tip") {{ $t('setting__basic_source_check_quality_tip') }}
+    h2
+      | {{ $t('setting__basic_source_check_quality') }}
+      svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__basic_source_check_quality_tip')")
     div.scroll(v-if="hasAvailableSource" :class="$style.tableWrap")
       table(:class="$style.table")
         thead
@@ -36,8 +37,8 @@ import { appSetting } from '@renderer/store/setting'
 import musicSdk from '@renderer/utils/musicSdk'
 
 const sources = ['wy', 'tx', 'kg', 'kw', 'mg']
-const qualities = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'master']
-const extendedQualities = new Set(['hires', 'atmos', 'master'])
+const qualities = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'atmos_plus', 'master']
+const extendedQualities = new Set(['hires', 'atmos', 'atmos_plus', 'master'])
 const createResults = () => Object.fromEntries(sources.map(source => [source, Object.fromEntries(qualities.map(quality => [quality, 'unavailable']))]))
 
 export default {
@@ -218,14 +219,6 @@ export default {
     line-height: 1.3;
     text-align: center;
   }
-}
-
-.tip {
-  color: var(--color-550);
-  font-size: 12px;
-  line-height: 1.5;
-  margin-top: 8px;
-  text-align: center;
 }
 
 .tableWrap {

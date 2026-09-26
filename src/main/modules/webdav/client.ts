@@ -111,14 +111,6 @@ export const createClient = (config: LX.WebDAV.Config) => {
 
   return {
     identity: `${paths.file.href}\n${config.username}`,
-    async browse(relative: string) {
-      const url = resolveMediaURL(config, relative)
-      if (!url.pathname.endsWith('/')) url.pathname += '/'
-      const response = await request('PROPFIND', url, '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>', { Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' })
-      expectStatus(response, [207])
-      if (Buffer.byteLength(response.body) > 2 * 1024 * 1024) throw new WebDAVError('too_large')
-      return { xml: response.body, url: url.href, root: paths.base.href }
-    },
     async read(previous?: RemoteFile): Promise<RemoteFile> {
       const headers: Record<string, string> = {}
       if (previous?.content != null) {
@@ -159,21 +151,4 @@ export const createClient = (config: LX.WebDAV.Config) => {
       }
     },
   }
-}
-
-export const resolveMediaURL = (config: LX.WebDAV.Config, relative: string) => {
-  const { base } = resolveConfig(config)
-  if (typeof relative !== 'string' || relative.length > 8192) throw new WebDAVError('invalid_config')
-  let url: URL
-  try {
-    url = new URL(relative, base)
-    for (const part of url.pathname.split('/')) {
-      const text = decodeURIComponent(part)
-      // Encoded separators and dot segments cannot change the server's root.
-      // eslint-disable-next-line no-control-regex -- Remote paths must not contain control characters.
-      if (text === '.' || text === '..' || /[/\\\u0000-\u001f]/.test(text)) throw new Error('path')
-    }
-  } catch { throw new WebDAVError('invalid_config') }
-  if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname) || url.username || url.password || url.search || url.hash) throw new WebDAVError('invalid_config')
-  return url
 }

@@ -2,9 +2,12 @@
   <material-modal :show="show" :bg-close="bgClose && !starting" :teleport="teleport" @close="handleClose">
     <main :class="$style.main">
       <h2>{{ info.name }}<br>{{ info.singer }}</h2>
-      <base-btn v-for="quality in qualitys" :key="quality.type" :class="$style.btn" :disabled="starting" @click="handleClick(quality.type)">
-        {{ getTypeName(quality.type) }}{{ quality.size && ` - ${quality.size.toUpperCase()}` }}
+      <p v-if="refreshingQuality" :class="$style.hint" role="status">{{ $t('loading') }}</p>
+      <base-btn v-for="quality in qualitys" :key="quality.type" :class="$style.btn" :disabled="starting || refreshingQuality" @click="handleClick(quality.type)">
+        {{ getTypeName(quality.type) }}{{ getQualitySizeLabel(quality) }}
       </base-btn>
+      <p v-if="qualityLookupFailed" :class="$style.hint" role="status">{{ $t('download__quality_lookup_failed') }}</p>
+      <base-btn v-if="qualityLookupFailed" min :class="$style.btn" @click="refreshQuality(true)">{{ $t('reload') }}</base-btn>
     </main>
   </material-modal>
 </template>
@@ -12,7 +15,13 @@
 <script>
 import { qualityList } from '@renderer/store'
 import { createDownloadTasks } from '@renderer/store/download/action'
-import { getMaxQuality } from '@renderer/core/music/utils'
+import { toNewMusicInfo, toOldMusicInfo } from '@renderer/utils'
+import musicSdk from '@renderer/utils/musicSdk'
+import { getMusicUrl as getStoredMusicUrl } from '@renderer/utils/ipc'
+import { getAudioFileSize } from '@renderer/utils/request'
+import { awaitRequest, getRequestSignal, withRequestDeadline } from '@renderer/utils/requestContext'
+import { sizeFormate } from '@common/utils/common'
+import { getDownloadQualityOptions, isExtraDownloadQuality, mergeMatchedSearchQuality, shouldRefreshDownloadQuality } from './downloadQuality'
 
 export default {
   props: {
@@ -27,6 +36,10 @@ export default {
     listId: {
       type: String,
       default: '',
+    },
+    resolveQualityFromSearch: {
+      type: Boolean,
+      default: false,
     },
     bgClose: {
       type: Boolean,
@@ -44,37 +57,130 @@ export default {
     }
   },
   data() {
-    return { starting: false }
+    return {
+      starting: false,
+      refreshingQuality: false,
+      qualityLookupFailed: false,
+      resolvedMusicInfo: null,
+      qualityLookupController: null,
+      qualitySizes: {},
+      qualitySizeLoading: {},
+    }
   },
   computed: {
     info() {
-      return this.musicInfo || {}
+      return this.resolvedMusicInfo || this.musicInfo || {}
     },
     sourceQualityList() {
-      return this.qualityList[this.musicInfo.source] || []
+      return this.qualityList[this.info.source] || []
     },
     qualitys() {
-      const builtIn = (this.info.meta?.qualitys || [])
-        .filter(quality => this.checkSource(quality.type))
-      const qualityOrder = ['128k', '192k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'atmos_plus', 'master']
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      const maxQuality = getMaxQuality(this.info, this.sourceQualityList)
-      const maxIdx = qualityOrder.indexOf(maxQuality)
-      const builtInTypes = new Set(builtIn.map(q => q.type))
-      const extras = this.sourceQualityList
-        .filter(q => !builtInTypes.has(q) && qualityOrder.indexOf(q) <= maxIdx)
-        .map(type => ({ type, size: null }))
-      return [...builtIn, ...extras]
-        .filter(q => qualityOrder.indexOf(q.type) <= maxIdx)
-        .sort((a, b) => qualityOrder.indexOf(a.type) - qualityOrder.indexOf(b.type))
+      return getDownloadQualityOptions(this.info, this.sourceQualityList).map(quality => ({
+        ...quality,
+        size: quality.size || this.qualitySizes[quality.type] || null,
+      }))
     },
   },
+  watch: {
+    show: {
+      immediate: true,
+      handler(show) {
+        if (show) void this.refreshQuality()
+        else this.cancelQualityLookup()
+      },
+    },
+    musicInfo() {
+      if (this.show) void this.refreshQuality()
+    },
+    sourceQualityList() {
+      if (this.show) void this.refreshQuality()
+    },
+  },
+  beforeUnmount() {
+    this.cancelQualityLookup()
+  },
   methods: {
+    cancelQualityLookup() {
+      this.qualityLookupController?.abort()
+      this.qualityLookupController = null
+      this.refreshingQuality = false
+    },
+    async refreshQuality(forceRefresh = false) {
+      this.cancelQualityLookup()
+      this.resolvedMusicInfo = null
+      this.qualityLookupFailed = false
+      this.qualitySizes = {}
+      this.qualitySizeLoading = {}
+      const musicInfo = this.musicInfo
+      if (!this.show || !musicInfo) return
+      const controller = new AbortController()
+      this.qualityLookupController = controller
+      if (shouldRefreshDownloadQuality(musicInfo, this.sourceQualityList, this.listId || this.resolveQualityFromSearch)) {
+        const searchSource = musicSdk[musicInfo.source]?.musicSearch
+        const search = searchSource?.search
+        if (typeof search == 'function') {
+          this.refreshingQuality = true
+          try {
+            const query = `${musicInfo.name} ${musicInfo.singer || ''}`.trim()
+            const matchedInfo = await withRequestDeadline(8000, async() => {
+              const result = await search.call(searchSource, query, 1, 30, { refresh: forceRefresh })
+              let info = mergeMatchedSearchQuality(musicInfo, result.list.map(toNewMusicInfo))
+              if (info === musicInfo && musicInfo.singer) {
+                const byName = await search.call(searchSource, musicInfo.name, 1, 50, { refresh: forceRefresh })
+                info = mergeMatchedSearchQuality(musicInfo, byName.list.map(toNewMusicInfo))
+              }
+              return info
+            }, controller.signal)
+            if (this.qualityLookupController !== controller || !this.show) return
+            this.resolvedMusicInfo = matchedInfo
+            if (matchedInfo === musicInfo) this.qualityLookupFailed = true
+          } catch {
+            if (this.qualityLookupController === controller && !controller.signal.aborted) this.qualityLookupFailed = true
+          } finally {
+            if (this.qualityLookupController === controller) this.refreshingQuality = false
+          }
+        }
+      }
+      if (this.qualityLookupController === controller && this.show) void this.refreshExtendedSizes(controller)
+    },
+    async refreshExtendedSizes(controller) {
+      const musicInfo = this.info
+      const missing = getDownloadQualityOptions(musicInfo, this.sourceQualityList)
+        .filter(quality => isExtraDownloadQuality(quality.type) && !quality.size)
+      this.qualitySizeLoading = Object.fromEntries(missing.map(({ type }) => [type, true]))
+      await Promise.all(missing.map(async({ type }) => {
+        let bytes = null
+        try {
+          bytes = await withRequestDeadline(10000, async() => {
+            const signal = getRequestSignal()
+            const cachedUrl = await awaitRequest(getStoredMusicUrl(musicInfo, type)).catch(() => null)
+            if (signal.aborted) return null
+            if (cachedUrl) {
+              const cachedSize = await getAudioFileSize(cachedUrl, signal).catch(() => null)
+              if (cachedSize) return cachedSize
+            }
+            const result = await awaitRequest(musicSdk[musicInfo.source].getMusicUrl(toOldMusicInfo(musicInfo), type))
+            if (result?.type !== type || !result.url) return null
+            return getAudioFileSize(result.url, signal)
+          }, controller.signal)
+        } catch {}
+        if (this.qualityLookupController !== controller || !this.show) return
+        if (bytes) this.qualitySizes = { ...this.qualitySizes, [type]: sizeFormate(bytes) }
+        this.qualitySizeLoading = { ...this.qualitySizeLoading, [type]: false }
+      }))
+    },
+    getQualitySizeLabel(quality) {
+      if (quality.size) return ` - ${String(quality.size).toUpperCase()}`
+      if (!isExtraDownloadQuality(quality.type)) return ''
+      return ` - ${this.$t(this.qualitySizeLoading[quality.type] ? 'loading' : 'download__size_unknown')}`
+    },
     async handleClick(quality) {
-      if (this.starting) return
+      if (this.starting || this.refreshingQuality) return
       this.starting = true
       try {
-        if (await createDownloadTasks([this.musicInfo], quality, this.listId)) this.$emit('update:show', false)
+        const musicInfo = JSON.parse(JSON.stringify(this.info))
+        if (await createDownloadTasks([musicInfo], quality, this.listId)) this.$emit('update:show', false)
       } finally { this.starting = false }
     },
     handleClose() {
@@ -83,10 +189,11 @@ export default {
     getTypeName(quality) {
       switch (quality) {
         case 'flac24bit':
-          return this.$t('download__lossless') + ' FLAC Hires'
+          return this.$t('download__lossless') + ' FLAC 24Bit'
+        case 'atmos_plus':
+          return this.$t('download__lossless') + ' ATMOS PLUS'
         case 'hires':
         case 'atmos':
-        case 'atmos_plus':
         case 'master':
         case 'flac':
         case 'ape':
@@ -98,9 +205,6 @@ export default {
         case '128k':
           return this.$t('download__normal') + ' ' + quality.toUpperCase()
       }
-    },
-    checkSource(quality) {
-      return this.sourceQualityList.includes(quality)
     },
   },
 }
@@ -134,6 +238,12 @@ export default {
   &:last-child {
     margin-bottom: 0;
   }
+}
+.hint {
+  margin-bottom: 8px;
+  color: var(--color-font-label);
+  font-size: 12px;
+  text-align: center;
 }
 
 </style>

@@ -2,8 +2,6 @@ import { encodePath } from '@common/utils/common'
 import { updateListMusics } from '@renderer/store/list/action'
 import { getLyricEdited, saveLyric, saveMusicUrl } from '@renderer/utils/ipc'
 import { getLocalFilePath } from '@renderer/utils/music'
-import { rendererInvoke } from '@common/rendererIpc'
-import { WIN_MAIN_RENDERER_EVENT_NAME } from '@common/ipcNames'
 
 import {
   buildLyricInfo,
@@ -74,7 +72,7 @@ export const getMusicUrl = async({ musicInfo, isRefresh, allowToggleSource = tru
   allowToggleSource?: boolean
   onToggleSource?: (musicInfo?: LX.Music.MusicInfoOnline) => void
 }): Promise<string> => {
-  if (musicInfo.meta.webdav) return rendererInvoke<{ path: string, identity: string }, string>(WIN_MAIN_RENDERER_EVENT_NAME.webdav_audio_url, musicInfo.meta.webdav)
+  if (musicInfo.meta.webdav) throw Object.assign(new Error(window.i18n.t('webdav_audio_removed')), { code: 'WEBDAV_AUDIO_REMOVED' })
   if (!isRefresh) {
     const path = await getLocalFilePath(musicInfo)
     if (path) return encodePath(path)

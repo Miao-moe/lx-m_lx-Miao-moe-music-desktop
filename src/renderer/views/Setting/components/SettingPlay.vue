@@ -42,8 +42,9 @@ dd
       @update:model-value="updateSetting({'player.playQuality': $event})")
 
 dd
-  h3#basic_play_max_volume {{ $t('setting__play_max_volume') }}
-  p(style="color: var(--color-font-label); font-size: 12px; margin-bottom: 6px;") {{ $t('setting__play_max_volume_label') }}
+  h3#basic_play_max_volume
+    | {{ $t('setting__play_max_volume') }}
+    svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__play_max_volume_label')")
   .setting-row
     input.gap-left(
       type="number"
@@ -56,11 +57,11 @@ dd
     span.setting-value(v-if="maxVolumeHint") {{ maxVolumeHint }}
 
 dd
-  h3#play_volume_normalization {{ $t('setting__play_volume_normalization') }}
+  h3#play_volume_normalization
+    | {{ $t('setting__play_volume_normalization') }}
+    svg-icon.help-icon(name="help-circle-outline" :aria-label="$t('setting__play_volume_normalization_tip')")
   .setting-row
     base-checkbox(id="setting_player_volume_normalization" :model-value="appSetting['player.volumeNormalization']" :label="$t('setting__play_volume_normalization_enable')" @update:model-value="updateSetting({'player.volumeNormalization': $event})")
-  common-setting-reveal(:show="appSetting['player.volumeNormalization']" depends="setting_player_volume_normalization")
-    p.p.gap-top.setting-value {{ $t('setting__play_volume_normalization_tip') }}
 
 dd(:aria-label="$t('setting__play_mediaDevice_title')")
   h3#play_mediaDevice {{ $t('setting__play_mediaDevice') }}

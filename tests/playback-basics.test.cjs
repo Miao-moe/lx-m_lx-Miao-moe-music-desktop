@@ -6,7 +6,11 @@ const loader = require('./helpers/load-typescript.cjs')
 for (const side of ['main', 'renderer']) {
   test(`A01 ${side}: cancellation removes adapters, including once and duplicate subscriptions`, () => {
     const emitter = new EventEmitter()
-    const api = loader({ electron: { ipcMain: emitter, ipcRenderer: emitter } })(`src/common/${side}Ipc.ts`)
+    const api = loader({
+      electron: { ipcMain: emitter, ipcRenderer: emitter },
+      './utils/errorMessage': { errorForTransport: error => error, restoreTransportError: error => error },
+      '../main/utils/ipcPolicy': { assertIpcRequest() {} },
+    })(`src/common/${side}Ipc.ts`)
     let count = 0
     const fn = ({ params }) => { count += params }
     for (let i = 0; i < 50; i++) {
@@ -23,7 +27,11 @@ for (const side of ['main', 'renderer']) {
   })
   test(`A01 ${side}: cancellation during dispatch and recursive once calls remain safe`, () => {
     const emitter = new EventEmitter()
-    const api = loader({ electron: { ipcMain: emitter, ipcRenderer: emitter } })(`src/common/${side}Ipc.ts`)
+    const api = loader({
+      electron: { ipcMain: emitter, ipcRenderer: emitter },
+      './utils/errorMessage': { errorForTransport: error => error, restoreTransportError: error => error },
+      '../main/utils/ipcPolicy': { assertIpcRequest() {} },
+    })(`src/common/${side}Ipc.ts`)
     let calls = 0
     const target = () => calls++
     api[side + 'On']('a', () => api[side + 'Off']('a', target))

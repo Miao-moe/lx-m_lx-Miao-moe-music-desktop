@@ -26,7 +26,8 @@ test('toolkit and optional ZIPs import offline while legacy built-in packages st
     await (await button('setting__plugins_import')).waitFor({ timeout: 120000 })
     const status = await page.locator('[data-plugin-transfer-status]').innerText()
     if (['sound-effects', 'audio-tag-editor'].includes(id)) {
-      assert.equal(status, await label(page, 'setting__plugins_transfer_builtin'))
+      assert.ok(status.includes(await label(page, 'setting__plugins_transfer_builtin')))
+      assert.match(status, /builtin/)
       assert.equal(await card(id).locator('[data-plugin-status]').innerText(), '自带')
       return
     }

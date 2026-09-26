@@ -7,10 +7,10 @@
             v-for="(column, index) in layout.columns" :key="column.id" :data-music-column="column.id"
             :style="{ width: `var(--music-column-${column.id})` }" :class="{ [$style.center]: column.id == 'index' || column.id == 'cover' }" scope="col"
           >
-            <span :class="$style.label">{{ column.id == 'index' ? '#' : $t(column.label) }}</span>
+            <span :class="$style.label">{{ column.id == 'index' ? '#' : column.id == 'action' && actionLabel ? actionLabel : $t(column.label) }}</span>
             <span
               v-if="index < layout.columns.length - 1" :class="[$style.handle, { [$style.active]: resizingIndex == index }]"
-              role="separator" tabindex="0" aria-orientation="vertical" :aria-label="$t('list__column_width', { name: column.id == 'index' ? '#' : $t(column.label) })"
+              role="separator" tabindex="0" aria-orientation="vertical" :aria-label="$t('list__column_width', { name: column.id == 'index' ? '#' : column.id == 'action' && actionLabel ? actionLabel : $t(column.label) })"
               :aria-valuenow="Math.round(layout.widths[index])" :aria-valuemin="Math.round(layout.minimums[index])"
               :aria-valuemax="Math.round(layout.widths[index] + remainingSpace(layout.widths, index))"
               :title="$t('list__column_resize_tip')" :data-column-resize="column.id"
@@ -30,7 +30,10 @@ import type { PropType } from 'vue'
 import { ref, watch, onMounted, onBeforeUnmount } from '@common/utils/vueTools'
 import type { MusicColumnLayout } from '@renderer/utils/compositions/useMusicListColumns'
 
-const props = defineProps({ layout: { type: Object as PropType<MusicColumnLayout>, required: true } })
+const props = defineProps({
+  layout: { type: Object as PropType<MusicColumnLayout>, required: true },
+  actionLabel: { type: String, default: '' },
+})
 const header = ref<HTMLDivElement>()
 const table = ref<HTMLTableElement>()
 const resizingIndex = ref(-1)
