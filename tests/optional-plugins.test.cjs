@@ -326,6 +326,35 @@ test('download, metadata and compilation failures preserve the previous installa
   await assert.rejects(fs.stat(first.directory), { code: 'ENOENT' })
 })
 
+test('a transient plugin directory lock retries the update without removing the old version early', async t => {
+  const { manager, state, root } = await fixture(t)
+  await manager.refresh()
+  const previous = (await manager.install('test-effects')).installed['test-effects']
+  state.packages[0] = await bundle('test-effects', '1.1.0')
+  await manager.refresh()
+
+  const rename = fs.rename
+  let attempts = 0
+  fs.rename = async(source, destination) => {
+    if (source.startsWith(path.join(root, 'install-')) && destination.startsWith(path.join(root, 'test-effects-'))) {
+      attempts++
+      if (attempts === 1) {
+        assert.ok((await fs.stat(previous.directory)).isDirectory())
+        throw Object.assign(new Error('temporary directory lock'), { code: 'EPERM' })
+      }
+    }
+    return rename(source, destination)
+  }
+  try {
+    const installed = (await manager.install('test-effects')).installed['test-effects']
+    assert.equal(installed.manifest.version, '1.1.0')
+    assert.equal(attempts, 2)
+    await assert.rejects(fs.stat(previous.directory), { code: 'ENOENT' })
+  } finally {
+    fs.rename = rename
+  }
+})
+
 test('concurrent changes are serialized and unsupported APIs are rejected', async t => {
   const { manager, state, root } = await fixture(t)
   await manager.refresh()

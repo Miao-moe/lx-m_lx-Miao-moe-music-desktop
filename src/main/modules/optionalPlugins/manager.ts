@@ -339,7 +339,17 @@ export class PluginManager {
         await fs.writeFile(path.join(sourceDirectory, 'plugin.json'), sourceManifestBytes, { flag: 'wx' })
         sourceManifestHash = digest(sourceManifestBytes)
       }
-      await fs.rename(temporary, this.child(directoryName))
+      // A scanner can briefly hold newly written plugin files on Windows.
+      // Retry only transient rename failures while the old installation remains active.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await fs.rename(temporary, this.child(directoryName))
+          break
+        } catch (error) {
+          if (attempt >= 4 || !['EPERM', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+          await new Promise(resolve => setTimeout(resolve, 50 * 2 ** attempt))
+        }
+      }
       registry[id] = {
         directory: directoryName,
         manifestHash: digest(manifestBytes),
