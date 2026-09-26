@@ -22,11 +22,14 @@
       </div>
     </div>
     <p v-if="preferencesError" role="alert" :class="$style.saveError">{{ labels.saveError }}</p>
+    <Teleport v-if="!preview && dragReady" to="[data-player-detail]">
+      <div :class="$style.windowDrag" data-folia-window-drag aria-hidden="true" />
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from '@common/utils/vueTools'
+import { onMounted, ref } from '@common/utils/vueTools'
 import { isShowPlayerDetail } from '@renderer/store/player/state'
 import { FOLIA_MODES, type FoliaMode } from './protocol'
 import { engineUrl, preferences, preferencesError, savePreferences } from './preferences'
@@ -36,6 +39,8 @@ import useStage from './useStage'
 const props = defineProps({ preview: { type: Boolean, default: false } })
 const labels = useLabels()
 const element = ref<HTMLIFrameElement | null>(null)
+const dragReady = ref(false)
+onMounted(() => { dragReady.value = true })
 const { failed, retry } = useStage(element, props.preview)
 const selectMode = (event: Event) => { savePreferences({ mode: (event.target as HTMLSelectElement).value as FoliaMode, enabled: true }) }
 </script>
@@ -53,6 +58,20 @@ const selectMode = (event: Event) => { savePreferences({ mode: (event.target as 
 .error { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px; padding: 16px; text-align: center; }
 .saveError { flex: none; padding: 8px 14px; font-size: 12px; }
 .topReveal, .bottomReveal { display: none; }
+
+// Teleport after the host chrome so older app versions keep a native drag
+// region above the Folia iframe and its no-drag reveal areas.
+.windowDrag {
+  position: absolute;
+  top: 0;
+  left: 240px;
+  right: 240px;
+  height: @height-toolbar;
+  z-index: 3;
+  -webkit-app-region: drag;
+}
+:global([data-player-detail].fullscreen) > .windowDrag,
+:global(.maximized) .windowDrag { display: none; }
 
 // Use the existing API 2 player slots so this layout can ship as a plugin update.
 .stage[data-folia-stage='player'] {

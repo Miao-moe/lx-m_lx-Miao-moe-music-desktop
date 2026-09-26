@@ -21,9 +21,9 @@
         "en-us": "Audio Tag Editor"
       },
       "description": {
-        "zh-cn": "在下载列表右键修改 MP3、FLAC 的音频标签，也可选择本地文件，保留音频、封面与歌词。",
-        "zh-tw": "在下載列表按右鍵修改 MP3、FLAC 的音訊標籤，也可選擇本機檔案，保留音訊、封面與歌詞。",
-        "en-us": "Right-click a download to edit MP3 or FLAC tags, or choose a local file, preserving audio, artwork and lyrics."
+        "zh-cn": "在下载列表右键修改 MP3、FLAC 的文字标签、封面和内嵌歌词，也可选择本地文件。",
+        "zh-tw": "在下載列表按右鍵修改 MP3、FLAC 的文字標籤、封面和內嵌歌詞，也可選擇本機檔案。",
+        "en-us": "Right-click a download or choose a local MP3 or FLAC file to edit tags, artwork and embedded lyrics."
       },
       "icon": "#icon-music"
     },
@@ -55,16 +55,16 @@
     },
     {
       "id": "folia-lyrics",
-      "version": "1.2.3",
+      "version": "1.2.4",
       "apiVersion": 2,
-      "path": "folia-lyrics/1.2.3/f9e6b33fe2f19a056df5d7b0f1af718f50f10b24f4115a16e47543ef08483687.zip",
-      "bytes": 28494598,
-      "sha256": "f9e6b33fe2f19a056df5d7b0f1af718f50f10b24f4115a16e47543ef08483687",
+      "path": "folia-lyrics/1.2.4/c91fda34848a38103331b51261baeb506c02f1f1f65667c8543cddcd51d941c3.zip",
+      "bytes": 28494783,
+      "sha256": "c91fda34848a38103331b51261baeb506c02f1f1f65667c8543cddcd51d941c3",
       "packages": {
         "lxplugin": {
-          "path": "folia-lyrics/1.2.3/23885e54a6b7244be5ebd29170d425f408f9463491d81282ceeebabd09d28e92.lxplugin",
-          "bytes": 10472994,
-          "sha256": "23885e54a6b7244be5ebd29170d425f408f9463491d81282ceeebabd09d28e92"
+          "path": "folia-lyrics/1.2.4/5b9cd738ce15326bb2ad12d749e847d6bcaaa31c8bcdd44113dffd6040c46a38.lxplugin",
+          "bytes": 10473209,
+          "sha256": "5b9cd738ce15326bb2ad12d749e847d6bcaaa31c8bcdd44113dffd6040c46a38"
         }
       },
       "name": {

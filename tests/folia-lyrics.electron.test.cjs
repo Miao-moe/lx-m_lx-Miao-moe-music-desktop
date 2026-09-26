@@ -159,6 +159,7 @@ test('Folia installs, renders every style, follows playback and restores prefere
       await page.locator('[data-folia-toggle]').click()
       await page.locator('[data-player-detail] .lyric').waitFor()
       assert.equal(await page.locator('[data-folia-stage="player"]').count(), 0)
+      assert.equal(await page.locator('[data-folia-window-drag]').count(), 0)
       assert.equal(await page.evaluate(() => window.__lxPluginHost.player.getAudioElement().paused), true)
       assert.equal(await page.evaluate(() => window.__foliaAnalysers.length > 0 && window.__foliaAnalysers.every(node => node.__disconnected)), true)
       await page.locator('[data-folia-toggle]').click()
