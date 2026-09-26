@@ -54,8 +54,8 @@ let initPromise: Promise<void> | null = null
 
 const isStale = (feed: SourceFeedState | undefined) => {
   if (!feed) return true
-  // 三个板块任一从未成功加载，或整体数据早于 TTL，即视为需要刷新
-  if (!feed.playlistsAt || !feed.boardsAt) return true
+  // 推荐歌单为空、板块从未成功加载，或整体数据早于 TTL 时刷新
+  if (!feed.playlists.length || !feed.playlistsAt || !feed.boardsAt) return true
   return Date.now() - Math.max(feed.playlistsAt, feed.boardsAt, feed.hotWordsAt) > STALE_TTL
 }
 

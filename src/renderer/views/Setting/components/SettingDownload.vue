@@ -27,7 +27,7 @@ dd
 dd
   h3 {{ $t('setting__download_rate_limit') }}
   base-selection(:model-value="appSetting['download.rateLimit']" :list="rateLimits" item-key="id" item-name="name" @change="handleRateLimit")
-  .gap-top
+  .gap-top(:class="$style.fieldGap")
     base-checkbox(id="setting_download_auto_resume" :model-value="appSetting['download.autoResume']" :label="$t('setting__download_auto_resume')" @update:model-value="updateSetting({'download.autoResume': $event})")
 
 dd
@@ -59,9 +59,9 @@ dd(:aria-label="$t('setting__download_name_title')")
     base-checkbox.gap-left(
         v-for="item in musicNames" :id="`setting_download_musicName_${item.value}`" :key="item.value" name="setting_download_musicName" :value="item.value"
         need :model-value="appSetting['download.fileName']" :label="item.name" @update:model-value="updateSetting({'download.fileName': $event})")
-  .gap-top
+  .gap-top(:class="$style.fieldGap")
     base-input(id="setting_download_name_template" :class="$style.nameTemplate" :model-value="appSetting['download.fileName']" :aria-label="$t('setting__download_name_template')" :trim="false" :auto-paste="false" @change="updateSetting({'download.fileName': $event || '歌名 - 歌手'})")
-  p(data-download-name-preview) {{ $t('setting__download_name_preview') }}{{ namePreview }}
+  p(data-download-name-preview :class="$style.namePreview") {{ $t('setting__download_name_preview') }}{{ namePreview }}
 dd
   h3#download_data_embed {{ $t('setting__download_data_embed') }}
   .gap-top
@@ -201,6 +201,13 @@ export default {
   width: 360px;
   max-width: 100%;
   box-sizing: border-box;
+}
+.fieldGap {
+  margin-top: var(--setting-row-gap);
+}
+.namePreview {
+  margin: var(--setting-row-gap) 0 0;
+  padding: 0 var(--setting-inset);
 }
 .limitRow {
   display: flex;

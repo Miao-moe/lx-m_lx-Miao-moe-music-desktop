@@ -824,8 +824,8 @@ export default {
       margin: 0 0 0 var(--setting-row-gap);
       border: none;
       border-radius: 50%;
-      background: #fff;
-      color: #000;
+      background: transparent;
+      color: var(--color-font);
       cursor: pointer;
       transition: opacity 0.2s ease;
       &:hover {
@@ -840,8 +840,8 @@ export default {
 }
 
 :global(#view .help-icon), :global([data-backup-preview] .help-icon) {
-  color: #000;
-  background: #fff;
+  color: var(--color-font);
+  background: transparent;
   border-radius: 50%;
   cursor: help;
   flex: none;
